@@ -52,9 +52,25 @@ const server = http.createServer((req, res) => {
   });
 });
 
+let serverStarted = false;
+
 async function runBrowserTest() {
-  await new Promise((resolve) => server.listen(PORT, resolve));
-  console.log(`[BrowserTest] Static server listening on port ${PORT}`);
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(PORT, () => {
+        serverStarted = true;
+        resolve();
+      });
+    });
+    console.log(`[BrowserTest] Static server listening on port ${PORT}`);
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`[BrowserTest] Port ${PORT} already active, connecting to existing instance.`);
+    } else {
+      throw err;
+    }
+  }
 
   const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
   const userDataDir = path.join(os.tmpdir(), `rb26_edge_test_${Date.now()}`);
@@ -275,6 +291,39 @@ async function runBrowserTest() {
     const hasWavBtn = await evaluate(`Boolean(document.getElementById('btn-record-wav'))`);
     if (!hasWavBtn) throw new Error('Missing #btn-record-wav');
 
+    // Test Vector Modulation Pad existence in Deck 05
+    console.log('[BrowserTest] Verifying Deck 05 Vector Modulation Pad...');
+    const hasVectorPad = await evaluate(`Boolean(window.__RB26__.vectorPad)`);
+    console.log(`[BrowserTest] VectorPad initialized: ${hasVectorPad}`);
+    if (!hasVectorPad) throw new Error('window.__RB26__.vectorPad is not defined');
+
+    // Test CRT Display Mode Switch to WAVE
+    console.log('[BrowserTest] Testing CRT Display Mode Switch to WAVE...');
+    await evaluate(`
+      const waveBtn = document.querySelector('.braun-mode-btn[data-mode="WAVE"]');
+      if (waveBtn) waveBtn.click();
+    `);
+    const crtMode = await evaluate(`window.__RB26__.display.mode`);
+    console.log(`[BrowserTest] CRT Display Mode: ${crtMode}`);
+    if (crtMode !== 'WAVE') throw new Error(`Expected CRT Display mode to be WAVE, got ${crtMode}`);
+
+    // Test Preset Selection and Keyboard Focus Management
+    console.log('[BrowserTest] Testing Preset Select Focus and Keyboard Chime Triggering...');
+    await evaluate(`
+      const select = document.getElementById('select-preset');
+      select.focus();
+      select.value = 'ETHEREAL_SYNTH_PAD';
+      select.dispatchEvent(new Event('change'));
+      // Dispatch keydown for 'a' while select is active to verify focus release and note trigger
+      const keyEvt = new KeyboardEvent('keydown', { key: 'a', bubbles: true });
+      window.dispatchEvent(keyEvt);
+    `);
+    const keyIsActive = await evaluate(`
+      document.querySelector('.braun-chime-key[data-hotkey="a"]').classList.contains('is-active')
+    `);
+    console.log(`[BrowserTest] Chime key triggered after preset change: ${keyIsActive}`);
+    if (!keyIsActive) throw new Error('Expected chime key A to trigger after preset change');
+
     // Test Calibrated Reset
     console.log('[BrowserTest] Testing Calibrated Reset...');
     await evaluate(`document.getElementById('btn-reset-all').click()`);
@@ -290,7 +339,7 @@ async function runBrowserTest() {
   } finally {
     if (ws) ws.close();
     edgeProc.kill();
-    server.close();
+    if (serverStarted) server.close();
   }
 }
 

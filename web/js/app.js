@@ -14,6 +14,7 @@
 
 import { BraunKnob } from './ui/knob.js';
 import { BraunCrtDisplay } from './ui/crt-display.js';
+import { BraunVectorPad } from './ui/vector-pad.js';
 import { Rb26WebEngine } from './audio/rb26_web_engine.js';
 
 // Modal Scale Definitions matching AS-42
@@ -206,6 +207,19 @@ export const FACTORY_PRESETS = {
       shimmer_dimmer_blend: 20, pitch_regen: 60,
       tail_mod_rate: 0.60, tail_mod_depth: 65, tail_bloom: 110,
       stereo_width: 200, early_late_mix: 70, dry_wet_mix: 60, output_trim: -1.5,
+      soft_limiter: true
+    }
+  },
+  AS42_SHIMMER_COMPANION: {
+    name: 'AS-42 TAPE & SHIMMER COMPANION',
+    params: {
+      predelay: 28.0, diffusion: 85, input_trim: 0.0,
+      low_crossover: 180, damping_low: 1.0, low_punch: 60, mono_bass: 120,
+      rt60_decay: 8.5, room_size: 115, damping_high: 6800, decay_hold: false,
+      shimmer_send: 45, dimmer_send: 25, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 40, pitch_regen: 50,
+      tail_mod_rate: 0.65, tail_mod_depth: 40, tail_bloom: 85,
+      stereo_width: 120, early_late_mix: 55, dry_wet_mix: 45, output_trim: 0.0,
       soft_limiter: true
     }
   }
@@ -517,6 +531,7 @@ export class BraunRb26App {
     this._initTheme();
     this._initDisplay();
     this._initKnobs();
+    this._initVectorPad();
     this._initButtons();
     this._initAuditionBar();
     this._initExciterDeck();
@@ -808,17 +823,33 @@ export class BraunRb26App {
     // Deck 5: TAIL MODULATION
     this.knobs.tail_mod_rate = createKnob('knob-tail-mod-rate', {
       label: 'MOD RATE', min: 0.05, max: 4.00, step: 0.05, unit: 'Hz', value: 0.65, size: 'medium',
-      onChange: (v) => { this.engine.setParam('tailModRateHz', v); this._emitJuceParam('tailModRateHz', v); }
+      onChange: (v) => {
+        this.engine.setParam('tailModRateHz', v);
+        this._emitJuceParam('tailModRateHz', v);
+        if (this.vectorPad && !this.vectorPad.isEngaged) {
+          const normX = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (v - 0.05) / 3.95), 1 / 1.6)));
+          this.vectorPad.setCoordinates(normX, this.vectorPad.y, false);
+        }
+      }
     });
 
     this.knobs.tail_mod_depth = createKnob('knob-tail-mod-depth', {
       label: 'MOD DEPTH', min: 0, max: 100, step: 1, unit: '%', value: 45, size: 'medium',
-      onChange: (v) => { this.engine.setParam('tailModDepthMs', (v / 100) * 3.0); this._emitJuceParam('tailModDepthMs', (v / 100) * 3.0); }
+      onChange: (v) => {
+        this.engine.setParam('tailModDepthMs', (v / 100) * 3.0);
+        this._emitJuceParam('tailModDepthMs', (v / 100) * 3.0);
+        if (this.vectorPad && !this.vectorPad.isEngaged) {
+          this.vectorPad.setCoordinates(this.vectorPad.x, v / 100, false);
+        }
+      }
     });
 
     this.knobs.tail_bloom = createKnob('knob-tail-bloom', {
       label: 'BLOOM ONSET', min: 20, max: 250, step: 5, unit: 'ms', value: 85, size: 'small',
-      onChange: (v) => { this.engine.setParam('tailBloomMs', v); this._emitJuceParam('tailBloomMs', v); }
+      onChange: (v) => {
+        this.engine.setParam('tailBloomMs', v);
+        this._emitJuceParam('tailBloomMs', v);
+      }
     });
 
     // Deck 6: MASTER BUS
@@ -844,6 +875,38 @@ export class BraunRb26App {
 
     // Initialize A/B buffer with initial values
     this.abBuffer.init();
+  }
+
+  _initVectorPad() {
+    const container = document.getElementById('vector-pad-container');
+    if (!container) return;
+
+    const initRate = 0.65;
+    const initDepth = 45;
+    const initX = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (initRate - 0.05) / 3.95), 1 / 1.6)));
+    const initY = initDepth / 100;
+
+    this.vectorPad = new BraunVectorPad(container, {
+      defaultX: initX,
+      defaultY: initY,
+      onEngage: async () => {
+        if (!this.isPowered) return;
+        if (!this.engine.isInitialized) await this.engine.init();
+      },
+      onChange: ({ rateHz, depthPct, bloomMs }) => {
+        if (this.knobs.tail_mod_rate) this.knobs.tail_mod_rate.setValue(rateHz, false);
+        if (this.knobs.tail_mod_depth) this.knobs.tail_mod_depth.setValue(depthPct, false);
+        if (this.knobs.tail_bloom) this.knobs.tail_bloom.setValue(bloomMs, false);
+
+        this.engine.setParam('tailModRateHz', rateHz);
+        this.engine.setParam('tailModDepthMs', (depthPct / 100) * 3.0);
+        this.engine.setParam('tailBloomMs', bloomMs);
+
+        this._emitJuceParam('tailModRateHz', rateHz);
+        this._emitJuceParam('tailModDepthMs', (depthPct / 100) * 3.0);
+        this._emitJuceParam('tailBloomMs', bloomMs);
+      }
+    });
   }
 
   _initButtons() {
@@ -979,6 +1042,10 @@ export class BraunRb26App {
     if (presetSelect) {
       presetSelect.addEventListener('change', (e) => {
         this.loadPreset(e.target.value);
+        presetSelect.blur();
+      });
+      presetSelect.addEventListener('mouseup', () => {
+        setTimeout(() => presetSelect.blur(), 60);
       });
     }
 
@@ -1186,8 +1253,20 @@ export class BraunRb26App {
     }
 
     const presetSelect = document.getElementById('select-preset');
-    if (presetSelect && presetSelect.value !== presetKey) {
-      presetSelect.value = presetKey;
+    if (presetSelect) {
+      if (presetSelect.value !== presetKey) {
+        presetSelect.value = presetKey;
+      }
+      presetSelect.blur();
+    }
+
+    if (this.vectorPad && preset.params) {
+      const pRate = preset.params.tail_mod_rate ?? 0.65;
+      const pDepth = preset.params.tail_mod_depth ?? 45;
+      const px = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (pRate - 0.05) / 3.95), 1 / 1.6)));
+      const py = Math.max(0, Math.min(1.0, pDepth / 100));
+      this.vectorPad.setDefaults(px, py);
+      this.vectorPad.setCoordinates(px, py, false);
     }
 
     const holdBtn = document.getElementById('btn-decay-hold');
@@ -1306,10 +1385,53 @@ export class BraunRb26App {
     this._initChimeStrip();
     this._updateChimeKeyLabels();
 
+    // Track active held keys to prevent machine-gun repeat bursts and support clean sustain
+    this._heldKeys = new Set();
+
+    const isPlayableMusicalKey = (key) => {
+      const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
+      const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+      return chimeHotkeys.includes(key) || chordHotkeys.includes(key) || key === ' ';
+    };
+
     // Keyboard Shortcuts (A-' for chimes, 1-= for chords)
     window.addEventListener('keydown', (e) => {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+      // Don't hijack text entry fields
+      if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'button') return;
+
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      // If preset select or dropdown has focus, blur it so typing triggers notes instead of cycling presets!
+      const activeEl = document.activeElement;
+      if ((e.target && e.target.tagName === 'SELECT') || (activeEl && activeEl.tagName === 'SELECT')) {
+        if (isPlayableMusicalKey(key)) {
+          if (e.target && typeof e.target.blur === 'function') e.target.blur();
+          if (activeEl && typeof activeEl.blur === 'function') activeEl.blur();
+          e.preventDefault();
+        } else {
+          return;
+        }
+      }
+
+      // Ignore browser auto-repeat events so sustained notes hold cleanly rather than stuttering at OS repeat speed
+      if (e.repeat) {
+        e.preventDefault();
+        return;
+      }
+
+      if (isPlayableMusicalKey(key)) {
+        this._heldKeys.add(key);
+      }
+
       this._handleKeyboardShortcuts(e);
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key ? e.key.toLowerCase() : '';
+      if (this._heldKeys) {
+        this._heldKeys.delete(key);
+      }
+      this._handleKeyboardKeyUp(e);
     });
   }
 
@@ -1387,9 +1509,31 @@ export class BraunRb26App {
     window.addEventListener('pointercancel', onPointerUp);
   }
 
+  _handleKeyboardKeyUp(e) {
+    const key = e.key ? e.key.toLowerCase() : '';
+    const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
+    const chimeIdx = chimeHotkeys.indexOf(key);
+    if (chimeIdx !== -1) {
+      const keyEl = document.querySelector(`.braun-chime-key[data-hotkey="${key}"]`);
+      if (keyEl) {
+        keyEl.classList.remove('is-active');
+      }
+      return;
+    }
+
+    const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+    const chordIdx = chordHotkeys.indexOf(key);
+    if (chordIdx !== -1) {
+      const chordBtn = document.querySelector(`.braun-chord-btn[data-chord-index="${chordIdx}"]`);
+      if (chordBtn) {
+        chordBtn.classList.remove('is-active');
+      }
+    }
+  }
+
   _handleKeyboardShortcuts(e) {
     if (!this.isPowered) return;
-    const key = e.key.toLowerCase();
+    const key = e.key ? e.key.toLowerCase() : '';
 
     // Chime hotkeys: a, s, d, f, g, h, j, k, l, ;, '
     const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
@@ -1398,9 +1542,13 @@ export class BraunRb26App {
       const keyEl = document.querySelector(`.braun-chime-key[data-hotkey="${key}"]`);
       if (keyEl) {
         const midi = parseFloat(keyEl.getAttribute('data-midi')) || (60 + chimeIdx * 2);
-        this.playChime(midi, 0.75);
+        this.playChime(midi, 0.70);
         keyEl.classList.add('is-active');
-        setTimeout(() => keyEl.classList.remove('is-active'), 140);
+        setTimeout(() => {
+          if (!this._heldKeys || !this._heldKeys.has(key)) {
+            keyEl.classList.remove('is-active');
+          }
+        }, 220);
       }
       return;
     }
@@ -1413,7 +1561,11 @@ export class BraunRb26App {
       const chordBtn = document.querySelector(`.braun-chord-btn[data-chord-index="${chordIdx}"]`);
       if (chordBtn) {
         chordBtn.classList.add('is-active');
-        setTimeout(() => chordBtn.classList.remove('is-active'), 200);
+        setTimeout(() => {
+          if (!this._heldKeys || !this._heldKeys.has(key)) {
+            chordBtn.classList.remove('is-active');
+          }
+        }, 250);
       }
     }
   }
@@ -1464,7 +1616,7 @@ export class BraunRb26App {
     // Master Voice Gain with 8ms anti-click attack and smooth exponential decay
     const voiceGain = ctx.createGain();
     voiceGain.gain.setValueAtTime(0.0001, now);
-    voiceGain.gain.linearRampToValueAtTime(velocity * 0.72, now + 0.008);
+    voiceGain.gain.linearRampToValueAtTime(velocity * 0.22, now + 0.008);
     voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
 
     // Spruce Soundboard Resonant Peaking Formant Filter (~480–610 Hz, Q=1.2, +2dB)
