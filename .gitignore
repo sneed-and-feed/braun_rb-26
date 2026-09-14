@@ -1,0 +1,36 @@
+# Build artifacts
+build/
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# IDE
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+out/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Node
+node_modules/
+package-lock.json
+
+# Archives
+*.zip

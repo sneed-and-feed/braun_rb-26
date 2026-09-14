@@ -1,0 +1,142 @@
+#pragma once
+
+#include "DspMath.h"
+#include "TailModulator.h"
+#include <array>
+#include <vector>
+#include <cmath>
+#include <cstddef>
+#include <algorithm>
+
+namespace rb26 {
+
+/**
+ * ManifoldType: The four selectable non-Euclidean delay geometries.
+ */
+enum class ManifoldType : int {
+    PoincareHyperbolic  = 0,
+    WhisperingGallery   = 1,
+    AnharmonicPlate     = 2,
+    StockhausenKlangdom = 3
+};
+
+/**
+ * FirstOrderAllpass: 1st-order dispersive allpass filter
+ * H(z) = (a + z^-1) / (1 + a * z^-1)
+ * Canonical one-multiplier form with denormal flushing.
+ */
+class FirstOrderAllpass {
+public:
+    void reset() noexcept { mState = 0.0f; }
+    void setCoeff(float a) noexcept { mCoeff = std::clamp(a, -0.99f, 0.99f); }
+    [[nodiscard]] inline float process(float x) noexcept {
+        const float v = x - mCoeff * mState;
+        const float y = mCoeff * v + mState;
+        mState = flushDenormal(v);
+        return flushDenormal(y);
+    }
+private:
+    float mCoeff { 0.0f };
+    float mState { 0.0f };
+};
+
+/**
+ * ManifoldDelayNetwork:
+ * Real-time non-Euclidean spatial delay network for the RB-26 reverb tank.
+ * Manages 8 delay lines with geometry-governed delays, per-line dispersion
+ * allpasses, manifold-specific resonant loop filters, and spatial stereo projections.
+ *
+ * Guarantees:
+ * - 0 dynamic heap allocations in audio thread (pre-allocated for 192 kHz)
+ * - Power-of-two bitmask indexing (2^16 = 65,536 samples)
+ * - Click-free manifold and room size parameter switching via OnePoleSmoother
+ * - Full denormal protection
+ */
+class ManifoldDelayNetwork {
+public:
+    static constexpr size_t kNumLines = 8;
+    // Sized for 192 kHz: 65,536 samples (~341.3 ms), power-of-two for bitwise masking
+    static constexpr size_t kBufferCapacity = 65536;
+    static constexpr size_t kBufferMask = kBufferCapacity - 1;
+
+    ManifoldDelayNetwork() noexcept;
+    ~ManifoldDelayNetwork() noexcept = default;
+
+    // Hard real-time lifecycle
+    void prepare(double sampleRate, float maxRoomSize = 2.0f) noexcept;
+    void reset() noexcept;
+
+    // Parameter updates
+    void setParameters(ManifoldType type, float roomSize, float highDampingHz) noexcept;
+    void setManifold(ManifoldType type) noexcept;
+
+    // Read 8 delay lines with Hermite cubic interpolation, apply dispersion allpasses and loop filters
+    // inExcursions: 8 modulation excursions in samples from TailModulator
+    // outFiltered: 8 filtered and dispersed delay outputs ready for Householder matrix reflection
+    void readAndFilterLines(const std::array<float, kNumLines>& inExcursions,
+                            std::array<float, kNumLines>& outFiltered) noexcept;
+
+    // Write reflected and saturated feedback samples back to the 8 delay lines
+    void writeFeedback(const std::array<float, kNumLines>& inSaturated) noexcept;
+
+    // Extract stereo late reverberation according to active manifold spatial geometry
+    void extractStereo(const std::array<float, kNumLines>& lines,
+                       float& outLateL, float& outLateR) noexcept;
+
+    [[nodiscard]] ManifoldType getActiveManifold() const noexcept { return mCurrentManifold; }
+    [[nodiscard]] const std::array<size_t, kNumLines>& getNominalLengths() const noexcept { return mNominalLengths; }
+
+private:
+    double mSampleRate { 48000.0 };
+    ManifoldType mCurrentManifold { ManifoldType::PoincareHyperbolic };
+    float mRoomSize { 0.65f };
+    float mHighDampingHz { 6500.0f };
+    bool  mIsFirstSet { true };
+
+    // 8 Delay line circular buffers pre-allocated for 192 kHz
+    std::array<std::vector<float>, kNumLines> mBuffers;
+    std::array<size_t, kNumLines> mWriteIndices {};
+
+    // Delay lengths and clickless slewing
+    std::array<size_t, kNumLines> mNominalLengths {};
+    std::array<OnePoleSmoother, kNumLines> mLengthSmoothers;
+
+    // Per-line Dispersion Allpass Stages (2 stages per line)
+    std::array<FirstOrderAllpass, kNumLines> mDispersionStage1;
+    std::array<FirstOrderAllpass, kNumLines> mDispersionStage2;
+
+    // Loop Filters
+    // 1. One-pole air absorption damping
+    std::array<float, kNumLines> mDampingStates {};
+    float mDampingAlpha { 0.5f };
+
+    // 2. Whispering Gallery Caustic Peaking Filter (9.5 kHz, +3.5 dB, Q = 2.8) + ultrasonic lowpass
+    std::array<BiquadDirectForm2T, kNumLines> mCausticPeaking;
+    std::array<OnePoleLowpass, kNumLines> mUltrasonicLowpass;
+
+    // 3. Anharmonic Plate Sitka Spruce Formants (A0: 95 Hz, T1: 320 Hz, Wood: 2400 Hz)
+    std::array<BiquadDirectForm2T, kNumLines> mSpruceA0;
+    std::array<BiquadDirectForm2T, kNumLines> mSpruceT1;
+    std::array<BiquadDirectForm2T, kNumLines> mSpruceWood;
+
+    // Spatial Panning / Extraction
+    // Whispering Gallery: Rotating circular spatial vector
+    float mCausticRotationAngle { 0.0f };
+    float mCausticRotationDelta { 0.0f };
+
+    // Spatial output weight smoothers for click-free manifold transitions
+    std::array<OnePoleSmoother, kNumLines> mSpatialWeightsL;
+    std::array<OnePoleSmoother, kNumLines> mSpatialWeightsR;
+
+    void updateManifoldGeometry() noexcept;
+    void updateFilterCoefficients() noexcept;
+    void updateSpatialWeights() noexcept;
+
+    // Manifold-specific delay length calculation routines
+    void computePoincareLengths(std::array<size_t, kNumLines>& lengths) const noexcept;
+    void computeWhisperingLengths(std::array<size_t, kNumLines>& lengths) const noexcept;
+    void computePlateLengths(std::array<size_t, kNumLines>& lengths) const noexcept;
+    void computeKlangdomLengths(std::array<size_t, kNumLines>& lengths) const noexcept;
+};
+
+} // namespace rb26

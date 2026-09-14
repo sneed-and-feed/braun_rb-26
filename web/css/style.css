@@ -1,0 +1,844 @@
+/**
+ * @file style.css
+ * @brief BRAUN RB-26 Studio Reverb · Dieter Rams Functionalist Industrial Design System
+ * Package-deal sibling unit to BRAUN AS-42 ("Weniger, aber besser").
+ * Exact design tokens: #ECEBE4, #141517, #EE592B, #24FF6A, #E5A93C.
+ * Strict DIN 1451 Mittelschrift typography and laboratory austerity.
+ */
+
+:root {
+  /* Braun Aluminum Light Chassis Theme (Default) */
+  --bg-app: #ECEBE4;
+  --bg-panel: #E2E0D8;
+  --bg-panel-inset: #D7D5CC;
+  --bg-bezel: #121414;
+  --border-line: #CBC8BD;
+  --border-subtle: #D8D6CD;
+  --text-primary: #1C1D1E;
+  --text-secondary: #5E6064;
+  --text-muted: #8E9094;
+  --knob-cap: #D4D2C9;
+  --knob-border: #BBB8AD;
+  --knob-indicator: #1C1D1E;
+  --knob-track: #D0CEC4;
+  --knob-fill: #1C1D1E;
+  --braun-orange: #EE592B;
+  --braun-orange-glow: rgba(238, 89, 43, 0.45);
+  --braun-green: #2A7B4C;
+  --braun-amber: #E5A93C;
+  --phosphor-color: #24FF6A;
+  --phosphor-glow: rgba(36, 255, 106, 0.40);
+  --font-sans: "DIN 1451 Mittelschrift", "DIN 1451", "DIN Alternate", "DIN Neuzeit Grotesk", -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Consolas", "Roboto Mono", "DIN 1451", monospace;
+  --panel-radius: 4px;
+}
+
+[data-theme="dark"],
+[data-theme="matte-black"] {
+  /* Braun Anthracite / Matte Black Studio Theme */
+  --bg-app: #141517;
+  --bg-panel: #1E2023;
+  --bg-panel-inset: #151618;
+  --bg-bezel: #0A0B0C;
+  --border-line: #3A3A3A;
+  --border-subtle: #2C2E33;
+  --text-primary: #F0F0F0;
+  --text-secondary: #BDBDBD;
+  --text-muted: #8E8E8E;
+  --text-dim: #8E8E8E;
+  --knob-cap: #2B2D31;
+  --knob-border: #4A4D52;
+  --knob-indicator: #F0F0F0;
+  --knob-track: #2A2C30;
+  --knob-fill: #EE592B;
+  --braun-orange: #EE592B;
+  --braun-orange-glow: rgba(238, 89, 43, 0.55);
+  --braun-green: #24FF6A;
+  --braun-amber: #F0B429;
+  --phosphor-color: #24FF6A;
+  --phosphor-glow: rgba(36, 255, 106, 0.55);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html {
+  overscroll-behavior: none;
+  overscroll-behavior-y: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  height: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+  overscroll-behavior-y: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: pan-y;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: max(20px, env(safe-area-inset-top))
+           max(16px, env(safe-area-inset-right))
+           max(36px, env(safe-area-inset-bottom))
+           max(16px, env(safe-area-inset-left));
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* --- Drag & Drop Patch Overlay --- */
+.braun-drop-overlay {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(20, 21, 23, 0.88);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  border: 2px dashed var(--braun-orange);
+}
+
+.braun-chassis.is-drag-over .braun-drop-overlay {
+  display: flex;
+}
+
+.braun-drop-text {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--braun-orange);
+  text-transform: uppercase;
+  border: 1px solid var(--braun-orange);
+  padding: 16px 28px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* --- Header / Top Bar --- */
+.braun-header {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border-bottom: 1px solid var(--border-line);
+  background-color: var(--bg-panel);
+}
+
+.braun-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.braun-logo-group {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.braun-brand {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--text-primary);
+}
+
+.braun-model {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+
+.braun-utility-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.braun-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.braun-label-inline {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.braun-select {
+  background-color: var(--bg-panel-inset);
+  color: var(--text-primary);
+  border: 1px solid var(--border-line);
+  border-radius: 2px;
+  padding: 5px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.braun-select:focus-visible {
+  border-color: var(--braun-orange);
+}
+
+/* --- Buttons & Switches --- */
+.braun-btn {
+  background-color: var(--bg-panel-inset);
+  color: var(--text-primary);
+  border: 1px solid var(--border-line);
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.braun-btn:hover {
+  background-color: var(--border-subtle);
+}
+
+.braun-btn:active,
+.braun-btn.is-active {
+  background-color: var(--braun-orange);
+  color: #fff;
+  border-color: var(--braun-orange);
+}
+
+/* Recording button active state */
+.braun-btn.is-recording {
+  background-color: var(--braun-orange);
+  color: #fff;
+  border-color: var(--braun-orange);
+}
+
+.braun-btn.is-recording .braun-led {
+  background-color: #fff;
+  box-shadow: 0 0 8px #fff;
+  animation: braun-rec-pulse 1s infinite alternate;
+}
+
+@keyframes braun-rec-pulse {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.3; transform: scale(0.85); }
+}
+
+/* A/B toggle states */
+#btn-ab-toggle.is-buffer-b {
+  border-color: var(--braun-orange);
+  color: var(--braun-orange);
+}
+
+.braun-rocker-btn {
+  background-color: var(--bg-panel-inset);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-line);
+  border-radius: 3px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  outline: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.braun-rocker-btn.is-active {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+.braun-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--border-line);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  display: inline-block;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.braun-led.is-active,
+.braun-rocker-btn.is-active .braun-led,
+.braun-btn.is-active .braun-led {
+  background-color: var(--braun-orange);
+  box-shadow: 0 0 6px var(--braun-orange-glow);
+  border-color: var(--braun-orange);
+}
+
+.braun-led.led-green.is-active {
+  background-color: var(--braun-green);
+  box-shadow: 0 0 6px var(--phosphor-glow);
+  border-color: var(--braun-green);
+}
+
+.braun-led.led-amber.is-active {
+  background-color: var(--braun-amber);
+  box-shadow: 0 0 6px rgba(229, 169, 60, 0.6);
+  border-color: var(--braun-amber);
+}
+
+/* Discrete Segmented Toggles */
+.braun-segment-group {
+  display: inline-flex;
+  border: 1px solid var(--border-line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.braun-segment-btn {
+  background-color: var(--bg-panel-inset);
+  color: var(--text-secondary);
+  border: none;
+  border-right: 1px solid var(--border-line);
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.braun-segment-btn:last-child {
+  border-right: none;
+}
+
+.braun-segment-btn.is-active {
+  background-color: var(--text-primary);
+  color: var(--bg-panel);
+}
+
+[data-theme="dark"] .braun-segment-btn.is-active {
+  background-color: var(--braun-orange);
+  color: #fff;
+}
+
+/* --- Panel Headings & Typography --- */
+.braun-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.braun-deck-subtitle {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* --- Rotary Knob Component Styling --- */
+.braun-knob-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  outline: none;
+  cursor: pointer;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.braun-knob-wrapper:focus-visible .braun-knob-cap {
+  outline: 2px solid var(--braun-orange);
+}
+
+.braun-knob-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-align: center;
+  touch-action: pan-y;
+  cursor: default;
+}
+
+.braun-knob-assembly {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.braun-knob-small .braun-knob-assembly {
+  width: 42px;
+  height: 42px;
+}
+
+.braun-knob-large .braun-knob-assembly {
+  width: 64px;
+  height: 64px;
+}
+
+.braun-knob-scale {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(140deg);
+}
+
+.braun-knob-track {
+  fill: none;
+  stroke: var(--knob-track);
+  stroke-width: 4;
+}
+
+.braun-knob-fill {
+  fill: none;
+  stroke: var(--knob-fill);
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.04s linear;
+}
+
+.braun-knob-cap {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--knob-cap);
+  border: 1px solid var(--knob-border);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.04s linear;
+}
+
+.braun-knob-small .braun-knob-cap {
+  width: 28px;
+  height: 28px;
+}
+
+.braun-knob-large .braun-knob-cap {
+  width: 46px;
+  height: 46px;
+}
+
+.braun-knob-indicator {
+  position: absolute;
+  top: 3px;
+  width: 2px;
+  height: 8px;
+  background-color: var(--knob-indicator);
+  border-radius: 1px;
+}
+
+.braun-knob-small .braun-knob-indicator {
+  height: 6px;
+}
+
+.braun-knob-large .braun-knob-indicator {
+  height: 10px;
+}
+
+.braun-knob-wrapper.is-active .braun-knob-indicator,
+.braun-knob-wrapper:hover .braun-knob-indicator {
+  background-color: var(--braun-orange);
+}
+
+.braun-knob-value-display {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-primary);
+  text-align: center;
+  min-width: 44px;
+  touch-action: pan-y;
+  cursor: default;
+}
+
+.braun-knob-unit {
+  font-size: 8px;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+.braun-knob-direct-input {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  width: 48px;
+  text-align: center;
+  background: var(--bg-panel-inset);
+  color: var(--text-primary);
+  border: 1px solid var(--border-line);
+  border-radius: 2px;
+  padding: 1px;
+}
+
+/* --- CRT Phosphor Scope Bezel --- */
+.braun-scope-bezel {
+  background-color: var(--bg-bezel);
+  border: 2px solid #000;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  height: 190px;
+}
+
+.braun-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ==========================================================================
+   DECK 07: AKUSTISCHER STIMULUS & EXCITER
+   ========================================================================== */
+.braun-exciter-deck {
+  width: 100%;
+  border-top: 1px solid var(--border-line);
+  border-bottom: 1px solid var(--border-line);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background-color: var(--bg-panel);
+}
+
+.braun-exciter-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.braun-exciter-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.braun-exciter-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.braun-exciter-controls {
+  background-color: var(--bg-panel-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--panel-radius);
+  padding: 12px;
+}
+
+.braun-exciter-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.braun-exciter-subgroup:last-child {
+  margin-bottom: 0;
+}
+
+.braun-subgroup-title {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.braun-pulse-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.braun-pulse-btn {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  border: 1px solid var(--border-line);
+  border-radius: 2px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.braun-pulse-btn:hover {
+  border-color: var(--text-primary);
+  background-color: var(--border-subtle);
+}
+
+.braun-pulse-btn:active {
+  background-color: var(--braun-orange);
+  color: #fff;
+  border-color: var(--braun-orange);
+}
+
+/* Poisson Controls */
+.braun-poisson-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.braun-poisson-param {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.braun-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  background: var(--border-line);
+  border-radius: 2px;
+  outline: none;
+}
+
+.braun-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 1px solid var(--knob-border);
+}
+
+[data-theme="dark"] .braun-slider::-webkit-slider-thumb {
+  background: var(--braun-orange);
+}
+
+/* Microtonal Chime Strip */
+.braun-exciter-performance {
+  background-color: var(--bg-panel-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--panel-radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.braun-strip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.braun-chime-strip {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  height: 96px;
+  touch-action: none;
+  position: relative;
+}
+
+.braun-chime-key {
+  flex: 1;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-line);
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.06s ease, background-color 0.08s ease, border-color 0.08s ease;
+  touch-action: none;
+}
+
+.braun-chime-key:hover {
+  background-color: var(--border-subtle);
+  border-color: var(--text-secondary);
+}
+
+.braun-chime-key.is-active {
+  background-color: var(--text-primary);
+  color: var(--bg-panel);
+  border-color: var(--text-primary);
+  transform: translateY(2px);
+}
+
+[data-theme="dark"] .braun-chime-key.is-active {
+  background-color: var(--braun-orange);
+  color: #fff;
+  border-color: var(--braun-orange);
+}
+
+.braun-key-hotkey {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.braun-chime-key.is-active .braun-key-hotkey {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.braun-key-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.braun-key-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--border-line);
+  transition: background-color 0.08s ease, box-shadow 0.08s ease;
+}
+
+.braun-chime-key.is-active .braun-key-indicator {
+  background-color: var(--braun-orange);
+  box-shadow: 0 0 6px var(--braun-orange-glow);
+}
+
+/* 12 Signature Chord Clusters */
+.braun-chord-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.braun-chord-btn {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  border: 1px solid var(--border-line);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.1s ease;
+}
+
+.braun-chord-btn .chord-num {
+  color: var(--braun-orange);
+  font-size: 8px;
+}
+
+.braun-chord-btn:hover {
+  background-color: var(--border-subtle);
+  border-color: var(--text-secondary);
+}
+
+.braun-chord-btn:active,
+.braun-chord-btn.is-active {
+  background-color: var(--braun-orange);
+  color: #fff;
+  border-color: var(--braun-orange);
+  transform: translateY(1px);
+}
+
+.braun-chord-btn.is-active .chord-num {
+  color: #fff;
+}
+
+/* --- Responsive Deck 07 Breakpoints --- */
+@media (max-width: 1139px) {
+  .braun-exciter-grid {
+    grid-template-columns: 1fr;
+  }
+  .braun-chord-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .braun-chord-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .braun-chime-strip {
+    height: 84px;
+  }
+}
+
+/* --- Footer / Manifesto --- */
+.braun-footer {
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-line);
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  width: 100%;
+}
+
+.braun-footer a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
