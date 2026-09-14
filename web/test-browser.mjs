@@ -324,6 +324,59 @@ async function runBrowserTest() {
     console.log(`[BrowserTest] Chime key triggered after preset change: ${keyIsActive}`);
     if (!keyIsActive) throw new Error('Expected chime key A to trigger after preset change');
 
+    // Release key 'a'
+    await evaluate(`
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
+    `);
+
+    // Test Spacebar Dirac Impulse Hotkey
+    console.log('[BrowserTest] Testing Spacebar Dirac Impulse Hotkey...');
+    await evaluate(`
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    `);
+    const impulseActive = await evaluate(`
+      document.getElementById('btn-audition-impulse').classList.contains('is-active')
+    `);
+    console.log(`[BrowserTest] Impulse button triggered on spacebar: ${impulseActive}`);
+    if (!impulseActive) throw new Error('Expected Dirac impulse button to be active on spacebar');
+
+    await evaluate(`
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+    `);
+
+    // Test Typematic Key Repeat Filter and Keyup Release
+    console.log('[BrowserTest] Testing Typematic Key Repeat Filter and Keyup Release...');
+    await evaluate(`
+      // Send keydown for 's'
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
+      // Send repeat keydown (simulating OS typematic repeat)
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', repeat: true, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', repeat: true, bubbles: true }));
+    `);
+    const activeVoiceCount = await evaluate(`window.__RB26__._activeVoices.size`);
+    const sKeyHeld = await evaluate(`window.__RB26__._heldKeys.has('s')`);
+    console.log(`[BrowserTest] Active voice count during hold (repeat ignored): ${activeVoiceCount}, held: ${sKeyHeld}`);
+    if (activeVoiceCount !== 1) throw new Error(`Expected exactly 1 active voice during hold, got ${activeVoiceCount}`);
+
+    // Now release key 's'
+    await evaluate(`
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 's', bubbles: true }));
+    `);
+    const activeVoiceCountAfterRelease = await evaluate(`window.__RB26__._activeVoices.size`);
+    const sKeyHeldAfter = await evaluate(`window.__RB26__._heldKeys.has('s')`);
+    console.log(`[BrowserTest] Active voice count after release: ${activeVoiceCountAfterRelease}, held: ${sKeyHeldAfter}`);
+    if (activeVoiceCountAfterRelease !== 0) throw new Error('Expected active voices to be 0 after keyup');
+    if (sKeyHeldAfter) throw new Error('Expected held keys to not contain s after keyup');
+
+    // Test Vector Pad Bidirectional Knob Sync
+    console.log('[BrowserTest] Testing Vector Pad Bidirectional Knob Sync...');
+    await evaluate(`
+      window.__RB26__.vectorPad.setCoordinates(0.80, 0.60, true);
+    `);
+    const syncedDepth = await evaluate(`window.__RB26__.knobs.tail_mod_depth.getValue()`);
+    console.log(`[BrowserTest] Vector pad Y=0.60 synced knob tail_mod_depth: ${syncedDepth}% (expected 60%)`);
+    if (syncedDepth !== 60) throw new Error(`Expected tail_mod_depth 60, got ${syncedDepth}`);
+
     // Test Calibrated Reset
     console.log('[BrowserTest] Testing Calibrated Reset...');
     await evaluate(`document.getElementById('btn-reset-all').click()`);

@@ -525,6 +525,8 @@ export class BraunRb26App {
     this.poissonHumanize = 0.50;
     this.poissonTimer = null;
     this.lastPoissonMidi = 60;
+    this._heldKeys = new Set();
+    this._activeVoices = new Map();
   }
 
   async init() {
@@ -657,6 +659,9 @@ export class BraunRb26App {
     const doUnlock = async () => {
       if (!this.engine.isInitialized) {
         await this.engine.init();
+        if (this.engine.analyserL && this.display) {
+          this.display.setAnalysers(this.engine.analyserL, this.engine.analyserR);
+        }
         if (this.engine.masterLimiter) {
           this.wavRecorder = new MasterWavRecorder(this.engine.ctx, this.engine.masterLimiter);
         }
@@ -849,6 +854,10 @@ export class BraunRb26App {
       onChange: (v) => {
         this.engine.setParam('tailBloomMs', v);
         this._emitJuceParam('tailBloomMs', v);
+        if (this.vectorPad && !this.vectorPad.isEngaged) {
+          const normY = Math.max(0, Math.min(1.0, (v - 20) / 230));
+          this.vectorPad.setCoordinates(this.vectorPad.x, normY, false);
+        }
       }
     });
 
@@ -1043,9 +1052,9 @@ export class BraunRb26App {
       presetSelect.addEventListener('change', (e) => {
         this.loadPreset(e.target.value);
         presetSelect.blur();
-      });
-      presetSelect.addEventListener('mouseup', () => {
-        setTimeout(() => presetSelect.blur(), 60);
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
       });
     }
 
@@ -1312,6 +1321,10 @@ export class BraunRb26App {
       scaleSelect.addEventListener('change', (e) => {
         this.currentScaleKey = e.target.value;
         this._updateChimeKeyLabels();
+        scaleSelect.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
       });
     }
 
@@ -1320,6 +1333,10 @@ export class BraunRb26App {
       rootSelect.addEventListener('change', (e) => {
         this.rootPitchClass = parseInt(e.target.value, 10);
         this._updateChimeKeyLabels();
+        rootSelect.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur();
+        }
       });
     }
 
@@ -1395,36 +1412,35 @@ export class BraunRb26App {
     };
 
     // Keyboard Shortcuts (A-' for chimes, 1-= for chords)
+    // Use capture phase to intercept BEFORE focused select/button elements process keystrokes
     window.addEventListener('keydown', (e) => {
-      // Don't hijack text entry fields
-      if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'button') return;
+      // Don't hijack text entry fields if user is typing custom patch name
+      const target = e.target;
+      if (target && target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'search' || !target.type)) return;
 
       const key = e.key ? e.key.toLowerCase() : '';
+      if (!isPlayableMusicalKey(key)) return;
 
-      // If preset select or dropdown has focus, blur it so typing triggers notes instead of cycling presets!
+      // Immediately blur any select, button, or active element so typing triggers notes cleanly
       const activeEl = document.activeElement;
-      if ((e.target && e.target.tagName === 'SELECT') || (activeEl && activeEl.tagName === 'SELECT')) {
-        if (isPlayableMusicalKey(key)) {
-          if (e.target && typeof e.target.blur === 'function') e.target.blur();
-          if (activeEl && typeof activeEl.blur === 'function') activeEl.blur();
-          e.preventDefault();
-        } else {
-          return;
-        }
+      if (activeEl && typeof activeEl.blur === 'function' && activeEl !== document.body) {
+        activeEl.blur();
+      }
+      if (target && typeof target.blur === 'function' && target !== document.body) {
+        target.blur();
       }
 
-      // Ignore browser auto-repeat events so sustained notes hold cleanly rather than stuttering at OS repeat speed
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Ignore browser typematic auto-repeat events so sustained notes hold cleanly rather than stuttering at OS repeat speed
       if (e.repeat) {
-        e.preventDefault();
         return;
       }
 
-      if (isPlayableMusicalKey(key)) {
-        this._heldKeys.add(key);
-      }
-
+      this._heldKeys.add(key);
       this._handleKeyboardShortcuts(e);
-    });
+    }, { capture: true });
 
     window.addEventListener('keyup', (e) => {
       const key = e.key ? e.key.toLowerCase() : '';
@@ -1432,7 +1448,7 @@ export class BraunRb26App {
         this._heldKeys.delete(key);
       }
       this._handleKeyboardKeyUp(e);
-    });
+    }, { capture: true });
   }
 
   _updateChimeKeyLabels() {
@@ -1511,6 +1527,22 @@ export class BraunRb26App {
 
   _handleKeyboardKeyUp(e) {
     const key = e.key ? e.key.toLowerCase() : '';
+
+    if (key === ' ') {
+      const impulseBtn = document.getElementById('btn-audition-impulse') || document.getElementById('btn-pulse-dirac');
+      if (impulseBtn) impulseBtn.classList.remove('is-active');
+      return;
+    }
+
+    // Release any active acoustic voice smoothly using piano felt damping (0.28s)
+    if (this._activeVoices && this._activeVoices.has(key)) {
+      const voice = this._activeVoices.get(key);
+      if (voice && typeof voice.release === 'function') {
+        voice.release(0.28);
+      }
+      this._activeVoices.delete(key);
+    }
+
     const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
     const chimeIdx = chimeHotkeys.indexOf(key);
     if (chimeIdx !== -1) {
@@ -1535,6 +1567,17 @@ export class BraunRb26App {
     if (!this.isPowered) return;
     const key = e.key ? e.key.toLowerCase() : '';
 
+    // Spacebar: Dirac Impulse Pulse
+    if (key === ' ') {
+      this.triggerDirac();
+      const impulseBtn = document.getElementById('btn-audition-impulse') || document.getElementById('btn-pulse-dirac');
+      if (impulseBtn) {
+        impulseBtn.classList.add('is-active');
+        setTimeout(() => impulseBtn.classList.remove('is-active'), 120);
+      }
+      return;
+    }
+
     // Chime hotkeys: a, s, d, f, g, h, j, k, l, ;, '
     const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
     const chimeIdx = chimeHotkeys.indexOf(key);
@@ -1542,7 +1585,14 @@ export class BraunRb26App {
       const keyEl = document.querySelector(`.braun-chime-key[data-hotkey="${key}"]`);
       if (keyEl) {
         const midi = parseFloat(keyEl.getAttribute('data-midi')) || (60 + chimeIdx * 2);
-        this.playChime(midi, 0.70);
+        const prevVoice = this._activeVoices ? this._activeVoices.get(key) : null;
+        if (prevVoice && typeof prevVoice.release === 'function') {
+          prevVoice.release(0.05);
+        }
+        const voice = this.playChime(midi, 0.70);
+        if (voice && this._activeVoices) {
+          this._activeVoices.set(key, voice);
+        }
         keyEl.classList.add('is-active');
         setTimeout(() => {
           if (!this._heldKeys || !this._heldKeys.has(key)) {
@@ -1557,7 +1607,14 @@ export class BraunRb26App {
     const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
     const chordIdx = chordHotkeys.indexOf(key);
     if (chordIdx !== -1) {
-      this.playChord(chordIdx);
+      const prevVoice = this._activeVoices ? this._activeVoices.get(key) : null;
+      if (prevVoice && typeof prevVoice.release === 'function') {
+        prevVoice.release(0.05);
+      }
+      const voice = this.playChord(chordIdx);
+      if (voice && this._activeVoices) {
+        this._activeVoices.set(key, voice);
+      }
       const chordBtn = document.querySelector(`.braun-chord-btn[data-chord-index="${chordIdx}"]`);
       if (chordBtn) {
         chordBtn.classList.add('is-active');
@@ -1723,6 +1780,29 @@ export class BraunRb26App {
     filter2.connect(bodyFilter);
     bodyFilter.connect(voiceGain);
     voiceGain.connect(this.engine.inputGain);
+
+    return {
+      release: (releaseSec = 0.28) => {
+        try {
+          const t = ctx.currentTime;
+          if (voiceGain.gain.cancelAndHoldAtTime) {
+            voiceGain.gain.cancelAndHoldAtTime(t);
+          } else {
+            voiceGain.gain.cancelScheduledValues(t);
+            voiceGain.gain.setValueAtTime(Math.max(0.0001, voiceGain.gain.value), t);
+          }
+          voiceGain.gain.exponentialRampToValueAtTime(0.0001, t + releaseSec);
+          setTimeout(() => {
+            try {
+              osc1.stop();
+              osc2.stop();
+              osc3.stop();
+              voiceGain.disconnect();
+            } catch (_) {}
+          }, (releaseSec + 0.05) * 1000);
+        } catch (_) {}
+      }
+    };
   }
 
   /**
@@ -1745,6 +1825,7 @@ export class BraunRb26App {
     }
 
     const strumMs = CHORD_SPEEDS[this.chordSpeed] ?? 50;
+    const voices = [];
 
     chord.freqs.forEach((freq, i) => {
       const jitter = strumMs > 0 ? (Math.random() - 0.5) * 6 : 0;
@@ -1752,9 +1833,18 @@ export class BraunRb26App {
       setTimeout(() => {
         if (!this.isPowered) return;
         const midi = 69 + 12 * Math.log2(freq / 440);
-        this.playChime(midi, 0.68, 4.2);
+        const v = this.playChime(midi, 0.68, 4.2);
+        if (v) voices.push(v);
       }, delay);
     });
+
+    return {
+      release: (sec = 0.35) => {
+        voices.forEach((v) => {
+          if (v && typeof v.release === 'function') v.release(sec);
+        });
+      }
+    };
   }
 
   /**
@@ -1770,7 +1860,7 @@ export class BraunRb26App {
     if (!this.engine.ctx || !this.engine.inputGain) return;
     const ctx = this.engine.ctx;
     const buf = ctx.createBuffer(1, 128, ctx.sampleRate);
-    buf.getChannelData(0)[0] = 0.95;
+    buf.getChannelData(0)[0] = 0.80;
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(this.engine.inputGain);

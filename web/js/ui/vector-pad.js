@@ -66,10 +66,10 @@ export class BraunVectorPad {
 
       <div class="braun-vector-surface-box" id="vector-surface">
         <canvas class="braun-vector-canvas"></canvas>
-        <span class="braun-vector-axis-label label-x-min">&lt; SLOW DRIFT</span>
-        <span class="braun-vector-axis-label label-x-max">FAST CHORUS &gt;</span>
-        <span class="braun-vector-axis-label label-y-max">^ DEEP BLOOM</span>
-        <span class="braun-vector-axis-label label-y-min">v SUBTLE TONE</span>
+        <span class="braun-vector-axis-label label-x-min">&#9668; SLOW</span>
+        <span class="braun-vector-axis-label label-x-max">FAST &#9658;</span>
+        <span class="braun-vector-axis-label label-y-max">&#9650; DEEP BLOOM</span>
+        <span class="braun-vector-axis-label label-y-min">SUBTLE &#9660;</span>
       </div>
 
       <div class="braun-vector-readout">

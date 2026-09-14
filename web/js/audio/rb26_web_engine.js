@@ -91,19 +91,19 @@ export class WebAudioPitchShifter {
     this.delayModSource.buffer = delayModBuffer;
     this.delayModSource.loop = true;
 
-    const delaySplitter = ctx.createChannelSplitter(2);
-    this.delayModSource.connect(delaySplitter);
-    delaySplitter.connect(this.delay1.delayTime, 0);
-    delaySplitter.connect(this.delay2.delayTime, 1);
+    this.delaySplitter = ctx.createChannelSplitter(2);
+    this.delayModSource.connect(this.delaySplitter);
+    this.delaySplitter.connect(this.delay1.delayTime, 0);
+    this.delaySplitter.connect(this.delay2.delayTime, 1);
 
     this.gainModSource = ctx.createBufferSource();
     this.gainModSource.buffer = gainModBuffer;
     this.gainModSource.loop = true;
 
-    const gainSplitter = ctx.createChannelSplitter(2);
-    this.gainModSource.connect(gainSplitter);
-    gainSplitter.connect(this.gain1.gain, 0);
-    gainSplitter.connect(this.gain2.gain, 1);
+    this.gainSplitter = ctx.createChannelSplitter(2);
+    this.gainModSource.connect(this.gainSplitter);
+    this.gainSplitter.connect(this.gain1.gain, 0);
+    this.gainSplitter.connect(this.gain2.gain, 1);
 
     this.delayModSource.start();
     this.gainModSource.start();
@@ -118,6 +118,12 @@ export class WebAudioPitchShifter {
       if (this.gainModSource) {
         this.gainModSource.stop();
         this.gainModSource.disconnect();
+      }
+      if (this.delaySplitter) {
+        this.delaySplitter.disconnect();
+      }
+      if (this.gainSplitter) {
+        this.gainSplitter.disconnect();
       }
     } catch (e) {}
   }
@@ -227,6 +233,7 @@ export class Rb26WebEngine {
     this.modalBus.gain.setValueAtTime(0.25, ctx.currentTime); // Calibrated headroom
     this.modalDelays = [];
     this.modalFeedbackGains = [];
+    this.modalDampingFilters = [];
     const modalTimes = [0.071, 0.089, 0.107, 0.126];
 
     // 4x4 Orthogonal Householder Reflection Matrix: H_4 = I_4 - 0.5 * 1 * 1^T
@@ -239,15 +246,22 @@ export class Rb26WebEngine {
       const d = ctx.createDelay(0.4);
       d.delayTime.setValueAtTime(modalTimes[i], ctx.currentTime);
 
+      // Lowpass damping filter in modal loop: extinguishes high-frequency transients and prevents metallic ringing
+      const damping = ctx.createBiquadFilter();
+      damping.type = 'lowpass';
+      damping.frequency.setValueAtTime(Math.min(320, this.params.lowCrossoverHz * 1.5), ctx.currentTime);
+      damping.Q.setValueAtTime(0.707, ctx.currentTime);
+
       const g = ctx.createGain();
       const fbGain = Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.90;
       g.gain.setValueAtTime(fbGain, ctx.currentTime);
 
       this.modalInputGain.connect(d);
 
-      // Direct path + Householder sum
-      d.connect(g);
-      d.connect(this.modalHouseholderSum);
+      // Recirculating path with lowpass damping + Householder reflection
+      d.connect(damping);
+      damping.connect(g);
+      damping.connect(this.modalHouseholderSum);
 
       this.modalHouseholderSum.connect(g);
       g.connect(d); // Recirculate through Householder reflection
@@ -255,6 +269,7 @@ export class Rb26WebEngine {
 
       this.modalDelays.push(d);
       this.modalFeedbackGains.push(g);
+      this.modalDampingFilters.push(damping);
     }
 
     // Sub-Mono Elliptical Filter on Modal Output
@@ -287,7 +302,7 @@ export class Rb26WebEngine {
     this.highPass2.connect(this.fdnInputBus);
 
     this.fdnSumBus = ctx.createGain();
-    this.fdnSumBus.gain.setValueAtTime(0.28, ctx.currentTime); // Bound diffuse sum below unity loop gain
+    this.fdnSumBus.gain.setValueAtTime(0.25, ctx.currentTime); // Bound diffuse sum below unity loop gain
 
     this.fdnDelays = [];
     this.fdnDampingFilters = [];
@@ -295,8 +310,9 @@ export class Rb26WebEngine {
     this.fdnLfos = [];
     this.fdnLfoGains = [];
 
-    // Prime delay lengths in seconds (eliminates harmonic overlap)
-    const fdnPrimes = [0.0293, 0.0353, 0.0419, 0.0479, 0.0541, 0.0607, 0.0673, 0.0739];
+    // Hyperbolic incommensurate delay lengths in seconds (Poincare manifold distribution: L_k = L_0 * cosh(xi * k / 7))
+    // Completely eliminates harmonic mode clustering and flutter ringing
+    const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
     const goldenRatios = [1.0, 1.618, 0.618, 1.272, 0.786, 1.414, 0.866, 1.118];
 
     // Orthogonal 8x8 Householder Reflection Matrix: H_8 = I_8 - 0.25 * 1 * 1^T
@@ -441,11 +457,11 @@ export class Rb26WebEngine {
 
     // Studio Transparent Peak Safety Limiter
     this.masterLimiter = ctx.createDynamicsCompressor();
-    this.masterLimiter.threshold.setValueAtTime(-1.0, ctx.currentTime);
-    this.masterLimiter.knee.setValueAtTime(3.0, ctx.currentTime);
-    this.masterLimiter.ratio.setValueAtTime(12.0, ctx.currentTime);
-    this.masterLimiter.attack.setValueAtTime(0.003, ctx.currentTime);
-    this.masterLimiter.release.setValueAtTime(0.060, ctx.currentTime);
+    this.masterLimiter.threshold.setValueAtTime(-0.5, ctx.currentTime);
+    this.masterLimiter.knee.setValueAtTime(2.0, ctx.currentTime);
+    this.masterLimiter.ratio.setValueAtTime(20.0, ctx.currentTime);
+    this.masterLimiter.attack.setValueAtTime(0.001, ctx.currentTime);
+    this.masterLimiter.release.setValueAtTime(0.080, ctx.currentTime);
 
     this.masterOutputBus.connect(this.outputTrimGain);
     this.outputTrimGain.connect(this.masterLimiter);
@@ -466,15 +482,19 @@ export class Rb26WebEngine {
   _generateHermiteCurve() {
     const n = 1024;
     const curve = new Float32Array(n);
+    const knee = 0.72;
+    const headroom = 0.26;
     for (let i = 0; i < n; i++) {
-      const x = (i / (n - 1)) * 4.0 - 2.0;
-      // Hermite bounded saturation: linear inside [-0.75, 0.75], cubic outside, bounded to 1.05
-      if (Math.abs(x) < 0.75) {
+      // Linear mapping from index to input range [-1.0, 1.0]
+      const x = (i / (n - 1)) * 2.0 - 1.0;
+      const absX = Math.abs(x);
+      // Linear transparent pass-through with exact unity gain (slope = 1.0) below knee
+      if (absX <= knee) {
         curve[i] = x;
       } else {
         const sign = x > 0 ? 1 : -1;
-        const absX = Math.abs(x);
-        curve[i] = sign * (0.75 + 0.30 * Math.tanh((absX - 0.75) / 0.30));
+        // Smooth C1-continuous soft knee transitioning into tanh saturation bounded to 0.98
+        curve[i] = sign * (knee + headroom * Math.tanh((absX - knee) / headroom));
       }
     }
     return curve;
@@ -545,6 +565,11 @@ export class Rb26WebEngine {
         this.lowPass2.frequency.setTargetAtTime(value, now, 0.02);
         this.highPass1.frequency.setTargetAtTime(value, now, 0.02);
         this.highPass2.frequency.setTargetAtTime(value, now, 0.02);
+        if (this.modalDampingFilters) {
+          for (const df of this.modalDampingFilters) {
+            df.frequency.setTargetAtTime(Math.min(360, value * 1.5), now, 0.02);
+          }
+        }
         break;
       case 'bassRt60Mult':
         this._updateModalDecayGains();
@@ -566,7 +591,7 @@ export class Rb26WebEngine {
         break;
       case 'decayRt60Sec':
       case 'roomSize': {
-        const fdnPrimes = [0.0293, 0.0353, 0.0419, 0.0479, 0.0541, 0.0607, 0.0673, 0.0739];
+        const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
         for (let i = 0; i < 8; i++) {
           this.fdnDelays[i].delayTime.setTargetAtTime(fdnPrimes[i] * this.params.roomSize, now, 0.02);
           const feedback = this.params.freezeHold ? 0.999 : (Math.pow(0.001, fdnPrimes[i] / this.params.decayRt60Sec) * 0.96);
@@ -578,7 +603,7 @@ export class Rb26WebEngine {
       case 'freezeHold': {
         const isFrozen = Boolean(value);
         this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 0.40, now, 0.02);
-        const fdnPrimes = [0.0293, 0.0353, 0.0419, 0.0479, 0.0541, 0.0607, 0.0673, 0.0739];
+        const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
         for (let i = 0; i < 8; i++) {
           this.fdnFeedbackGains[i].gain.setTargetAtTime(isFrozen ? 0.999 : (Math.pow(0.001, fdnPrimes[i] / this.params.decayRt60Sec) * 0.96), now, 0.02);
         }
@@ -686,7 +711,7 @@ export class Rb26WebEngine {
     const ctx = this.ctx;
     const buffer = ctx.createBuffer(1, 128, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    data[0] = 0.85; // Clean, calibrated click
+    data[0] = 0.80; // Clean, calibrated click
 
     const src = ctx.createBufferSource();
     src.buffer = buffer;

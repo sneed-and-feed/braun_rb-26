@@ -93,6 +93,21 @@ export class BraunCrtDisplay {
     this.draw();
   }
 
+  setAnalysers(analyserL, analyserR = null) {
+    this.analyserL = analyserL;
+    this.analyserR = analyserR;
+    if (this.analyserL) {
+      const size = this.analyserL.fftSize || 512;
+      if (this.timeDataL.length !== size) {
+        this.timeDataL = new Float32Array(size);
+        this.timeDataR = new Float32Array(size);
+        this.bufferSize = size;
+      }
+      if (!this.isRunning) this.start();
+    }
+    this.draw();
+  }
+
   setPower(isPowered) {
     this.isPowered = Boolean(isPowered);
     this.silentFrames = 0;
@@ -109,19 +124,26 @@ export class BraunCrtDisplay {
 
   /**
    * Push real-time audio samples from the DSP engine
-   * @param {Float32Array} left
-   * @param {Float32Array} right
+   * @param {Float32Array|Object} left
+   * @param {Float32Array} [right]
    */
   pushAudio(left, right) {
     if (!left) return;
-    const len = Math.min(this.bufferSize, left.length);
+    let lData = left;
+    let rData = right;
+    if (left && left.leftData) {
+      lData = left.leftData;
+      rData = left.rightData || left.leftData;
+    }
+    if (!lData || typeof lData.length !== 'number') return;
+    const len = Math.min(this.bufferSize, lData.length);
     let hasSignal = false;
 
     for (let i = 0; i < len; i++) {
-      this.timeDataL[i] = left[i];
-      const r = right ? right[i] : left[i];
+      this.timeDataL[i] = lData[i];
+      const r = (rData && typeof rData[i] === 'number') ? rData[i] : lData[i];
       this.timeDataR[i] = r;
-      if (!hasSignal && (Math.abs(left[i]) > 0.005 || Math.abs(r) > 0.005)) {
+      if (!hasSignal && (Math.abs(lData[i]) > 0.005 || Math.abs(r) > 0.005)) {
         hasSignal = true;
       }
     }
@@ -160,6 +182,25 @@ export class BraunCrtDisplay {
       const interval = (this.silentFrames > 60) ? 200 : (this.silentFrames > 15) ? 100 : 25;
 
       if (elapsed >= interval) {
+        if (this.analyserL) {
+          this.analyserL.getFloatTimeDomainData(this.timeDataL);
+          if (this.analyserR) {
+            this.analyserR.getFloatTimeDomainData(this.timeDataR);
+          } else {
+            this.timeDataR.set(this.timeDataL);
+          }
+          let maxVal = 0;
+          for (let i = 0; i < this.bufferSize; i += 8) {
+            const absVal = Math.abs(this.timeDataL[i]);
+            if (absVal > maxVal) maxVal = absVal;
+          }
+          if (maxVal > 0.005) {
+            this.silentFrames = 0;
+          } else {
+            this.silentFrames = Math.min(100, this.silentFrames + 1);
+          }
+        }
+
         this.lastRenderTime = now;
         this.draw();
       }
@@ -295,13 +336,21 @@ export class BraunCrtDisplay {
     ctx.fillText('ANALOG OSCILLOSCOPE [CH1 + CH2 SUM]', 10, 15);
 
     const len = this.bufferSize;
-    // Find rising zero-crossing trigger for rock-solid stationary trace
+    // Schmitt trigger rising zero-crossing search with hysteresis for rock-solid stationary trace
     let startIdx = 0;
     const searchLimit = Math.min(Math.floor(len / 2), len - 2);
     for (let i = 0; i < searchLimit; i++) {
-      if (this.timeDataL[i] < 0.0 && this.timeDataL[i + 1] >= 0.0) {
+      if (this.timeDataL[i] < -0.005 && this.timeDataL[i + 1] >= 0.0) {
         startIdx = i;
         break;
+      }
+    }
+    if (startIdx === 0) {
+      for (let i = 0; i < searchLimit; i++) {
+        if (this.timeDataL[i] < 0.0 && this.timeDataL[i + 1] >= 0.0) {
+          startIdx = i;
+          break;
+        }
       }
     }
 
