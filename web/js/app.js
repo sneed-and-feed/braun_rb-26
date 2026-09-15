@@ -1299,21 +1299,37 @@ export class BraunRb26App {
       }
     }
 
+    if (params.shimmer_interval !== undefined) {
+      this.engine.setParam('shimmerInterval', params.shimmer_interval);
+      const sIdx = params.shimmer_interval === 7 ? 0 : (params.shimmer_interval === 24 ? 2 : 1);
+      this._emitJuceParam('shimmerInterval', sIdx);
+    }
+
+    if (params.dimmer_interval !== undefined) {
+      this.engine.setParam('dimmerInterval', params.dimmer_interval);
+      const dIdx = params.dimmer_interval === -24 ? 1 : 0;
+      this._emitJuceParam('dimmerInterval', dIdx);
+    }
+
     if (params.decay_hold !== undefined) {
       const holdBtn = document.getElementById('btn-decay-hold');
       if (holdBtn) {
-        holdBtn.classList.toggle('is-active', params.decay_hold);
+        const isHold = Boolean(params.decay_hold);
+        holdBtn.classList.toggle('is-active', isHold);
         const statusText = holdBtn.querySelector('.braun-status-text');
-        if (statusText) statusText.textContent = params.decay_hold ? 'HOLD ON' : 'FREEZE HOLD';
-        this.engine.setParam('freezeHold', params.decay_hold);
+        if (statusText) statusText.textContent = isHold ? 'HOLD ON' : 'FREEZE HOLD';
+        this.engine.setParam('freezeHold', isHold);
+        this._emitJuceParam('freezeHold', isHold ? 1 : 0);
       }
     }
 
     if (params.soft_limiter !== undefined) {
       const limBtn = document.getElementById('btn-soft-limiter');
       if (limBtn) {
-        limBtn.classList.toggle('is-active', params.soft_limiter);
-        this.engine.setParam('limiterEnable', params.soft_limiter);
+        const isLim = Boolean(params.soft_limiter);
+        limBtn.classList.toggle('is-active', isLim);
+        this.engine.setParam('limiterEnable', isLim);
+        this._emitJuceParam('limiterEnable', isLim ? 1 : 0);
       }
     }
   }
@@ -1351,12 +1367,34 @@ export class BraunRb26App {
       this.vectorPad.setCoordinates(px, py, false);
     }
 
+    if (preset.params.shimmer_interval !== undefined) {
+      this.engine.setParam('shimmerInterval', preset.params.shimmer_interval);
+      const sIdx = preset.params.shimmer_interval === 7 ? 0 : (preset.params.shimmer_interval === 24 ? 2 : 1);
+      this._emitJuceParam('shimmerInterval', sIdx);
+    }
+
+    if (preset.params.dimmer_interval !== undefined) {
+      this.engine.setParam('dimmerInterval', preset.params.dimmer_interval);
+      const dIdx = preset.params.dimmer_interval === -24 ? 1 : 0;
+      this._emitJuceParam('dimmerInterval', dIdx);
+    }
+
     const holdBtn = document.getElementById('btn-decay-hold');
     if (holdBtn && preset.params.decay_hold !== undefined) {
-      holdBtn.classList.toggle('is-active', preset.params.decay_hold);
+      const isHold = Boolean(preset.params.decay_hold);
+      holdBtn.classList.toggle('is-active', isHold);
       const statusText = holdBtn.querySelector('.braun-status-text');
-      if (statusText) statusText.textContent = preset.params.decay_hold ? 'HOLD ON' : 'FREEZE HOLD';
-      this.engine.setParam('freezeHold', preset.params.decay_hold);
+      if (statusText) statusText.textContent = isHold ? 'HOLD ON' : 'FREEZE HOLD';
+      this.engine.setParam('freezeHold', isHold);
+      this._emitJuceParam('freezeHold', isHold ? 1 : 0);
+    }
+
+    const limBtn = document.getElementById('btn-soft-limiter');
+    if (limBtn && preset.params.soft_limiter !== undefined) {
+      const isLim = Boolean(preset.params.soft_limiter);
+      limBtn.classList.toggle('is-active', isLim);
+      this.engine.setParam('limiterEnable', isLim);
+      this._emitJuceParam('limiterEnable', isLim ? 1 : 0);
     }
   }
 
@@ -1690,6 +1728,15 @@ export class BraunRb26App {
       if (!this.engine.isInitialized) await this.engine.init();
       if (!keyEl) return;
 
+      const hotkey = keyEl.getAttribute('data-hotkey') || '';
+      if (hotkey && this._activeVoices && this._activeVoices.has(hotkey)) {
+        const oldKeyVoice = this._activeVoices.get(hotkey);
+        if (oldKeyVoice && typeof oldKeyVoice.release === 'function') {
+          oldKeyVoice.release(0.28);
+        }
+        this._activeVoices.delete(hotkey);
+      }
+
       const rect = keyEl.getBoundingClientRect();
       const relY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
       // Continuous velocity: higher on key = softer (0.35), lower = firmer (0.85)
@@ -1701,10 +1748,17 @@ export class BraunRb26App {
         ? getChimeMidiForDegree(keyIdx, this.rootPitchClass, scale.intervals)
         : (keyEl.hasAttribute('data-note-offset') ? (60 + parseFloat(keyEl.getAttribute('data-note-offset'))) : 60);
       const midi = parseFloat(keyEl.getAttribute('data-midi')) || fallbackMidi;
-      this.playChime(midi, velocity);
+      const voice = this.playChime(midi, velocity);
+      if (voice && hotkey && this._activeVoices) {
+        this._activeVoices.set(hotkey, voice);
+      }
 
       keyEl.classList.add('is-active');
-      setTimeout(() => keyEl.classList.remove('is-active'), 140);
+      setTimeout(() => {
+        if (!this._heldKeys || !this._heldKeys.has(hotkey)) {
+          keyEl.classList.remove('is-active');
+        }
+      }, 140);
     };
 
     const onPointerDown = (e) => {
@@ -1757,7 +1811,8 @@ export class BraunRb26App {
     const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
     const chimeIdx = chimeHotkeys.indexOf(key);
     if (chimeIdx !== -1) {
-      const keyEl = document.querySelector(`.braun-chime-key[data-hotkey="${key}"]`);
+      const chimeKeys = document.querySelectorAll('.braun-chime-key');
+      const keyEl = Array.from(chimeKeys).find((el) => el.getAttribute('data-hotkey') === key);
       if (keyEl) {
         keyEl.classList.remove('is-active');
       }
@@ -1767,7 +1822,8 @@ export class BraunRb26App {
     const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
     const chordIdx = chordHotkeys.indexOf(key);
     if (chordIdx !== -1) {
-      const chordBtn = document.querySelector(`.braun-chord-btn[data-chord-index="${chordIdx}"]`);
+      const chordBtns = document.querySelectorAll('.braun-chord-btn');
+      const chordBtn = Array.from(chordBtns).find((btn) => btn.getAttribute('data-chord-index') === String(chordIdx));
       if (chordBtn && !chordBtn._pointerActive) {
         chordBtn.classList.remove('is-active');
       }
@@ -1788,7 +1844,8 @@ export class BraunRb26App {
     const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
     const chimeIdx = chimeHotkeys.indexOf(key);
     if (chimeIdx !== -1) {
-      const keyEl = document.querySelector(`.braun-chime-key[data-hotkey="${key}"]`);
+      const chimeKeys = document.querySelectorAll('.braun-chime-key');
+      const keyEl = Array.from(chimeKeys).find((el) => el.getAttribute('data-hotkey') === key);
       if (keyEl) {
         const scale = SCALES[this.currentScaleKey] || SCALES.BUDD_PENTATONIC;
         const midi = parseFloat(keyEl.getAttribute('data-midi')) || getChimeMidiForDegree(chimeIdx, this.rootPitchClass, scale.intervals);
@@ -1814,7 +1871,8 @@ export class BraunRb26App {
     const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
     const chordIdx = chordHotkeys.indexOf(key);
     if (chordIdx !== -1) {
-      const chordBtn = document.querySelector(`.braun-chord-btn[data-chord-index="${chordIdx}"]`);
+      const chordBtns = document.querySelectorAll('.braun-chord-btn');
+      const chordBtn = Array.from(chordBtns).find((btn) => btn.getAttribute('data-chord-index') === String(chordIdx));
       if (chordBtn && this._activeChordButtons && this._activeChordButtons.has(chordBtn)) {
         const oldBtnVoice = this._activeChordButtons.get(chordBtn);
         if (oldBtnVoice && typeof oldBtnVoice.release === 'function') oldBtnVoice.release(0.28);

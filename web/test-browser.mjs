@@ -216,6 +216,14 @@ async function runBrowserTest() {
     if (savedTheme !== 'dark') throw new Error(`Expected localStorage theme to be "dark", got "${savedTheme}"`);
 
     // Test Preset Loading (Classic + Companion)
+    console.log('[BrowserTest] Testing preset loading (SUB_BASS_PRESERVER)...');
+    await evaluate(`window.__RB26__.loadPreset('SUB_BASS_PRESERVER')`);
+    const subBassRt60 = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
+    console.log(`[BrowserTest] Loaded SUB_BASS_PRESERVER RT60: ${subBassRt60}s (expected 4.5s)`);
+    if (Math.abs(subBassRt60 - 4.5) > 0.1) {
+      throw new Error(`Expected RT60 approx 4.5, got ${subBassRt60}`);
+    }
+
     console.log('[BrowserTest] Testing preset loading (AMBIENT_GUITAR_CLOUD)...');
     await evaluate(`window.__RB26__.loadPreset('AMBIENT_GUITAR_CLOUD')`);
     const rt60Val = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
@@ -780,6 +788,188 @@ async function runBrowserTest() {
     if (chordHoldResult.maxChordJump500ms >= 0.05) throw new Error(`Chord 500ms release jump exceeds 0.05 threshold: ${chordHoldResult.maxChordJump500ms}`);
     if (chordHoldResult.activeVoicesAfterChord500ms !== 0) throw new Error(`Expected 0 active voices after chord 500ms keyup, got ${chordHoldResult.activeVoicesAfterChord500ms}`);
     if (chordHoldResult.finalRms >= 0.04) throw new Error(`Chord did not decay to silence after release tail! Final RMS: ${chordHoldResult.finalRms}`);
+
+    // Test High Register Chime Keys (; and ') Hold and Release
+    console.log('[BrowserTest] Testing High Register Chime Keys (; and \') Hold and Release...');
+    const punctChimeResult = await evaluate(`
+      (async () => {
+        const keyElSemicolon = Array.from(document.querySelectorAll('.braun-chime-key')).find(el => el.getAttribute('data-hotkey') === ';');
+        const keyElQuote = Array.from(document.querySelectorAll('.braun-chime-key')).find(el => el.getAttribute('data-hotkey') === "'");
+
+        // 1. Hold semicolon (;) for 120ms
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ';', bubbles: true }));
+        await new Promise(r => setTimeout(r, 60));
+        const semiActiveDuringHold = keyElSemicolon ? keyElSemicolon.classList.contains('is-active') : false;
+        const semiVoicesDuringHold = window.__RB26__._activeVoices.size;
+
+        await new Promise(r => setTimeout(r, 60));
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: ';', bubbles: true }));
+        let maxJumpSemi = 0;
+        for (let pass = 0; pass < 4; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxJumpSemi) maxJumpSemi = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+        await new Promise(r => setTimeout(r, 200));
+        const semiActiveAfterKeyUp = keyElSemicolon ? keyElSemicolon.classList.contains('is-active') : false;
+        const semiVoicesAfterKeyUp = window.__RB26__._activeVoices.size;
+
+        // 2. Hold single quote (') for 120ms
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: "'", bubbles: true }));
+        await new Promise(r => setTimeout(r, 60));
+        const quoteActiveDuringHold = keyElQuote ? keyElQuote.classList.contains('is-active') : false;
+        const quoteVoicesDuringHold = window.__RB26__._activeVoices.size;
+
+        await new Promise(r => setTimeout(r, 60));
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: "'", bubbles: true }));
+        let maxJumpQuote = 0;
+        for (let pass = 0; pass < 4; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxJumpQuote) maxJumpQuote = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+        await new Promise(r => setTimeout(r, 200));
+        const quoteActiveAfterKeyUp = keyElQuote ? keyElQuote.classList.contains('is-active') : false;
+        const quoteVoicesAfterKeyUp = window.__RB26__._activeVoices.size;
+
+        return {
+          semiActiveDuringHold,
+          semiVoicesDuringHold,
+          semiActiveAfterKeyUp,
+          semiVoicesAfterKeyUp,
+          maxJumpSemi,
+          quoteActiveDuringHold,
+          quoteVoicesDuringHold,
+          quoteActiveAfterKeyUp,
+          quoteVoicesAfterKeyUp,
+          maxJumpQuote
+        };
+      })()
+    `);
+    console.log('[BrowserTest] Punctuation chimes result:', punctChimeResult);
+    if (!punctChimeResult.semiActiveDuringHold) throw new Error('Expected chime key ; to be active during hold');
+    if (punctChimeResult.semiVoicesDuringHold !== 1) throw new Error('Expected 1 active voice during ; hold');
+    if (punctChimeResult.semiActiveAfterKeyUp) throw new Error('Expected chime key ; to clear active class on keyup');
+    if (punctChimeResult.semiVoicesAfterKeyUp !== 0) throw new Error('Expected 0 active voices after ; keyup');
+    if (punctChimeResult.maxJumpSemi >= 0.05) throw new Error(`Chime ; release jump exceeds 0.05 threshold: ${punctChimeResult.maxJumpSemi}`);
+    if (!punctChimeResult.quoteActiveDuringHold) throw new Error('Expected chime key \' to be active during hold');
+    if (punctChimeResult.quoteVoicesDuringHold !== 1) throw new Error('Expected 1 active voice during \' hold');
+    if (punctChimeResult.quoteActiveAfterKeyUp) throw new Error('Expected chime key \' to clear active class on keyup');
+    if (punctChimeResult.quoteVoicesAfterKeyUp !== 0) throw new Error('Expected 0 active voices after \' keyup');
+    if (punctChimeResult.maxJumpQuote >= 0.05) throw new Error(`Chime \' release jump exceeds 0.05 threshold: ${punctChimeResult.maxJumpQuote}`);
+
+    // Test Mid-Strum Slow Chord Keyup Release (Timer Cancellation & Zero Secondary Triggers)
+    console.log('[BrowserTest] Testing Mid-Strum Slow Chord Keyup Release...');
+    const slowStrumResult = await evaluate(`
+      (async () => {
+        const prevSpeed = window.__RB26__.chordSpeed;
+        window.__RB26__.chordSpeed = 'slow'; // 120ms per note
+
+        let chimeInvocations = 0;
+        const origPlayChime = window.__RB26__.playChime;
+        window.__RB26__.playChime = function(...args) {
+          chimeInvocations++;
+          return origPlayChime.apply(this, args);
+        };
+
+        // Keydown on chord '1' (Harold Budd Sus2: 4 notes spaced 120ms apart)
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
+        // Release after 60ms: exactly 1 note should have fired, remaining 3 timers pending
+        await new Promise(r => setTimeout(r, 60));
+        const callsAtRelease = chimeInvocations;
+
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: '1', bubbles: true }));
+
+        // Wait 400ms (longer than the full 360ms strum duration) to confirm cancelled timers NEVER fire
+        await new Promise(r => setTimeout(r, 400));
+        const callsAfterStrumWindow = chimeInvocations;
+        const activeVoicesAfterRelease = window.__RB26__._activeVoices.size;
+
+        let maxJumpSlow = 0;
+        for (let pass = 0; pass < 4; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxJumpSlow) maxJumpSlow = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+
+        window.__RB26__.playChime = origPlayChime;
+        window.__RB26__.chordSpeed = prevSpeed;
+
+        return {
+          callsAtRelease,
+          callsAfterStrumWindow,
+          activeVoicesAfterRelease,
+          maxJumpSlow
+        };
+      })()
+    `);
+    console.log('[BrowserTest] Mid-strum slow chord result:', slowStrumResult);
+    if (slowStrumResult.callsAtRelease !== 1) throw new Error(`Expected 1 note fired before release, got ${slowStrumResult.callsAtRelease}`);
+    if (slowStrumResult.callsAfterStrumWindow !== 1) throw new Error(`Expected pending strum notes to be cancelled, got ${slowStrumResult.callsAfterStrumWindow} calls`);
+    if (slowStrumResult.activeVoicesAfterRelease !== 0) throw new Error(`Expected 0 active voices after mid-strum release, got ${slowStrumResult.activeVoicesAfterRelease}`);
+    if (slowStrumResult.maxJumpSlow >= 0.05) throw new Error(`Slow strum release jump exceeds 0.05 threshold: ${slowStrumResult.maxJumpSlow}`);
+
+    // Test Polyphonic Multi-Key Cluster Hold and Staggered Keyup Release
+    console.log('[BrowserTest] Testing Polyphonic Multi-Key Cluster Hold...');
+    const clusterResult = await evaluate(`
+      (async () => {
+        // Press 4 keys simultaneously: 2 chimes ('d', 'k') and 2 chords ('3', '4')
+        const keysToPress = ['d', 'k', '3', '4'];
+        keysToPress.forEach(k => {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+        });
+
+        await new Promise(r => setTimeout(r, 150));
+        const voicesDuringCluster = window.__RB26__._activeVoices.size;
+        const heldKeysDuringCluster = window.__RB26__._heldKeys.size;
+
+        // Release keys one by one in staggered fashion (40ms spacing)
+        let maxClusterJump = 0;
+        for (const k of keysToPress) {
+          window.dispatchEvent(new KeyboardEvent('keyup', { key: k, bubbles: true }));
+          for (let pass = 0; pass < 3; pass++) {
+            const buf = new Float32Array(512);
+            window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+            for (let i = 1; i < buf.length; i++) {
+              const diff = Math.abs(buf[i] - buf[i - 1]);
+              if (diff > maxClusterJump) maxClusterJump = diff;
+            }
+            await new Promise(r => setTimeout(r, 10));
+          }
+          await new Promise(r => setTimeout(r, 40));
+        }
+
+        await new Promise(r => setTimeout(r, 300));
+        const voicesAfterCluster = window.__RB26__._activeVoices.size;
+        const heldKeysAfterCluster = window.__RB26__._heldKeys.size;
+
+        return {
+          voicesDuringCluster,
+          heldKeysDuringCluster,
+          voicesAfterCluster,
+          heldKeysAfterCluster,
+          maxClusterJump
+        };
+      })()
+    `);
+    console.log('[BrowserTest] Polyphonic cluster result:', clusterResult);
+    if (clusterResult.voicesDuringCluster !== 4) throw new Error(`Expected 4 active cluster voices, got ${clusterResult.voicesDuringCluster}`);
+    if (clusterResult.heldKeysDuringCluster !== 4) throw new Error(`Expected 4 held keys during cluster, got ${clusterResult.heldKeysDuringCluster}`);
+    if (clusterResult.voicesAfterCluster !== 0) throw new Error(`Expected 0 active voices after cluster release, got ${clusterResult.voicesAfterCluster}`);
+    if (clusterResult.heldKeysAfterCluster !== 0) throw new Error(`Expected 0 held keys after cluster release, got ${clusterResult.heldKeysAfterCluster}`);
+    if (clusterResult.maxClusterJump >= 0.05) throw new Error(`Cluster release jump exceeds 0.05 threshold: ${clusterResult.maxClusterJump}`);
 
     // Test Window Blur Safety Release
     console.log('[BrowserTest] Testing Window Blur Safety Release...');
