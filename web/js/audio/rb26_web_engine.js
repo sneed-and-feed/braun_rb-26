@@ -1212,14 +1212,48 @@ export class Rb26WebEngine {
   }
 
   /**
-   * Dirac Delta Impulse Click
+   * Band-Limited Dirac Delta Impulse Excitation
+   * Delivers zero-DC, windowed acoustic impulse excitation to audition
+   * the reverb tank decay profile and impulse response without DAC step pop.
    */
   triggerImpulse() {
     if (!this.ctx) return;
     const ctx = this.ctx;
-    const buffer = ctx.createBuffer(1, 128, ctx.sampleRate);
+    const length = 96; // 2.0ms at 48kHz
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    data[0] = 0.80; // Clean, calibrated click
+    const center = (length - 1) / 2;
+    const f0 = 2400; // Optimal center frequency for full-spectrum reverb tank excitation
+
+    for (let i = 0; i < length; i++) {
+      const t = (i - center) / ctx.sampleRate;
+      const a = Math.PI * f0 * t;
+      const a2 = a * a;
+      // Hann window to guarantee strict zero at boundaries
+      const win = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (length - 1)));
+      data[i] = (1 - 2 * a2) * Math.exp(-a2) * win;
+    }
+
+    // Exact DC nulling
+    let sum = 0;
+    for (let i = 0; i < length; i++) sum += data[i];
+    const mean = sum / length;
+    for (let i = 0; i < length; i++) data[i] -= mean;
+
+    // Strict zero endpoints to eliminate boundary clicks
+    data[0] = 0.0;
+    data[1] *= 0.25;
+    data[length - 2] *= 0.25;
+    data[length - 1] = 0.0;
+
+    let maxVal = 0;
+    for (let i = 0; i < length; i++) {
+      const abs = Math.abs(data[i]);
+      if (abs > maxVal) maxVal = abs;
+    }
+    if (maxVal > 0) {
+      for (let i = 0; i < length; i++) data[i] = (data[i] / maxVal) * 0.85;
+    }
 
     const src = ctx.createBufferSource();
     src.buffer = buffer;

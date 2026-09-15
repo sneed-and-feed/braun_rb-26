@@ -273,8 +273,56 @@ async function runBrowserTest() {
     console.log(`[BrowserTest] Chord buttons count: ${chordBtnCount} (expected 12)`);
     if (chordBtnCount !== 12) throw new Error(`Expected 12 chord buttons, got ${chordBtnCount}`);
 
-    // Trigger first chord button
+    // Trigger first chord button via programmatic click
     await evaluate(`document.querySelector('.braun-chord-btn[data-chord-index="0"]').click()`);
+
+    // Test Chord Button Tactile Pointer and Duplicate Click Suppression
+    console.log('[BrowserTest] Testing Chord Button Tactile Pointer and Duplicate Click Suppression...');
+    const pointerTriggerResult = await evaluate(`
+      (async () => {
+        const btn = document.querySelector('.braun-chord-btn[data-chord-index="0"]');
+        let playChordCalls = 0;
+        const origPlayChord = window.__RB26__.playChord;
+        window.__RB26__.playChord = function(...args) {
+          playChordCalls++;
+          return origPlayChord.apply(this, args);
+        };
+
+        // 1. Pointerdown starts chord
+        btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        const isActiveOnDown = btn.classList.contains('is-active');
+        const activeVoicesOnDown = window.__RB26__._activeChordButtons ? window.__RB26__._activeChordButtons.size : 0;
+
+        await new Promise(r => setTimeout(r, 60));
+
+        // 2. Pointerup releases chord
+        btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        const isActiveOnUp = btn.classList.contains('is-active');
+        const activeVoicesOnUp = window.__RB26__._activeChordButtons ? window.__RB26__._activeChordButtons.size : 0;
+
+        // 3. Browser synthesizes click event immediately after pointerup
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        // Restore original method
+        window.__RB26__.playChord = origPlayChord;
+
+        return {
+          playChordCalls,
+          isActiveOnDown,
+          activeVoicesOnDown,
+          isActiveOnUp,
+          activeVoicesOnUp
+        };
+      })()
+    `);
+    console.log('[BrowserTest] Chord tactile pointer result:', pointerTriggerResult);
+    if (!pointerTriggerResult.isActiveOnDown) throw new Error('Chord button must become active on pointerdown');
+    if (pointerTriggerResult.activeVoicesOnDown !== 1) throw new Error('Chord button must register active voice on pointerdown');
+    if (pointerTriggerResult.isActiveOnUp) throw new Error('Chord button must clear active state on pointerup');
+    if (pointerTriggerResult.activeVoicesOnUp !== 0) throw new Error('Chord button must release active voice on pointerup');
+    if (pointerTriggerResult.playChordCalls !== 1) {
+      throw new Error(`Expected exactly 1 playChord invocation (duplicate click not suppressed), got ${pointerTriggerResult.playChordCalls}`);
+    }
 
     // Test Poisson Generator Toggle
     console.log('[BrowserTest] Testing Poisson Generator Toggle...');
@@ -337,12 +385,34 @@ async function runBrowserTest() {
     const impulseActive = await evaluate(`
       document.getElementById('btn-audition-impulse').classList.contains('is-active')
     `);
-    console.log(`[BrowserTest] Impulse button triggered on spacebar: ${impulseActive}`);
-    if (!impulseActive) throw new Error('Expected Dirac impulse button to be active on spacebar');
+    const deck7DiracActive = await evaluate(`
+      document.getElementById('btn-pulse-dirac').classList.contains('is-active')
+    `);
+    console.log(`[BrowserTest] Impulse button triggered on spacebar: ${impulseActive}, deck 7: ${deck7DiracActive}`);
+    if (!impulseActive) throw new Error('Expected Dirac impulse audition button to be active on spacebar');
+    if (!deck7DiracActive) throw new Error('Expected Deck 07 Dirac impulse button to be active on spacebar');
+
+    // Sample audio energy in reverb tank to verify band-limited excitation bloom
+    const impulseEnergy = await evaluate(`
+      (() => {
+        const buf = new Float32Array(512);
+        window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+        let rms = 0;
+        for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
+        return Math.sqrt(rms / buf.length);
+      })()
+    `);
+    console.log(`[BrowserTest] Dirac impulse excitation RMS: ${impulseEnergy.toFixed(6)}`);
+    if (impulseEnergy <= 0.0001) throw new Error('Expected Dirac impulse to audibly excite the reverb tank');
 
     await evaluate(`
       window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
     `);
+    const impulseStillActive = await evaluate(`
+      document.getElementById('btn-audition-impulse').classList.contains('is-active') ||
+      document.getElementById('btn-pulse-dirac').classList.contains('is-active')
+    `);
+    if (impulseStillActive) throw new Error('Expected Dirac impulse buttons to clear active state on spacebar keyup');
 
     // Test Typematic Key Repeat Filter and Keyup Release
     console.log('[BrowserTest] Testing Typematic Key Repeat Filter and Keyup Release...');
