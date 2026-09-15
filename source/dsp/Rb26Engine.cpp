@@ -282,9 +282,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
         const float fb = mPitchFeedbackSmoother.next();
         const float safePitchFb = fb * 0.30f;
-        const bool pitchActive = (mParams.shimmerSend > 0.001f || mParams.dimmerSend > 0.001f);
-        const float injPitchL = pitchActive ? (delayedPitchL * safePitchFb) : 0.0f;
-        const float injPitchR = pitchActive ? (delayedPitchR * safePitchFb) : 0.0f;
+        const float injPitchL = delayedPitchL * safePitchFb;
+        const float injPitchR = delayedPitchR * safePitchFb;
 
         float lateL = 0.0f, lateR = 0.0f;
         mFdnTank.processSample(highInL, highInR, injPitchL, injPitchR, lateL, lateR);
@@ -305,8 +304,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         const float elMix = mEarlyLateSmoother.next();
         const float earlyGain = std::cos(elMix * kHalfPi);
         const float lateGain  = std::sin(elMix * kHalfPi);
-        const float pitchAddL = pitchActive ? (delayedPitchL * 0.85f) : 0.0f;
-        const float pitchAddR = pitchActive ? (delayedPitchR * 0.85f) : 0.0f;
+        const float pitchAddL = delayedPitchL * 0.85f;
+        const float pitchAddR = delayedPitchR * 0.85f;
         const float highReverbL = earlyGain * earlyL + lateGain * (lateL + pitchAddL);
         const float highReverbR = earlyGain * earlyR + lateGain * (lateR + pitchAddR);
 

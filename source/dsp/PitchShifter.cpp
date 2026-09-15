@@ -97,6 +97,9 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
 }
 
 inline float DualTapDelayPitchShifter::readHermite(float readPos) const noexcept {
+    if (!std::isfinite(readPos)) [[unlikely]] {
+        return 0.0f;
+    }
     const float bufSz = static_cast<float>(kMaxCapacity);
     while (readPos < 0.0f) readPos += bufSz;
     while (readPos >= bufSz) readPos -= bufSz;
@@ -105,11 +108,12 @@ inline float DualTapDelayPitchShifter::readHermite(float readPos) const noexcept
     const float frac = readPos - static_cast<float>(i0);
 
     const int im1 = (i0 - 1 + kMaxCapacity) & kBufferMask;
+    const int i0_m = i0 & kBufferMask;
     const int i1 = (i0 + 1) & kBufferMask;
     const int i2 = (i0 + 2) & kBufferMask;
 
     const float ym1 = mDelayBuffer[static_cast<size_t>(im1)];
-    const float y0  = mDelayBuffer[static_cast<size_t>(i0)];
+    const float y0  = mDelayBuffer[static_cast<size_t>(i0_m)];
     const float y1  = mDelayBuffer[static_cast<size_t>(i1)];
     const float y2  = mDelayBuffer[static_cast<size_t>(i2)];
 
@@ -245,6 +249,22 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     const float fb = mPitchFeedbackSmoother.next();
     const float spiralDepth = mSpiralDepthSmoother.next();
 
+    // Fast path: when both shimmer and dimmer sends are bypassed or below threshold
+    if (sSend <= 1.0e-5f && dSend <= 1.0e-5f) {
+        mRecircShimmerL = 0.0f;
+        mRecircShimmerR = 0.0f;
+        mRecircDimmerL = 0.0f;
+        mRecircDimmerR = 0.0f;
+        mShimmerCircBufferL[mCircWriteIndex] = 0.0f;
+        mShimmerCircBufferR[mCircWriteIndex] = 0.0f;
+        mDimmerCircBufferL[mCircWriteIndex] = 0.0f;
+        mDimmerCircBufferR[mCircWriteIndex] = 0.0f;
+        mCircWriteIndex = (mCircWriteIndex + 1) & kCircMask;
+        outL = 0.0f;
+        outR = 0.0f;
+        return;
+    }
+
     // Equal-power crossfade weighting based on blend beta in [-1.0, +1.0]
     const float blendAngle = (kPi * 0.25f) * (1.0f - blend);
     const float blendShim = std::cos(blendAngle);
@@ -293,12 +313,8 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     } else {
         mRecircShimmerL = 0.0f;
         mRecircShimmerR = 0.0f;
-        std::fill(mShimmerCircBufferL.begin(), mShimmerCircBufferL.end(), 0.0f);
-        std::fill(mShimmerCircBufferR.begin(), mShimmerCircBufferR.end(), 0.0f);
-        mShimmerFilterL.reset();
-        mShimmerFilterR.reset();
-        mShimmerShifterL.reset();
-        mShimmerShifterR.reset();
+        mShimmerCircBufferL[mCircWriteIndex] = 0.0f;
+        mShimmerCircBufferR[mCircWriteIndex] = 0.0f;
         shimSatL = 0.0f;
         shimSatR = 0.0f;
     }
@@ -341,12 +357,8 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     } else {
         mRecircDimmerL = 0.0f;
         mRecircDimmerR = 0.0f;
-        std::fill(mDimmerCircBufferL.begin(), mDimmerCircBufferL.end(), 0.0f);
-        std::fill(mDimmerCircBufferR.begin(), mDimmerCircBufferR.end(), 0.0f);
-        mDimmerFilterL.reset();
-        mDimmerFilterR.reset();
-        mDimmerShifterL.reset();
-        mDimmerShifterR.reset();
+        mDimmerCircBufferL[mCircWriteIndex] = 0.0f;
+        mDimmerCircBufferR[mCircWriteIndex] = 0.0f;
         dimSatL = 0.0f;
         dimSatR = 0.0f;
     }

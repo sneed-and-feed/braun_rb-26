@@ -700,6 +700,262 @@ bool runIdleSilenceAndDenormalBenchmark() {
 }
 
 // ============================================================================
+// TEST 6: Zero Shimmer & Dimmer Stress & CPU Spike Prevention Benchmark
+// ============================================================================
+bool runZeroShimmerDimmerSpikeStressTests() {
+    std::cout << "\n=======================================================\n";
+    std::cout << "TEST 6: Zero Shimmer/Dimmer CPU Spike & Stress Tests\n";
+    std::cout << "=======================================================\n";
+
+    rb26::ScopedNoDenormals noDenormals;
+    bool allPassed = true;
+
+    const double sampleRates[] = { 44100.0, 48000.0, 96000.0, 192000.0 };
+
+    for (double fs : sampleRates) {
+        std::cout << "  --- Testing Sample Rate: " << static_cast<int>(fs) << " Hz ---\n";
+
+        const size_t testDurationSamples = static_cast<size_t>(5.0 * fs); // 5 seconds
+        const size_t blockSize = 512;
+        const double audioDurationMs = (static_cast<double>(testDurationSamples) / fs) * 1000.0;
+
+        // Pre-generate high-energy test signals outside timed benchmark
+        std::vector<float> sweepL(testDurationSamples);
+        std::vector<float> sweepR(testDurationSamples);
+        for (size_t i = 0; i < testDurationSamples; ++i) {
+            const double t = static_cast<double>(i) / static_cast<double>(testDurationSamples);
+            const double freq = 20.0 * std::pow(1000.0, t); // Logarithmic sine sweep 20 Hz to 20000 Hz
+            const float s = static_cast<float>(std::sin(2.0 * test_utils::kPi * freq * (static_cast<double>(i) / fs)));
+            sweepL[i] = s;
+            sweepR[i] = -s;
+        }
+
+        std::vector<float> noiseL(testDurationSamples);
+        std::vector<float> noiseR(testDurationSamples);
+        uint32_t seed = 0x12345678;
+        auto lcg = [&seed]() -> float {
+            seed = seed * 1664525u + 1013904223u;
+            return (static_cast<float>(seed) / 2147483648.0f) - 1.0f;
+        };
+        for (size_t i = 0; i < testDurationSamples; ++i) {
+            noiseL[i] = lcg() * 0.95f;
+            noiseR[i] = lcg() * 0.95f;
+            if (i % 1024 == 0) {
+                noiseL[i] = 1.0f;
+                noiseR[i] = 1.0f;
+            }
+        }
+
+        // 1. Standalone PitchShifter test with shimmerSend = 0.0f, dimmerSend = 0.0f
+        {
+            rb26::PitchShifter shifter;
+            shifter.prepare(fs, static_cast<int>(blockSize));
+            shifter.setParameters(0.0f, 0.0f, 12, -12, 0.0f, 0.0f);
+
+            std::vector<float> outL(testDurationSamples, 0.0f);
+            std::vector<float> outR(testDurationSamples, 0.0f);
+
+            gAllocationCount = 0;
+            gBytesAllocated = 0;
+            gTrackAllocations = true;
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+
+            size_t processed = 0;
+            while (processed < testDurationSamples) {
+                const size_t chunk = std::min(blockSize, testDurationSamples - processed);
+                shifter.process(sweepL.data() + processed, sweepR.data() + processed,
+                                outL.data() + processed, outR.data() + processed,
+                                static_cast<int>(chunk));
+                processed += chunk;
+            }
+
+            auto t1 = std::chrono::high_resolution_clock::now();
+            gTrackAllocations = false;
+
+            double elapsedMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            double cpuLoadPct = (elapsedMs / audioDurationMs) * 100.0;
+
+            size_t totalNonFinite = 0;
+            size_t totalDenormals = 0;
+            size_t totalNonZeroOut = 0;
+            for (size_t i = 0; i < testDurationSamples; ++i) {
+                if (!std::isfinite(outL[i]) || !std::isfinite(outR[i])) totalNonFinite++;
+                if (std::fpclassify(outL[i]) == FP_SUBNORMAL || std::fpclassify(outR[i]) == FP_SUBNORMAL) totalDenormals++;
+                if (std::abs(outL[i]) > 1.0e-5f || std::abs(outR[i]) > 1.0e-5f) totalNonZeroOut++;
+            }
+
+            std::cout << "      [6.1] PitchShifter (0% Send, 5s Sweep) CPU Time : " << std::fixed << std::setprecision(3) 
+                      << elapsedMs << " ms (CPU load: " << std::setprecision(2) << cpuLoadPct << "%)\n";
+            std::cout << "            Allocations = " << gAllocationCount << ", Non-finite = " << totalNonFinite 
+                      << ", Denormals = " << totalDenormals << ", Residual Out = " << totalNonZeroOut << "\n";
+
+            // With 0% sends, PitchShifter bypass must consume negligible CPU (< 1.0% single core)
+            if (cpuLoadPct > 1.5) {
+                std::cout << "      Verdict : FAIL (CPU spike detected in PitchShifter with 0% send: " << cpuLoadPct << "%)\n";
+                allPassed = false;
+            } else if (gAllocationCount != 0 || totalNonFinite != 0 || totalDenormals != 0 || totalNonZeroOut != 0) {
+                std::cout << "      Verdict : FAIL (Artifacts/Allocations detected in PitchShifter bypass)\n";
+                allPassed = false;
+            } else {
+                std::cout << "      Verdict : PASS (Clean zero-cost bypass, 0 CPU spikes, 0 denormals)\n";
+            }
+        }
+
+        // 2. Full Rb26Engine Reverb test with shimmerSend = 0.0f, dimmerSend = 0.0f under High-Energy Noise & Dirac Impulses
+        {
+            rb26::Rb26ReverbEngine engine;
+            engine.prepare(fs, static_cast<int>(blockSize));
+
+            rb26::Rb26Parameters params;
+            params.shimmerSend = 0.0f;
+            params.dimmerSend = 0.0f;
+            params.pitchFeedback = 0.0f;
+            params.decayRt60Sec = 4.0f;
+            params.dryWetMix = 0.5f;
+            engine.setParameters(params);
+
+            std::vector<float> outL(testDurationSamples, 0.0f);
+            std::vector<float> outR(testDurationSamples, 0.0f);
+
+            gAllocationCount = 0;
+            gBytesAllocated = 0;
+            gTrackAllocations = true;
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+
+            size_t processed = 0;
+            while (processed < testDurationSamples) {
+                const size_t chunk = std::min(blockSize, testDurationSamples - processed);
+                const float* inPtrs[2] = { noiseL.data() + processed, noiseR.data() + processed };
+                float* outPtrs[2] = { outL.data() + processed, outR.data() + processed };
+
+                engine.process(inPtrs, outPtrs, 2, static_cast<int>(chunk));
+                processed += chunk;
+            }
+
+            auto t1 = std::chrono::high_resolution_clock::now();
+            gTrackAllocations = false;
+
+            double elapsedMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            double cpuLoadPct = (elapsedMs / audioDurationMs) * 100.0;
+
+            size_t totalNonFinite = 0;
+            size_t totalDenormals = 0;
+            for (size_t i = 0; i < testDurationSamples; ++i) {
+                if (!std::isfinite(outL[i]) || !std::isfinite(outR[i])) totalNonFinite++;
+                if (std::fpclassify(outL[i]) == FP_SUBNORMAL || std::fpclassify(outR[i]) == FP_SUBNORMAL) totalDenormals++;
+            }
+
+            std::cout << "      [6.2] Rb26Engine (0% Shimmer/Dimmer, 5s Noise) CPU Time : " << std::fixed << std::setprecision(3) 
+                      << elapsedMs << " ms (CPU load: " << std::setprecision(2) << cpuLoadPct << "%)\n";
+            std::cout << "            Allocations = " << gAllocationCount << ", Non-finite = " << totalNonFinite 
+                      << ", Denormals = " << totalDenormals << "\n";
+
+            // Full 8-line FDN reverb with 0% shimmer must operate with normal bounded CPU (< 20% at 48kHz, < 35% at 96kHz, < 65% at 192kHz)
+            const double maxAllowedCpuPct = (fs <= 48000.0) ? 20.0 : (fs <= 96000.0 ? 35.0 : 65.0);
+            if (cpuLoadPct > maxAllowedCpuPct) {
+                std::cout << "      Verdict : FAIL (CPU spike in Rb26Engine with 0% shimmer: " << cpuLoadPct << "%)\n";
+                allPassed = false;
+            } else if (gAllocationCount != 0 || totalNonFinite != 0 || totalDenormals != 0) {
+                std::cout << "      Verdict : FAIL (Non-finite/denormal outputs detected)\n";
+                allPassed = false;
+            } else {
+                std::cout << "      Verdict : PASS (Smooth bounded CPU consumption, 0 denormals, 0 NaNs)\n";
+            }
+        }
+
+        // 3. Dynamic Automation Stress: Rapid modulation of Shimmer & Dimmer Sends across 0% <-> 100%
+        {
+            rb26::Rb26ReverbEngine engine;
+            engine.prepare(fs, static_cast<int>(blockSize));
+
+            rb26::Rb26Parameters params;
+            params.decayRt60Sec = 3.5f;
+            params.dryWetMix = 0.5f;
+
+            // Generate continuous 440 Hz test tone for smooth parameter slew verification
+            std::vector<float> toneL(testDurationSamples);
+            std::vector<float> toneR(testDurationSamples);
+            for (size_t i = 0; i < testDurationSamples; ++i) {
+                const float s = static_cast<float>(std::sin(2.0 * test_utils::kPi * 440.0 * (static_cast<double>(i) / fs))) * 0.707f;
+                toneL[i] = s;
+                toneR[i] = s;
+            }
+
+            std::vector<float> outL(testDurationSamples, 0.0f);
+            std::vector<float> outR(testDurationSamples, 0.0f);
+
+            gAllocationCount = 0;
+            gBytesAllocated = 0;
+            gTrackAllocations = true;
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+
+            size_t processed = 0;
+            size_t stepIdx = 0;
+            while (processed < testDurationSamples) {
+                const size_t chunk = std::min(blockSize, testDurationSamples - processed);
+
+                // Automate parameters every 1024 samples (~21ms at 48kHz)
+                if (stepIdx % 2 == 0) {
+                    const float cycle = static_cast<float>(stepIdx % 16) / 16.0f;
+                    params.shimmerSend = (cycle < 0.25f || cycle > 0.75f) ? 0.0f : (cycle * 1.5f);
+                    params.dimmerSend = (cycle >= 0.25f && cycle <= 0.75f) ? 0.0f : ((1.0f - cycle) * 1.2f);
+                    params.pitchFeedback = 0.4f * std::sin(rb26::kTwoPi * cycle);
+                    params.pitchBlend = std::cos(rb26::kTwoPi * cycle);
+                    engine.setParameters(params);
+                }
+                stepIdx++;
+
+                const float* inPtrs[2] = { toneL.data() + processed, toneR.data() + processed };
+                float* outPtrs[2] = { outL.data() + processed, outR.data() + processed };
+
+                engine.process(inPtrs, outPtrs, 2, static_cast<int>(chunk));
+                processed += chunk;
+            }
+
+            auto t1 = std::chrono::high_resolution_clock::now();
+            gTrackAllocations = false;
+
+            double elapsedMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            double cpuLoadPct = (elapsedMs / audioDurationMs) * 100.0;
+
+            size_t totalNonFinite = 0;
+            size_t totalDenormals = 0;
+            float maxSampleJump = 0.0f;
+            float maxPeak = 0.0f;
+            for (size_t i = 1; i < testDurationSamples; ++i) {
+                if (!std::isfinite(outL[i]) || !std::isfinite(outR[i])) totalNonFinite++;
+                if (std::fpclassify(outL[i]) == FP_SUBNORMAL || std::fpclassify(outR[i]) == FP_SUBNORMAL) totalDenormals++;
+                maxSampleJump = std::max(maxSampleJump, std::abs(outL[i] - outL[i-1]));
+                maxSampleJump = std::max(maxSampleJump, std::abs(outR[i] - outR[i-1]));
+                maxPeak = std::max(maxPeak, std::max(std::abs(outL[i]), std::abs(outR[i])));
+            }
+
+            std::cout << "      [6.3] Rapid Send Automation (0% <-> 100%) CPU Time      : " << std::fixed << std::setprecision(3) 
+                      << elapsedMs << " ms (CPU load: " << std::setprecision(2) << cpuLoadPct << "%)\n";
+            std::cout << "            Allocations = " << gAllocationCount << ", Non-finite = " << totalNonFinite 
+                      << ", Denormals = " << totalDenormals << ", Max Sample Jump = " << maxSampleJump 
+                      << ", Max Peak = " << maxPeak << "\n";
+
+            const double maxAllowedCpuPct = (fs <= 48000.0) ? 25.0 : (fs <= 96000.0 ? 45.0 : 75.0);
+            if (cpuLoadPct > maxAllowedCpuPct) {
+                std::cout << "      Verdict : FAIL (CPU spike under rapid parameter automation: " << cpuLoadPct << "%)\n";
+                allPassed = false;
+            } else if (gAllocationCount != 0 || totalNonFinite != 0 || totalDenormals != 0 || maxSampleJump > 0.25f || maxPeak > 2.0f) {
+                std::cout << "      Verdict : FAIL (Artifacts/Discontinuities under rapid parameter modulation)\n";
+                allPassed = false;
+            } else {
+                std::cout << "      Verdict : PASS (Smooth modulation transitions, 0 CPU spikes, 0 pops)\n";
+            }
+        }
+    }
+
+    return allPassed;
+}
+
+// ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 int main() {
@@ -712,6 +968,7 @@ int main() {
     bool pass3 = runTailModulationIsolationTests();
     bool pass4 = runRealTimeSafetyTests();
     bool pass5 = runIdleSilenceAndDenormalBenchmark();
+    bool pass6 = runZeroShimmerDimmerSpikeStressTests();
 
     std::cout << "\n=======================================================\n";
     std::cout << "FINAL CHALLENGER 2 VERIFICATION SUMMARY:\n";
@@ -720,9 +977,10 @@ int main() {
     std::cout << "  [3] Tail Modulation Isolation       : " << (pass3 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [4] Hard Real-Time Audio Safety     : " << (pass4 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [5] Zero Denormals & Idle Gating    : " << (pass5 ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [6] Zero Shimmer/Dimmer CPU Stress  : " << (pass6 ? "PASS" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 
-    const bool overallPass = pass1 && pass2 && pass3 && pass4 && pass5;
+    const bool overallPass = pass1 && pass2 && pass3 && pass4 && pass5 && pass6;
     std::cout << "OVERALL EMPIRICAL VERDICT: " << (overallPass ? "APPROVE" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 

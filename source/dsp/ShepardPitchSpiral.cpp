@@ -95,6 +95,9 @@ float ShepardPitchSpiral::getVoiceWeight(int voiceIdx) const noexcept {
 }
 
 inline float ShepardPitchSpiral::readHermite(const std::vector<float>& buffer, float readPos) const noexcept {
+    if (!std::isfinite(readPos)) [[unlikely]] {
+        return 0.0f;
+    }
     const float bufSz = static_cast<float>(kMaxCapacity);
     while (readPos < 0.0f) readPos += bufSz;
     while (readPos >= bufSz) readPos -= bufSz;

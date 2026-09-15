@@ -27,6 +27,9 @@ public:
     static inline float readHermite(const float* buffer, size_t bufferCapacity,
                                     size_t bufferMask, size_t writeIndex,
                                     float delaySamples) noexcept {
+        if (!std::isfinite(delaySamples)) [[unlikely]] {
+            return 0.0f;
+        }
         const float clampedDelay = std::max(0.0f, delaySamples);
         const int intDelay = static_cast<int>(clampedDelay);
         const float mu = clampedDelay - static_cast<float>(intDelay);
