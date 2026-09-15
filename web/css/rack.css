@@ -113,7 +113,8 @@
   border-color: var(--text-primary);
 }
 
-.braun-audition-btn:active {
+.braun-audition-btn:active,
+.braun-audition-btn.is-active {
   background-color: var(--braun-orange);
   color: #fff;
   border-color: var(--braun-orange);

@@ -620,7 +620,8 @@ body {
   background-color: var(--border-subtle);
 }
 
-.braun-pulse-btn:active {
+.braun-pulse-btn:active,
+.braun-pulse-btn.is-active {
   background-color: var(--braun-orange);
   color: #fff;
   border-color: var(--braun-orange);

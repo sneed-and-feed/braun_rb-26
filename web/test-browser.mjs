@@ -303,6 +303,12 @@ async function runBrowserTest() {
         // 3. Browser synthesizes click event immediately after pointerup
         btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
+        // 4. Test sustained hold (> 500ms) to verify duplicate click suppression does not expire on release
+        btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        await new Promise(r => setTimeout(r, 550));
+        btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
         // Restore original method
         window.__RB26__.playChord = origPlayChord;
 
@@ -320,8 +326,8 @@ async function runBrowserTest() {
     if (pointerTriggerResult.activeVoicesOnDown !== 1) throw new Error('Chord button must register active voice on pointerdown');
     if (pointerTriggerResult.isActiveOnUp) throw new Error('Chord button must clear active state on pointerup');
     if (pointerTriggerResult.activeVoicesOnUp !== 0) throw new Error('Chord button must release active voice on pointerup');
-    if (pointerTriggerResult.playChordCalls !== 1) {
-      throw new Error(`Expected exactly 1 playChord invocation (duplicate click not suppressed), got ${pointerTriggerResult.playChordCalls}`);
+    if (pointerTriggerResult.playChordCalls !== 2) {
+      throw new Error(`Expected exactly 2 playChord invocations (1 short hold + 1 long hold, 0 duplicate clicks), got ${pointerTriggerResult.playChordCalls}`);
     }
 
     // Test Poisson Generator Toggle
@@ -382,15 +388,32 @@ async function runBrowserTest() {
     await evaluate(`
       window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     `);
-    const impulseActive = await evaluate(`
-      document.getElementById('btn-audition-impulse').classList.contains('is-active')
+    // Allow CSS transition (0.12s ease) to fully settle to steady-state
+    await new Promise((r) => setTimeout(r, 180));
+
+    const impulseStatus = await evaluate(`
+      (() => {
+        const audBtn = document.getElementById('btn-audition-impulse');
+        const d7Btn = document.getElementById('btn-pulse-dirac');
+        const audStyle = window.getComputedStyle(audBtn);
+        const d7Style = window.getComputedStyle(d7Btn);
+        return {
+          audActive: audBtn.classList.contains('is-active'),
+          d7Active: d7Btn.classList.contains('is-active'),
+          audBg: audStyle.backgroundColor,
+          d7Bg: d7Style.backgroundColor
+        };
+      })()
     `);
-    const deck7DiracActive = await evaluate(`
-      document.getElementById('btn-pulse-dirac').classList.contains('is-active')
-    `);
-    console.log(`[BrowserTest] Impulse button triggered on spacebar: ${impulseActive}, deck 7: ${deck7DiracActive}`);
-    if (!impulseActive) throw new Error('Expected Dirac impulse audition button to be active on spacebar');
-    if (!deck7DiracActive) throw new Error('Expected Deck 07 Dirac impulse button to be active on spacebar');
+    console.log('[BrowserTest] Spacebar impulse visual status:', impulseStatus);
+    if (!impulseStatus.audActive) throw new Error('Expected Dirac impulse audition button to be active on spacebar');
+    if (!impulseStatus.d7Active) throw new Error('Expected Deck 07 Dirac impulse button to be active on spacebar');
+    if (impulseStatus.audBg !== 'rgb(238, 89, 43)') {
+      throw new Error(`Expected audition impulse button to render Braun safety orange, got: ${impulseStatus.audBg}`);
+    }
+    if (impulseStatus.d7Bg !== 'rgb(238, 89, 43)') {
+      throw new Error(`Expected Deck 07 Dirac button to render Braun safety orange, got: ${impulseStatus.d7Bg}`);
+    }
 
     // Sample audio energy in reverb tank to verify band-limited excitation bloom
     const impulseEnergy = await evaluate(`
@@ -408,11 +431,28 @@ async function runBrowserTest() {
     await evaluate(`
       window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
     `);
-    const impulseStillActive = await evaluate(`
-      document.getElementById('btn-audition-impulse').classList.contains('is-active') ||
-      document.getElementById('btn-pulse-dirac').classList.contains('is-active')
+    // Allow CSS transition (0.12s ease) to fully revert to idle styling
+    await new Promise((r) => setTimeout(r, 180));
+
+    const impulsePostStatus = await evaluate(`
+      (() => {
+        const audBtn = document.getElementById('btn-audition-impulse');
+        const d7Btn = document.getElementById('btn-pulse-dirac');
+        const audStyle = window.getComputedStyle(audBtn);
+        const d7Style = window.getComputedStyle(d7Btn);
+        return {
+          isStillActive: audBtn.classList.contains('is-active') || d7Btn.classList.contains('is-active'),
+          audBg: audStyle.backgroundColor,
+          d7Bg: d7Style.backgroundColor
+        };
+      })()
     `);
-    if (impulseStillActive) throw new Error('Expected Dirac impulse buttons to clear active state on spacebar keyup');
+    if (impulsePostStatus.isStillActive) {
+      throw new Error('Expected Dirac impulse buttons to clear active state on spacebar keyup');
+    }
+    if (impulsePostStatus.audBg === 'rgb(238, 89, 43)') {
+      throw new Error('Expected audition impulse button background to revert on spacebar keyup');
+    }
 
     // Test Typematic Key Repeat Filter and Keyup Release
     console.log('[BrowserTest] Testing Typematic Key Repeat Filter and Keyup Release...');
