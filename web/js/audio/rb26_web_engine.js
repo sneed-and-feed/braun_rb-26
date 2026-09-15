@@ -13,6 +13,8 @@
  * - Curated zero-install sound generator (Impulse, 808 Kick/Snare, Felt Piano, Ambient Pad)
  */
 
+export const BUTTERWORTH_Q = -3.0103; // Butterworth 2nd-order Q: 20 * log10(1 / sqrt(2)) dB (strictly <= 1.0 peak gain)
+
 export class WebAudioPitchShifter {
   constructor(ctx, options = {}) {
     this.ctx = ctx;
@@ -127,6 +129,46 @@ export class WebAudioPitchShifter {
       }
     } catch (e) {}
   }
+
+  flush() {
+    try {
+      this._teardownModulation();
+      if (this.input) {
+        try { this.input.disconnect(); } catch (_) {}
+      }
+      if (this.delay1) {
+        try { this.delay1.disconnect(); } catch (_) {}
+      }
+      if (this.delay2) {
+        try { this.delay2.disconnect(); } catch (_) {}
+      }
+      if (this.gain1) {
+        try { this.gain1.disconnect(); } catch (_) {}
+      }
+      if (this.gain2) {
+        try { this.gain2.disconnect(); } catch (_) {}
+      }
+
+      this.delay1 = this.ctx.createDelay(0.3);
+      this.delay2 = this.ctx.createDelay(0.3);
+      this.delay1.delayTime.setValueAtTime(0.0, this.ctx.currentTime);
+      this.delay2.delayTime.setValueAtTime(0.0, this.ctx.currentTime);
+
+      this.gain1 = this.ctx.createGain();
+      this.gain2 = this.ctx.createGain();
+      this.gain1.gain.setValueAtTime(0.0, this.ctx.currentTime);
+      this.gain2.gain.setValueAtTime(0.0, this.ctx.currentTime);
+
+      this.input.connect(this.delay1);
+      this.input.connect(this.delay2);
+      this.delay1.connect(this.gain1);
+      this.delay2.connect(this.gain2);
+      this.gain1.connect(this.output);
+      this.gain2.connect(this.output);
+
+      this._setupModulation();
+    } catch (e) {}
+  }
 }
 
 //==============================================================================
@@ -197,26 +239,26 @@ export class Rb26WebEngine {
     this.inputGain.connect(this.preDelayNode);
 
     // --- Decoupled LR4 Crossover (Cascaded Dual 2nd-Order Butterworth) ---
-    // In Web Audio, Q=0.707 (linear Butterworth Q)
+    // In Web Audio, Q is in dB; Butterworth maximally flat Q is -3.0103 dB (Q_linear = 1/sqrt(2))
     this.lowPass1 = ctx.createBiquadFilter();
     this.lowPass1.type = 'lowpass';
     this.lowPass1.frequency.setValueAtTime(this.params.lowCrossoverHz, ctx.currentTime);
-    this.lowPass1.Q.setValueAtTime(0.707, ctx.currentTime);
+    this.lowPass1.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.lowPass2 = ctx.createBiquadFilter();
     this.lowPass2.type = 'lowpass';
     this.lowPass2.frequency.setValueAtTime(this.params.lowCrossoverHz, ctx.currentTime);
-    this.lowPass2.Q.setValueAtTime(0.707, ctx.currentTime);
+    this.lowPass2.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.highPass1 = ctx.createBiquadFilter();
     this.highPass1.type = 'highpass';
     this.highPass1.frequency.setValueAtTime(this.params.lowCrossoverHz, ctx.currentTime);
-    this.highPass1.Q.setValueAtTime(0.707, ctx.currentTime);
+    this.highPass1.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.highPass2 = ctx.createBiquadFilter();
     this.highPass2.type = 'highpass';
     this.highPass2.frequency.setValueAtTime(this.params.lowCrossoverHz, ctx.currentTime);
-    this.highPass2.Q.setValueAtTime(0.707, ctx.currentTime);
+    this.highPass2.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.preDelayNode.connect(this.lowPass1);
     this.lowPass1.connect(this.lowPass2);
@@ -234,7 +276,10 @@ export class Rb26WebEngine {
     this.modalDelays = [];
     this.modalFeedbackGains = [];
     this.modalDampingFilters = [];
+    this.modalDcBlockers = [];
+    this.modalInputGains = [];
     const modalTimes = [0.071, 0.089, 0.107, 0.126];
+    const modalSigns = [1.0, -1.0, 1.0, -1.0]; // Strictly orthogonal to collective eigenvector [1,1,1,1]
 
     // 4x4 Orthogonal Householder Reflection Matrix: H_4 = I_4 - 0.5 * 1 * 1^T
     this.modalHouseholderSum = ctx.createGain();
@@ -246,20 +291,30 @@ export class Rb26WebEngine {
       const d = ctx.createDelay(0.4);
       d.delayTime.setValueAtTime(modalTimes[i], ctx.currentTime);
 
+      // DC-blocking highpass filter (25 Hz)
+      const dcBlock = ctx.createBiquadFilter();
+      dcBlock.type = 'highpass';
+      dcBlock.frequency.setValueAtTime(25, ctx.currentTime);
+      dcBlock.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
       // Lowpass damping filter in modal loop: extinguishes high-frequency transients and prevents metallic ringing
       const damping = ctx.createBiquadFilter();
       damping.type = 'lowpass';
       damping.frequency.setValueAtTime(Math.min(320, this.params.lowCrossoverHz * 1.5), ctx.currentTime);
-      damping.Q.setValueAtTime(0.707, ctx.currentTime);
+      damping.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
+      const inGain = ctx.createGain();
+      inGain.gain.setValueAtTime(modalSigns[i] * 0.50, ctx.currentTime);
+      this.modalInputGain.connect(inGain);
+      inGain.connect(d);
 
       const g = ctx.createGain();
-      const fbGain = Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.90;
-      g.gain.setValueAtTime(fbGain, ctx.currentTime);
+      const fbGain = Math.min(0.96, Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.90);
+      g.gain.setValueAtTime(this.isPowered ? fbGain : 0.0, ctx.currentTime);
 
-      this.modalInputGain.connect(d);
-
-      // Recirculating path with lowpass damping + Householder reflection
-      d.connect(damping);
+      // Recirculating path with DC block + lowpass damping + Householder reflection
+      d.connect(dcBlock);
+      dcBlock.connect(damping);
       damping.connect(g);
       damping.connect(this.modalHouseholderSum);
 
@@ -270,13 +325,15 @@ export class Rb26WebEngine {
       this.modalDelays.push(d);
       this.modalFeedbackGains.push(g);
       this.modalDampingFilters.push(damping);
+      this.modalDcBlockers.push(dcBlock);
+      this.modalInputGains.push(inGain);
     }
 
     // Sub-Mono Elliptical Filter on Modal Output
     this.modalHighPass = ctx.createBiquadFilter();
     this.modalHighPass.type = 'highpass';
     this.modalHighPass.frequency.setValueAtTime(28, ctx.currentTime);
-    this.modalHighPass.Q.setValueAtTime(0.707, ctx.currentTime);
+    this.modalHighPass.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
     this.modalBus.connect(this.modalHighPass);
 
     // --- Early Reflections (12-Tap Decorrelated Cluster) ---
@@ -298,15 +355,23 @@ export class Rb26WebEngine {
 
     // --- 8-Line Householder FDN Late Tank with Golden-Ratio LFO Modulation ---
     this.fdnInputBus = ctx.createGain();
-    this.fdnInputBus.gain.setValueAtTime(0.40, ctx.currentTime);
+    this.fdnInputBus.gain.setValueAtTime(0.35, ctx.currentTime);
     this.highPass2.connect(this.fdnInputBus);
 
     this.fdnSumBus = ctx.createGain();
     this.fdnSumBus.gain.setValueAtTime(0.25, ctx.currentTime); // Bound diffuse sum below unity loop gain
 
     this.fdnDelays = [];
+    this.fdnDelaysA = [];
+    this.fdnDelaysB = [];
+    this.fdnXfadeA = [];
+    this.fdnXfadeB = [];
+    this._activeFdnBank = 'A';
+    this.fdnDcBlockers = [];
     this.fdnDampingFilters = [];
     this.fdnFeedbackGains = [];
+    this.fdnInjectionGains = [];
+    this.fdnOutGains = [];
     this.fdnLfos = [];
     this.fdnLfoGains = [];
 
@@ -314,23 +379,52 @@ export class Rb26WebEngine {
     // Completely eliminates harmonic mode clustering and flutter ringing
     const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
     const goldenRatios = [1.0, 1.618, 0.618, 1.272, 0.786, 1.414, 0.866, 1.118];
+    // Balanced sign pattern with sum == 0, strictly orthogonal to Householder eigenvector [1,1,1,1,1,1,1,1]
+    const fdnSigns = [1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0];
+    const normFactor = 1.0 / Math.sqrt(8.0); // ~0.35355
 
     // Orthogonal 8x8 Householder Reflection Matrix: H_8 = I_8 - 0.25 * 1 * 1^T
     this.fdnHouseholderSum = ctx.createGain();
     this.fdnHouseholderSum.gain.setValueAtTime(-0.25, ctx.currentTime);
 
     for (let i = 0; i < 8; i++) {
-      const delay = ctx.createDelay(0.4);
-      delay.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, ctx.currentTime);
+      const delayA = ctx.createDelay(0.5);
+      const delayB = ctx.createDelay(0.5);
+      delayA.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, ctx.currentTime);
+      delayB.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, ctx.currentTime);
 
+      const xfadeA = ctx.createGain();
+      const xfadeB = ctx.createGain();
+      xfadeA.gain.setValueAtTime(1.0, ctx.currentTime);
+      xfadeB.gain.setValueAtTime(0.0, ctx.currentTime);
+
+      // DC-blocking highpass filter (30 Hz) in every recirculating delay path
+      const dcBlock = ctx.createBiquadFilter();
+      dcBlock.type = 'highpass';
+      dcBlock.frequency.setValueAtTime(30, ctx.currentTime);
+      dcBlock.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
+      // Lowpass damping filter in FDN loop: eliminates high-frequency runaway
       const damping = ctx.createBiquadFilter();
       damping.type = 'lowpass';
-      damping.frequency.setValueAtTime(this.params.highDampingHz, ctx.currentTime);
-      damping.Q.setValueAtTime(0.707, ctx.currentTime); // Linear Butterworth Q
+      damping.frequency.setValueAtTime(Math.min(14000, this.params.highDampingHz), ctx.currentTime);
+      damping.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
       const gain = ctx.createGain();
-      const fb = Math.pow(0.001, fdnPrimes[i] / this.params.decayRt60Sec) * 0.96;
-      gain.gain.setValueAtTime(fb, ctx.currentTime);
+      const effDelaySec = fdnPrimes[i] * this.params.roomSize;
+      const fb = Math.min(0.96, Math.pow(0.001, effDelaySec / this.params.decayRt60Sec) * 0.95);
+      gain.gain.setValueAtTime(this.isPowered ? fb : 0.0, ctx.currentTime);
+
+      // Input injection with balanced sign & 1/sqrt(8) normalization
+      const injGain = ctx.createGain();
+      injGain.gain.setValueAtTime(fdnSigns[i] * normFactor, ctx.currentTime);
+      this.fdnInputBus.connect(injGain);
+      injGain.connect(delayA);
+      injGain.connect(delayB);
+
+      // Output extraction with balanced sign & 1/sqrt(8) normalization
+      const outGain = ctx.createGain();
+      outGain.gain.setValueAtTime(fdnSigns[i] * normFactor, ctx.currentTime);
 
       // Golden-Ratio Tail Modulation LFO: breaks up standing waves & eliminates metallic ringing
       const lfo = ctx.createOscillator();
@@ -342,28 +436,40 @@ export class Rb26WebEngine {
       lfoGain.gain.setValueAtTime(modDepthSec, ctx.currentTime);
 
       lfo.connect(lfoGain);
-      lfoGain.connect(delay.delayTime);
+      lfoGain.connect(delayA.delayTime);
+      lfoGain.connect(delayB.delayTime);
       lfo.start();
 
       this.fdnLfos.push(lfo);
       this.fdnLfoGains.push(lfoGain);
 
-      // Signal routing: Input -> Delay -> Damping Filter
-      this.fdnInputBus.connect(delay);
-      delay.connect(damping);
+      // Signal routing: Delay A/B -> Crossfade A/B -> DC Blocker -> Damping Filter
+      delayA.connect(xfadeA);
+      delayB.connect(xfadeB);
+      xfadeA.connect(dcBlock);
+      xfadeB.connect(dcBlock);
+      dcBlock.connect(damping);
 
       // Orthogonal Householder reflection:
-      // output entering gain[i] = damping[i] - 0.25 * sum_{j=0..7} damping[j]
       damping.connect(gain);
       damping.connect(this.fdnHouseholderSum);
       this.fdnHouseholderSum.connect(gain);
 
-      gain.connect(delay); // Lossless unitary loop back
-      gain.connect(this.fdnSumBus);
+      gain.connect(delayA); // Strictly contractive unitary loop back
+      gain.connect(delayB);
+      gain.connect(outGain);
+      outGain.connect(this.fdnSumBus);
 
-      this.fdnDelays.push(delay);
+      this.fdnDelays.push(delayA);
+      this.fdnDelaysA.push(delayA);
+      this.fdnDelaysB.push(delayB);
+      this.fdnXfadeA.push(xfadeA);
+      this.fdnXfadeB.push(xfadeB);
+      this.fdnDcBlockers.push(dcBlock);
       this.fdnDampingFilters.push(damping);
       this.fdnFeedbackGains.push(gain);
+      this.fdnInjectionGains.push(injGain);
+      this.fdnOutGains.push(outGain);
     }
 
     // --- Hermite Soft Saturation Curve for Loop Boundedness ---
@@ -376,35 +482,56 @@ export class Rb26WebEngine {
     this.shimmerShifter = new WebAudioPitchShifter(ctx, { semitones: this.params.shimmerInterval });
     this.dimmerShifter = new WebAudioPitchShifter(ctx, { semitones: this.params.dimmerInterval });
 
-    // Shimmer Bandpass (800Hz - 7.5kHz)
-    this.shimmerFilter = ctx.createBiquadFilter();
-    this.shimmerFilter.type = 'bandpass';
-    this.shimmerFilter.frequency.setValueAtTime(2400, ctx.currentTime);
-    this.shimmerFilter.Q.setValueAtTime(0.85, ctx.currentTime);
+    // Shimmer Loop Filter: 600 Hz HPF + cascaded 7.5 kHz & 9 kHz LPF
+    // Guarantees zero screeching hiss runaway in upward pitch circulation
+    this.shimmerHp = ctx.createBiquadFilter();
+    this.shimmerHp.type = 'highpass';
+    this.shimmerHp.frequency.setValueAtTime(600, ctx.currentTime);
+    this.shimmerHp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
-    // Dimmer Bandpass (70Hz - 1.2kHz)
-    this.dimmerFilter = ctx.createBiquadFilter();
-    this.dimmerFilter.type = 'bandpass';
-    this.dimmerFilter.frequency.setValueAtTime(350, ctx.currentTime);
-    this.dimmerFilter.Q.setValueAtTime(0.85, ctx.currentTime);
+    this.shimmerLp1 = ctx.createBiquadFilter();
+    this.shimmerLp1.type = 'lowpass';
+    this.shimmerLp1.frequency.setValueAtTime(7500, ctx.currentTime);
+    this.shimmerLp1.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
+    this.shimmerLp2 = ctx.createBiquadFilter();
+    this.shimmerLp2.type = 'lowpass';
+    this.shimmerLp2.frequency.setValueAtTime(9000, ctx.currentTime);
+    this.shimmerLp2.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
+    // Dimmer Loop Filter: 70 Hz HPF (anti-DC rumble) + 1200 Hz LPF
+    this.dimmerHp = ctx.createBiquadFilter();
+    this.dimmerHp.type = 'highpass';
+    this.dimmerHp.frequency.setValueAtTime(70, ctx.currentTime);
+    this.dimmerHp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
+    this.dimmerLp = ctx.createBiquadFilter();
+    this.dimmerLp.type = 'lowpass';
+    this.dimmerLp.frequency.setValueAtTime(1200, ctx.currentTime);
+    this.dimmerLp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.shimmerSendGain = ctx.createGain();
-    this.shimmerSendGain.gain.setValueAtTime(this.params.shimmerSend * 0.70, ctx.currentTime);
+    this.shimmerSendGain.gain.setValueAtTime(this.params.shimmerSend * 0.50, ctx.currentTime);
 
     this.dimmerSendGain = ctx.createGain();
-    this.dimmerSendGain.gain.setValueAtTime(this.params.dimmerSend * 0.70, ctx.currentTime);
+    this.dimmerSendGain.gain.setValueAtTime(this.params.dimmerSend * 0.50, ctx.currentTime);
 
+    // Routing into Shimmer: FDN Sum -> Send -> HPF -> LPF1 -> LPF2 -> PitchShifter
     this.hermiteSaturator.connect(this.shimmerSendGain);
-    this.shimmerSendGain.connect(this.shimmerFilter);
-    this.shimmerFilter.connect(this.shimmerShifter.input);
+    this.shimmerSendGain.connect(this.shimmerHp);
+    this.shimmerHp.connect(this.shimmerLp1);
+    this.shimmerLp1.connect(this.shimmerLp2);
+    this.shimmerLp2.connect(this.shimmerShifter.input);
 
+    // Routing into Dimmer: FDN Sum -> Send -> HPF -> LPF -> PitchShifter
     this.hermiteSaturator.connect(this.dimmerSendGain);
-    this.dimmerSendGain.connect(this.dimmerFilter);
-    this.dimmerFilter.connect(this.dimmerShifter.input);
+    this.dimmerSendGain.connect(this.dimmerHp);
+    this.dimmerHp.connect(this.dimmerLp);
+    this.dimmerLp.connect(this.dimmerShifter.input);
 
     // Pitch Blend Macro & Recirculation Feedback
     this.pitchReturnBus = ctx.createGain();
-    this.pitchReturnBus.gain.setValueAtTime(0.70, ctx.currentTime);
+    this.pitchReturnBus.gain.setValueAtTime(0.60, ctx.currentTime);
     this.pitchBlendGainShim = ctx.createGain();
     this.pitchBlendGainDim = ctx.createGain();
 
@@ -416,10 +543,26 @@ export class Rb26WebEngine {
     this.pitchBlendGainShim.connect(this.pitchReturnBus);
     this.pitchBlendGainDim.connect(this.pitchReturnBus);
 
-    // Recirculate back to FDN input with safety bound
+    // Secondary Loop Isolation & Damping:
+    // Filter pitch feedback return before injecting into FDN input bus
+    // Includes steep high-cut damping (6 kHz) and DC block (150 Hz) with strictly contractive scaling
+    this.pitchFeedbackHp = ctx.createBiquadFilter();
+    this.pitchFeedbackHp.type = 'highpass';
+    this.pitchFeedbackHp.frequency.setValueAtTime(150, ctx.currentTime);
+    this.pitchFeedbackHp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
+    this.pitchFeedbackLp = ctx.createBiquadFilter();
+    this.pitchFeedbackLp.type = 'lowpass';
+    this.pitchFeedbackLp.frequency.setValueAtTime(6000, ctx.currentTime);
+    this.pitchFeedbackLp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
     this.pitchFeedbackGain = ctx.createGain();
-    this.pitchFeedbackGain.gain.setValueAtTime(this.params.pitchFeedback * 0.55, ctx.currentTime);
-    this.pitchReturnBus.connect(this.pitchFeedbackGain);
+    const safePitchFb = this.params.pitchFeedback * 0.30;
+    this.pitchFeedbackGain.gain.setValueAtTime(safePitchFb, ctx.currentTime);
+
+    this.pitchReturnBus.connect(this.pitchFeedbackHp);
+    this.pitchFeedbackHp.connect(this.pitchFeedbackLp);
+    this.pitchFeedbackLp.connect(this.pitchFeedbackGain);
     this.pitchFeedbackGain.connect(this.fdnInputBus);
 
     // --- Master Bus & Summing ---
@@ -501,14 +644,22 @@ export class Rb26WebEngine {
   }
 
   _updateDryWetGains() {
+    if (!this.ctx || !this.dryGain || !this.wetGain) return;
+    if (!this.isPowered) {
+      try {
+        if (this.dryGain.gain.cancelScheduledValues) this.dryGain.gain.cancelScheduledValues(0);
+        if (this.wetGain.gain.cancelScheduledValues) this.wetGain.gain.cancelScheduledValues(0);
+      } catch (_) {}
+      this.dryGain.gain.value = 0.0;
+      this.wetGain.gain.value = 0.0;
+      return;
+    }
     const mix = this.params.dryWetMix;
     // Equal-power crossfade: cos(mix * pi/2), sin(mix * pi/2)
     const dry = Math.cos(mix * 0.5 * Math.PI);
     const wet = Math.sin(mix * 0.5 * Math.PI);
-    if (this.dryGain && this.wetGain) {
-      this.dryGain.gain.setTargetAtTime(dry, this.ctx.currentTime, 0.02);
-      this.wetGain.gain.setTargetAtTime(wet, this.ctx.currentTime, 0.02);
-    }
+    this.dryGain.gain.setTargetAtTime(dry, this.ctx.currentTime, 0.02);
+    this.wetGain.gain.setTargetAtTime(wet, this.ctx.currentTime, 0.02);
   }
 
   _updatePitchBlendGains() {
@@ -524,13 +675,266 @@ export class Rb26WebEngine {
 
   _updateModalDecayGains() {
     if (!this.ctx || !this.modalFeedbackGains) return;
+    if (!this.isPowered) {
+      for (let i = 0; i < 4; i++) {
+        if (this.modalFeedbackGains[i]) {
+          try {
+            if (this.modalFeedbackGains[i].gain.cancelScheduledValues) {
+              this.modalFeedbackGains[i].gain.cancelScheduledValues(0);
+            }
+          } catch (_) {}
+          this.modalFeedbackGains[i].gain.value = 0.0;
+          try {
+            this.modalFeedbackGains[i].gain.setValueAtTime(0.0, this.ctx.currentTime);
+          } catch (_) {}
+        }
+      }
+      return;
+    }
     const effRt60 = Math.max(0.1, this.params.decayRt60Sec * this.params.bassRt60Mult);
     const modalTimes = [0.071, 0.089, 0.107, 0.126];
     const now = this.ctx.currentTime;
 
     for (let i = 0; i < 4; i++) {
-      const fb = this.params.freezeHold ? 0.998 : (Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.90);
+      const fb = this.params.freezeHold ? 0.985 : Math.min(0.96, Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.90);
+      this.modalFeedbackGains[i].gain.value = fb;
       this.modalFeedbackGains[i].gain.setTargetAtTime(fb, now, 0.02);
+    }
+  }
+
+  _updateFdnDecayGains() {
+    if (!this.ctx || !this.fdnFeedbackGains) return;
+    if (!this.isPowered) {
+      for (let i = 0; i < 8; i++) {
+        if (this.fdnFeedbackGains[i]) {
+          try {
+            if (this.fdnFeedbackGains[i].gain.cancelScheduledValues) {
+              this.fdnFeedbackGains[i].gain.cancelScheduledValues(0);
+            }
+          } catch (_) {}
+          this.fdnFeedbackGains[i].gain.value = 0.0;
+          try {
+            this.fdnFeedbackGains[i].gain.setValueAtTime(0.0, this.ctx.currentTime);
+          } catch (_) {}
+        }
+      }
+      return;
+    }
+    const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+    const now = this.ctx.currentTime;
+    const maxFeedback = this.params.freezeHold ? 0.985 : 0.96;
+
+    for (let i = 0; i < 8; i++) {
+      const effDelaySec = fdnPrimes[i] * this.params.roomSize;
+      const calculatedFb = Math.pow(0.001, effDelaySec / Math.max(0.1, this.params.decayRt60Sec)) * 0.95;
+      const feedback = this.params.freezeHold ? 0.985 : Math.min(maxFeedback, calculatedFb);
+      this.fdnFeedbackGains[i].gain.value = feedback;
+      this.fdnFeedbackGains[i].gain.setTargetAtTime(feedback, now, 0.05);
+    }
+  }
+
+  flushDelayLines() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+    const modalTimes = [0.071, 0.089, 0.107, 0.126];
+
+    // 1. Rebuild & clear FDN delay lines (Dual-Bank A & B)
+    if (this.fdnDelaysA && this.fdnDelaysA.length === 8) {
+      for (let i = 0; i < 8; i++) {
+        try {
+          if (this.fdnDelaysA[i]) this.fdnDelaysA[i].disconnect();
+          if (this.fdnDelaysB[i]) this.fdnDelaysB[i].disconnect();
+
+          // Disconnect injection, feedback and LFO gains before reconnecting to prevent duplicate connections
+          if (this.fdnInjectionGains && this.fdnInjectionGains[i]) {
+            try { this.fdnInjectionGains[i].disconnect(); } catch (_) {}
+          }
+          if (this.fdnLfoGains && this.fdnLfoGains[i]) {
+            try { this.fdnLfoGains[i].disconnect(); } catch (_) {}
+          }
+          if (this.fdnFeedbackGains && this.fdnFeedbackGains[i]) {
+            try { this.fdnFeedbackGains[i].disconnect(); } catch (_) {}
+          }
+
+          const newDA = ctx.createDelay(0.5);
+          const newDB = ctx.createDelay(0.5);
+          newDA.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, now);
+          newDB.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, now);
+
+          if (this.fdnInjectionGains && this.fdnInjectionGains[i]) {
+            this.fdnInjectionGains[i].connect(newDA);
+            this.fdnInjectionGains[i].connect(newDB);
+          }
+          if (this.fdnLfoGains && this.fdnLfoGains[i]) {
+            this.fdnLfoGains[i].connect(newDA.delayTime);
+            this.fdnLfoGains[i].connect(newDB.delayTime);
+          }
+          if (this.fdnFeedbackGains && this.fdnFeedbackGains[i]) {
+            this.fdnFeedbackGains[i].connect(newDA);
+            this.fdnFeedbackGains[i].connect(newDB);
+            if (this.fdnOutGains && this.fdnOutGains[i]) {
+              this.fdnFeedbackGains[i].connect(this.fdnOutGains[i]);
+            }
+          }
+
+          if (this.fdnXfadeA && this.fdnXfadeA[i]) {
+            newDA.connect(this.fdnXfadeA[i]);
+            try { this.fdnXfadeA[i].gain.cancelScheduledValues(now); } catch (_) {}
+            this.fdnXfadeA[i].gain.setValueAtTime(1.0, now);
+          }
+          if (this.fdnXfadeB && this.fdnXfadeB[i]) {
+            newDB.connect(this.fdnXfadeB[i]);
+            try { this.fdnXfadeB[i].gain.cancelScheduledValues(now); } catch (_) {}
+            this.fdnXfadeB[i].gain.setValueAtTime(0.0, now);
+          }
+
+          this.fdnDelaysA[i] = newDA;
+          this.fdnDelaysB[i] = newDB;
+          this.fdnDelays[i] = newDA;
+        } catch (e) {}
+      }
+      this._activeFdnBank = 'A';
+    }
+
+    // 2. Rebuild & clear modal delay lines
+    if (this.modalDelays && this.modalDelays.length === 4) {
+      for (let i = 0; i < 4; i++) {
+        try {
+          const oldD = this.modalDelays[i];
+          if (oldD) oldD.disconnect();
+
+          if (this.modalInputGains && this.modalInputGains[i]) {
+            try { this.modalInputGains[i].disconnect(); } catch (_) {}
+          }
+          if (this.modalFeedbackGains && this.modalFeedbackGains[i]) {
+            try { this.modalFeedbackGains[i].disconnect(); } catch (_) {}
+          }
+
+          const newD = ctx.createDelay(0.4);
+          newD.delayTime.setValueAtTime(modalTimes[i], now);
+
+          if (this.modalInputGains && this.modalInputGains[i]) {
+            this.modalInputGains[i].connect(newD);
+          }
+          if (this.modalDcBlockers && this.modalDcBlockers[i]) {
+            newD.connect(this.modalDcBlockers[i]);
+          }
+          if (this.modalFeedbackGains && this.modalFeedbackGains[i]) {
+            this.modalFeedbackGains[i].connect(newD);
+            if (this.modalBus) {
+              this.modalFeedbackGains[i].connect(this.modalBus);
+            }
+          }
+
+          this.modalDelays[i] = newD;
+        } catch (e) {}
+      }
+    }
+
+    // 3. Flush pitch shifters
+    if (this.shimmerShifter && typeof this.shimmerShifter.flush === 'function') {
+      this.shimmerShifter.flush();
+    }
+    if (this.dimmerShifter && typeof this.dimmerShifter.flush === 'function') {
+      this.dimmerShifter.flush();
+    }
+
+    // 4. Rebuild & clear pre-delay
+    if (this.preDelayNode && this.inputGain) {
+      try {
+        try {
+          this.inputGain.disconnect(this.preDelayNode);
+        } catch (_) {
+          this.inputGain.disconnect();
+          if (this.dryGain) this.inputGain.connect(this.dryGain);
+        }
+        this.preDelayNode.disconnect();
+
+        const newPre = ctx.createDelay(0.5);
+        newPre.delayTime.setValueAtTime(this.params.preDelayMs / 1000, now);
+
+        this.inputGain.connect(newPre);
+        if (this.lowPass1) newPre.connect(this.lowPass1);
+        if (this.highPass1) newPre.connect(this.highPass1);
+
+        this.preDelayNode = newPre;
+      } catch (e) {}
+    }
+  }
+
+  setPower(isPowered) {
+    this.isPowered = Boolean(isPowered);
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    if (!this.isPowered) {
+      // Immediate silence on output buses
+      if (this.masterOutputBus) {
+        try { if (this.masterOutputBus.gain.cancelScheduledValues) this.masterOutputBus.gain.cancelScheduledValues(0); } catch (_) {}
+        this.masterOutputBus.gain.value = 0.0;
+        try { this.masterOutputBus.gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
+      if (this.wetGain) {
+        try { if (this.wetGain.gain.cancelScheduledValues) this.wetGain.gain.cancelScheduledValues(0); } catch (_) {}
+        this.wetGain.gain.value = 0.0;
+        try { this.wetGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
+      if (this.dryGain) {
+        try { if (this.dryGain.gain.cancelScheduledValues) this.dryGain.gain.cancelScheduledValues(0); } catch (_) {}
+        this.dryGain.gain.value = 0.0;
+        try { this.dryGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
+
+      // Zero feedback gains
+      if (this.fdnFeedbackGains) {
+        for (const g of this.fdnFeedbackGains) {
+          try { if (g.gain.cancelScheduledValues) g.gain.cancelScheduledValues(0); } catch (_) {}
+          g.gain.value = 0.0;
+          try { g.gain.setValueAtTime(0.0, now); } catch (_) {}
+        }
+      }
+      if (this.modalFeedbackGains) {
+        for (const g of this.modalFeedbackGains) {
+          try { if (g.gain.cancelScheduledValues) g.gain.cancelScheduledValues(0); } catch (_) {}
+          g.gain.value = 0.0;
+          try { g.gain.setValueAtTime(0.0, now); } catch (_) {}
+        }
+      }
+      if (this.pitchFeedbackGain) {
+        try { if (this.pitchFeedbackGain.gain.cancelScheduledValues) this.pitchFeedbackGain.gain.cancelScheduledValues(0); } catch (_) {}
+        this.pitchFeedbackGain.gain.value = 0.0;
+        try { this.pitchFeedbackGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
+
+      // Flush and replace all delay lines so trapped audio is 100% eliminated
+      this.flushDelayLines();
+    } else {
+      // Re-powering: Ensure completely fresh delay lines
+      this.flushDelayLines();
+
+      // Restore dry/wet and master levels
+      this._updateDryWetGains();
+      if (this.masterOutputBus) {
+        try { if (this.masterOutputBus.gain.cancelScheduledValues) this.masterOutputBus.gain.cancelScheduledValues(0); } catch (_) {}
+        this.masterOutputBus.gain.value = 1.0;
+        try { this.masterOutputBus.gain.setValueAtTime(1.0, now); } catch (_) {}
+      }
+      if (this.inputGain) {
+        const inputLinear = Math.pow(10, this.params.inputTrimDb / 20) * 0.85;
+        this.inputGain.gain.value = inputLinear;
+        try { this.inputGain.gain.setValueAtTime(inputLinear, now); } catch (_) {}
+      }
+
+      // Restore calibrated feedback gains
+      this._updateFdnDecayGains();
+      this._updateModalDecayGains();
+      if (this.pitchFeedbackGain) {
+        const pFb = this.params.pitchFeedback * 0.30;
+        this.pitchFeedbackGain.gain.value = pFb;
+        try { this.pitchFeedbackGain.gain.setValueAtTime(pFb, now); } catch (_) {}
+      }
     }
   }
 
@@ -585,36 +989,66 @@ export class Rb26WebEngine {
         }
         break;
       case 'highDampingHz':
-        for (const f of this.fdnDampingFilters) {
-          f.frequency.setTargetAtTime(value, now, 0.02);
+        if (this.fdnDampingFilters) {
+          const clampedDamp = Math.max(1000, Math.min(16000, value));
+          for (const f of this.fdnDampingFilters) {
+            f.frequency.setTargetAtTime(clampedDamp, now, 0.02);
+          }
         }
         break;
-      case 'decayRt60Sec':
+      case 'decayRt60Sec': {
+        this._updateFdnDecayGains();
+        this._updateModalDecayGains();
+        break;
+      }
       case 'roomSize': {
         const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+        const nextBank = this._activeFdnBank === 'A' ? 'B' : 'A';
+        const targetDelays = nextBank === 'A' ? this.fdnDelaysA : this.fdnDelaysB;
+        const targetXf = nextBank === 'A' ? this.fdnXfadeA : this.fdnXfadeB;
+        const currentXf = nextBank === 'A' ? this.fdnXfadeB : this.fdnXfadeA;
+        const xfadeSec = 0.045; // 45ms click-free crossfade
+
+        // Set delayTime on the muted target bank before crossfading (zero Doppler pitch shift)
         for (let i = 0; i < 8; i++) {
-          this.fdnDelays[i].delayTime.setTargetAtTime(fdnPrimes[i] * this.params.roomSize, now, 0.02);
-          const feedback = this.params.freezeHold ? 0.999 : (Math.pow(0.001, fdnPrimes[i] / this.params.decayRt60Sec) * 0.96);
-          this.fdnFeedbackGains[i].gain.setTargetAtTime(feedback, now, 0.02);
+          const targetDelayTime = fdnPrimes[i] * this.params.roomSize;
+          if (targetDelays && targetDelays[i]) {
+            targetDelays[i].delayTime.setValueAtTime(targetDelayTime, now);
+            this.fdnDelays[i] = targetDelays[i];
+          }
+          if (targetXf && targetXf[i]) {
+            try { targetXf[i].gain.cancelScheduledValues(now); } catch (_) {}
+            targetXf[i].gain.setValueAtTime(targetXf[i].gain.value, now);
+            targetXf[i].gain.linearRampToValueAtTime(1.0, now + xfadeSec);
+          }
+          if (currentXf && currentXf[i]) {
+            try { currentXf[i].gain.cancelScheduledValues(now); } catch (_) {}
+            currentXf[i].gain.setValueAtTime(currentXf[i].gain.value, now);
+            currentXf[i].gain.linearRampToValueAtTime(0.0, now + xfadeSec);
+          }
         }
-        this._updateModalDecayGains();
+        this._activeFdnBank = nextBank;
+        this._updateFdnDecayGains();
         break;
       }
       case 'freezeHold': {
         const isFrozen = Boolean(value);
-        this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 0.40, now, 0.02);
-        const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
-        for (let i = 0; i < 8; i++) {
-          this.fdnFeedbackGains[i].gain.setTargetAtTime(isFrozen ? 0.999 : (Math.pow(0.001, fdnPrimes[i] / this.params.decayRt60Sec) * 0.96), now, 0.02);
+        if (this.fdnInputBus) {
+          this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 0.35, now, 0.02);
         }
+        this._updateFdnDecayGains();
         this._updateModalDecayGains();
         break;
       }
       case 'shimmerSend':
-        this.shimmerSendGain.gain.setTargetAtTime(value * 0.70, now, 0.02);
+        if (this.shimmerSendGain) {
+          this.shimmerSendGain.gain.setTargetAtTime(value * 0.50, now, 0.02);
+        }
         break;
       case 'dimmerSend':
-        this.dimmerSendGain.gain.setTargetAtTime(value * 0.70, now, 0.02);
+        if (this.dimmerSendGain) {
+          this.dimmerSendGain.gain.setTargetAtTime(value * 0.50, now, 0.02);
+        }
         break;
       case 'shimmerInterval':
         this.shimmerShifter.setSemitones(value);
@@ -626,7 +1060,9 @@ export class Rb26WebEngine {
         this._updatePitchBlendGains();
         break;
       case 'pitchFeedback':
-        this.pitchFeedbackGain.gain.setTargetAtTime(value * 0.55, now, 0.02);
+        if (this.pitchFeedbackGain) {
+          this.pitchFeedbackGain.gain.setTargetAtTime(value * 0.30, now, 0.02);
+        }
         break;
       case 'tailModRateHz': {
         const goldenRatios = [1.0, 1.618, 0.618, 1.272, 0.786, 1.414, 0.866, 1.118];
@@ -812,8 +1248,8 @@ export class Rb26WebEngine {
       const filter2 = ctx.createBiquadFilter();
       filter1.type = 'lowpass';
       filter2.type = 'lowpass';
-      filter1.Q.setValueAtTime(0.707, now);
-      filter2.Q.setValueAtTime(0.707, now);
+      filter1.Q.setValueAtTime(BUTTERWORTH_Q, now);
+      filter2.Q.setValueAtTime(BUTTERWORTH_Q, now);
       filter1.frequency.setValueAtTime(1800, now);
       filter2.frequency.setValueAtTime(1800, now);
       filter1.frequency.exponentialRampToValueAtTime(450, now + 0.35);

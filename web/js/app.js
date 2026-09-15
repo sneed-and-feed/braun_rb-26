@@ -527,6 +527,119 @@ export class BraunRb26App {
     this.lastPoissonMidi = 60;
     this._heldKeys = new Set();
     this._activeVoices = new Map();
+    this._initRoomSizeSmoother();
+  }
+
+  _initRoomSizeSmoother() {
+    this._targetRoomSize = 1.0;
+    this._currentRoomSize = 1.0;
+    this._roomSizeRafId = null;
+    this._lastRoomSizeUpdateTime = 0;
+  }
+
+  _updateRoomSize(targetNorm, immediate = false) {
+    this._targetRoomSize = Math.max(0.2, Math.min(2.0, targetNorm));
+    const nowMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+    if (immediate || !this.engine) {
+      this._currentRoomSize = this._targetRoomSize;
+      if (this.engine) this.engine.setParam('roomSize', this._currentRoomSize);
+      this._lastRoomSizeUpdateTime = nowMs;
+      return;
+    }
+
+    if (this._roomSizeRafId) return;
+
+    const reqAnim = (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame
+      : (cb) => setTimeout(cb, 16);
+
+    const smoothStep = () => {
+      if (!this.isPowered) {
+        this._roomSizeRafId = null;
+        return;
+      }
+      const diff = this._targetRoomSize - this._currentRoomSize;
+      if (Math.abs(diff) < 0.002) {
+        this._currentRoomSize = this._targetRoomSize;
+        if (this.engine) this.engine.setParam('roomSize', this._currentRoomSize);
+        this._lastRoomSizeUpdateTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        this._roomSizeRafId = null;
+        return;
+      }
+
+      // Smooth bounded rate interpolation preventing live Doppler pitch glitches
+      const step = diff * 0.15;
+      const clampedStep = Math.sign(step) * Math.min(Math.abs(step), 0.035);
+      this._currentRoomSize += clampedStep;
+
+      // Throttle live audio engine parameter updates to >= 40ms intervals matching dual-bank crossfade cadence
+      const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      if (t - this._lastRoomSizeUpdateTime >= 40) {
+        this._lastRoomSizeUpdateTime = t;
+        if (this.engine) {
+          this.engine.setParam('roomSize', this._currentRoomSize);
+        }
+      }
+
+      this._roomSizeRafId = reqAnim(smoothStep);
+    };
+
+    this._roomSizeRafId = reqAnim(smoothStep);
+  }
+
+  async setPower(isPowered) {
+    this.isPowered = Boolean(isPowered);
+    const powerBtn = document.getElementById('btn-power');
+    if (powerBtn) {
+      powerBtn.classList.toggle('is-active', this.isPowered);
+      const statusText = powerBtn.querySelector('.braun-status-text');
+      if (statusText) statusText.textContent = this.isPowered ? 'POWER ON' : 'STANDBY';
+    }
+    if (this.display) this.display.setPower(this.isPowered);
+
+    if (!this.isPowered) {
+      // Cancel active room size animation
+      if (this._roomSizeRafId) {
+        const cancelAnim = (typeof cancelAnimationFrame === 'function')
+          ? cancelAnimationFrame
+          : clearTimeout;
+        cancelAnim(this._roomSizeRafId);
+        this._roomSizeRafId = null;
+      }
+      // Release any currently held voices
+      if (this._activeVoices) {
+        this._activeVoices.forEach((voice) => {
+          if (voice && typeof voice.release === 'function') {
+            try { voice.release(0.01); } catch (_) {}
+          }
+        });
+        this._activeVoices.clear();
+      }
+      if (this._heldKeys) {
+        this._heldKeys.clear();
+      }
+      if (this.isPoissonRunning) this.togglePoisson();
+    }
+
+    if (this.engine) {
+      if (this.isPowered) {
+        if (!this.engine.isInitialized) await this.engine.init();
+        if (this.engine.ctx && this.engine.ctx.state === 'suspended') {
+          await this.engine.ctx.resume();
+        }
+        this.engine.setPower(true);
+      } else {
+        this.engine.setPower(false);
+        // Allow audio processing thread 25ms to render silence before suspending context
+        await new Promise((r) => setTimeout(r, 25));
+        if (this.engine.ctx && this.engine.ctx.state === 'running') {
+          await this.engine.ctx.suspend();
+        }
+      }
+    }
+
+    this._emitJuceParam('power', this.isPowered ? 1.0 : 0.0);
   }
 
   async init() {
@@ -571,14 +684,7 @@ export class BraunRb26App {
         if (data.id === 'power' || data.apvtsId === 'power') {
           const nextPower = data.value > 0.5;
           if (this.isPowered !== nextPower) {
-            this.isPowered = nextPower;
-            const pBtn = document.getElementById('btn-power');
-            if (pBtn) {
-              pBtn.classList.toggle('is-active', nextPower);
-              const st = pBtn.querySelector('.braun-status-text');
-              if (st) st.textContent = nextPower ? 'POWER ON' : 'STANDBY';
-            }
-            if (this.display) this.display.setPower(nextPower);
+            this.setPower(nextPower);
           }
           return;
         }
@@ -796,7 +902,7 @@ export class BraunRb26App {
 
     this.knobs.room_size = createKnob('knob-room-size', {
       label: 'ROOM SIZE', min: 20, max: 200, step: 1, unit: '%', value: 100, size: 'large',
-      onChange: (v) => { this.engine.setParam('roomSize', v / 100); this._emitJuceParam('roomSize', v / 100); }
+      onChange: (v) => { this._updateRoomSize(v / 100); this._emitJuceParam('roomSize', v / 100); }
     });
 
     this.knobs.damping_high = createKnob('knob-damping-high', {
@@ -923,21 +1029,7 @@ export class BraunRb26App {
     const powerBtn = document.getElementById('btn-power');
     if (powerBtn) {
       powerBtn.addEventListener('click', async () => {
-        this.isPowered = !this.isPowered;
-        powerBtn.classList.toggle('is-active', this.isPowered);
-        const statusText = powerBtn.querySelector('.braun-status-text');
-        if (statusText) statusText.textContent = this.isPowered ? 'POWER ON' : 'STANDBY';
-        if (this.display) this.display.setPower(this.isPowered);
-        if (this.engine) {
-          if (this.isPowered) {
-            if (!this.engine.isInitialized) await this.engine.init();
-            if (this.engine.ctx) await this.engine.ctx.resume();
-          } else {
-            if (this.isPoissonRunning) this.togglePoisson();
-            if (this.engine.ctx) await this.engine.ctx.suspend();
-          }
-        }
-        this._emitJuceParam('power', this.isPowered ? 1.0 : 0.0);
+        await this.setPower(!this.isPowered);
       });
     }
 
@@ -1688,8 +1780,8 @@ export class BraunRb26App {
     const filter2 = ctx.createBiquadFilter();
     filter1.type = 'lowpass';
     filter2.type = 'lowpass';
-    filter1.Q.setValueAtTime(0.707, now);
-    filter2.Q.setValueAtTime(0.707, now);
+    filter1.Q.setValueAtTime(-3.0103, now); // Butterworth maximally flat response in dB (strictly <= 1.0 gain)
+    filter2.Q.setValueAtTime(-3.0103, now); // Butterworth maximally flat response in dB (strictly <= 1.0 gain)
     filter1.frequency.setValueAtTime(maxCutoff, now);
     filter2.frequency.setValueAtTime(maxCutoff, now);
     filter1.frequency.exponentialRampToValueAtTime(restCutoff, now + filterDecayBase);

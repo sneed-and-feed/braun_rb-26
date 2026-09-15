@@ -384,6 +384,91 @@ async function runBrowserTest() {
     console.log(`[BrowserTest] Reset RT60 value: ${defaultRt60}s (expected 6.5s)`);
     if (Math.abs(defaultRt60 - 6.5) > 0.1) throw new Error(`Expected reset RT60 6.5, got ${defaultRt60}`);
 
+    // Test Room Size Parameter Slew Smoothing & Dual-Bank Crossfading
+    console.log('[BrowserTest] Testing Room Size live parameter smoothing and dual-bank crossfading...');
+    const hasDualBanks = await evaluate(`
+      Boolean(window.__RB26__.engine.fdnDelaysA?.length === 8 &&
+              window.__RB26__.engine.fdnDelaysB?.length === 8 &&
+              window.__RB26__.engine.fdnXfadeA?.length === 8 &&
+              window.__RB26__.engine.fdnXfadeB?.length === 8)
+    `);
+    console.log(`[BrowserTest] Dual-bank FDN architecture initialized: ${hasDualBanks}`);
+    if (!hasDualBanks) throw new Error('Expected dual-bank FDN delay architecture (A & B)');
+
+    const initialBank = await evaluate(`window.__RB26__.engine._activeFdnBank`);
+    await evaluate(`window.__RB26__.knobs.room_size.setValue(180, true)`);
+    await new Promise(r => setTimeout(r, 120)); // Allow requestAnimationFrame smoother to step
+    const targetRoomSize = await evaluate(`window.__RB26__._targetRoomSize`);
+    const activeBankAfter = await evaluate(`window.__RB26__.engine._activeFdnBank`);
+    console.log(`[BrowserTest] Target room size: ${targetRoomSize} (expected 1.8), active bank: ${initialBank} -> ${activeBankAfter}`);
+    if (Math.abs(targetRoomSize - 1.8) > 0.01) throw new Error(`Expected targetRoomSize 1.8, got ${targetRoomSize}`);
+    if (activeBankAfter === initialBank) throw new Error('Expected active FDN bank to switch on room size change');
+
+    // Test Piano Chord Trigger & FDN Feedback Loop Stability
+    console.log('[BrowserTest] Testing felt piano chord audition and FDN stability...');
+    await evaluate(`document.getElementById('btn-audition-piano').click()`);
+    // Sample audio energy over 1.5s to verify contractive decay and zero runaway
+    const energySamples = [];
+    for (let i = 0; i < 5; i++) {
+      await new Promise(r => setTimeout(r, 300));
+      const rms = await evaluate(`
+        (() => {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          let sum = 0;
+          for (let j = 0; j < buf.length; j++) sum += buf[j] * buf[j];
+          return Math.sqrt(sum / buf.length);
+        })()
+      `);
+      energySamples.push(rms);
+    }
+    console.log(`[BrowserTest] Post-chord audio RMS profile: ${energySamples.map(x => x.toFixed(6)).join(' -> ')}`);
+    const finalRms = energySamples[energySamples.length - 1];
+    if (finalRms > 1.0) {
+      throw new Error(`FDN feedback loop runaway detected! Final RMS: ${finalRms}`);
+    }
+
+    // Test Power Cycle Flush
+    console.log('[BrowserTest] Testing Power Cycle flush (Power OFF -> Standby)...');
+    await evaluate(`document.getElementById('btn-power').click()`);
+    await new Promise(r => setTimeout(r, 100)); // Allow 25ms thread drain + margin
+    const isPowerOff = await evaluate(`window.__RB26__.isPowered === false && window.__RB26__.engine.isPowered === false`);
+    console.log(`[BrowserTest] Power is standby: ${isPowerOff}`);
+    if (!isPowerOff) throw new Error('Expected unit to be in standby after clicking power button');
+
+    const fdnGainsZeroed = await evaluate(`
+      window.__RB26__.engine.fdnFeedbackGains.every(g => Math.abs(g.gain.value) < 1e-6)
+    `);
+    console.log(`[BrowserTest] FDN feedback gains zeroed on power off: ${fdnGainsZeroed}`);
+    if (!fdnGainsZeroed) throw new Error('Expected FDN feedback gains to be zeroed in standby');
+
+    const standbyRms = await evaluate(`
+      (() => {
+        const buf = new Float32Array(512);
+        window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (let j = 0; j < buf.length; j++) sum += buf[j] * buf[j];
+        return Math.sqrt(sum / buf.length);
+      })()
+    `);
+    console.log(`[BrowserTest] Standby output RMS: ${standbyRms}`);
+    if (standbyRms > 1e-4) {
+      throw new Error(`Trapped audio remained circulating in standby! RMS: ${standbyRms}`);
+    }
+
+    console.log('[BrowserTest] Testing Power Cycle restore (Power ON)...');
+    await evaluate(`document.getElementById('btn-power').click()`);
+    await new Promise(r => setTimeout(r, 100)); // Allow async ctx.resume and power restore
+    const isPowerRestored = await evaluate(`window.__RB26__.isPowered === true && window.__RB26__.engine.isPowered === true`);
+    console.log(`[BrowserTest] Power restored: ${isPowerRestored}`);
+    if (!isPowerRestored) throw new Error('Expected power to be ON after clicking power button');
+
+    const fdnGainsRestored = await evaluate(`
+      window.__RB26__.engine.fdnFeedbackGains.every(g => g.gain.value > 0.5)
+    `);
+    console.log(`[BrowserTest] FDN feedback gains restored on power on: ${fdnGainsRestored}`);
+    if (!fdnGainsRestored) throw new Error('Expected FDN feedback gains to be restored when powered on');
+
     if (pageErrors.length > 0) {
       throw new Error(`Page exceptions encountered: ${JSON.stringify(pageErrors)}`);
     }
