@@ -368,6 +368,188 @@ async function runBrowserTest() {
     if (activeVoiceCountAfterRelease !== 0) throw new Error('Expected active voices to be 0 after keyup');
     if (sKeyHeldAfter) throw new Error('Expected held keys to not contain s after keyup');
 
+    // Set dry/wet mix to 0 (100% dry) to measure direct voice synthesis attack & release envelopes without 8.5s reverb tank circulation
+    const prevDryWet = await evaluate(`window.__RB26__.knobs.dry_wet_mix.getValue()`);
+    await evaluate(`window.__RB26__.knobs.dry_wet_mix.setValue(0, true)`);
+    await new Promise(r => setTimeout(r, 100));
+
+    const baselineRms = await evaluate(`
+      (() => {
+        const buf = new Float32Array(512);
+        window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+        return Math.sqrt(sum / buf.length);
+      })()
+    `);
+    console.log(`[BrowserTest] Baseline RMS before note press: ${baselineRms.toFixed(6)}`);
+
+    // Test Note Press Transient Smoothness (Zero Initial Jump / Anti-Click Attack)
+    console.log('[BrowserTest] Testing Note Press Transient Smoothness (Zero Initial Jump)...');
+    const pressTelemetry = await evaluate(`
+      (async () => {
+        await new Promise(r => setTimeout(r, 100));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true }));
+        await new Promise(r => setTimeout(r, 20));
+
+        const buf = new Float32Array(512);
+        window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+        let maxJump = 0;
+        for (let i = 1; i < buf.length; i++) {
+          const diff = Math.abs(buf[i] - buf[i - 1]);
+          if (diff > maxJump) maxJump = diff;
+        }
+        return { maxJump, sampleCount: buf.length };
+      })()
+    `);
+    console.log(`[BrowserTest] Note press max sample jump: ${pressTelemetry.maxJump.toFixed(4)} (must be < 0.20)`);
+    if (pressTelemetry.maxJump >= 0.20) {
+      throw new Error(`Note press transient pop detected! Max sample jump: ${pressTelemetry.maxJump}`);
+    }
+
+    // Test Note Release Transient Smoothness (Anti-Click setTargetAtTime Decay)
+    console.log('[BrowserTest] Testing Note Release Transient Smoothness (Anti-Click setTargetAtTime Decay)...');
+    await new Promise(r => setTimeout(r, 150));
+    const releaseTelemetry = await evaluate(`
+      (async () => {
+        const beforeBuf = new Float32Array(512);
+        window.__RB26__.engine.analyserL.getFloatTimeDomainData(beforeBuf);
+        let beforeRms = 0;
+        for (let i = 0; i < beforeBuf.length; i++) beforeRms += beforeBuf[i] * beforeBuf[i];
+        beforeRms = Math.sqrt(beforeRms / beforeBuf.length);
+
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'd', bubbles: true }));
+
+        // Continuous sampling across consecutive frames immediately upon keyup to catch any transient step discontinuity
+        let maxReleaseJump = 0;
+        for (let pass = 0; pass < 4; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxReleaseJump) maxReleaseJump = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+
+        await new Promise(r => setTimeout(r, 600));
+        const tailBuf = new Float32Array(512);
+        window.__RB26__.engine.analyserL.getFloatTimeDomainData(tailBuf);
+        let tailRms = 0;
+        for (let i = 0; i < tailBuf.length; i++) tailRms += tailBuf[i] * tailBuf[i];
+        tailRms = Math.sqrt(tailRms / tailBuf.length);
+
+        return { beforeRms, maxReleaseJump, tailRms };
+      })()
+    `);
+    console.log(`[BrowserTest] Note release pre-RMS: ${releaseTelemetry.beforeRms.toFixed(4)}, max jump: ${releaseTelemetry.maxReleaseJump.toFixed(4)}, post-tail RMS: ${releaseTelemetry.tailRms.toFixed(6)}`);
+    if (releaseTelemetry.maxReleaseJump >= 0.15) {
+      throw new Error(`Note release pop discontinuity detected! Max sample jump: ${releaseTelemetry.maxReleaseJump}`);
+    }
+    if (releaseTelemetry.tailRms >= releaseTelemetry.beforeRms * 0.25) {
+      throw new Error(`Audio did not decay sufficiently after note release tail! Start: ${releaseTelemetry.beforeRms}, Final: ${releaseTelemetry.tailRms}`);
+    }
+
+    // Test Rapid Staccato Key Churn (< 15ms note re-triggering under high audio load)
+    console.log('[BrowserTest] Testing Rapid Staccato Key Churn (< 15ms retriggering)...');
+    const staccatoTelemetry = await evaluate(`
+      (async () => {
+        let maxStaccatoJump = 0;
+        for (let iter = 0; iter < 5; iter++) {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }));
+          await new Promise(r => setTimeout(r, 12));
+          window.dispatchEvent(new KeyboardEvent('keyup', { key: 'g', bubbles: true }));
+          await new Promise(r => setTimeout(r, 12));
+
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxStaccatoJump) maxStaccatoJump = diff;
+          }
+        }
+        await new Promise(r => setTimeout(r, 400));
+        return { maxStaccatoJump };
+      })()
+    `);
+    console.log(`[BrowserTest] Rapid staccato max jump: ${staccatoTelemetry.maxStaccatoJump.toFixed(4)} (must be < 0.20)`);
+    if (staccatoTelemetry.maxStaccatoJump >= 0.20) {
+      throw new Error(`Rapid staccato pop detected! Max jump: ${staccatoTelemetry.maxStaccatoJump}`);
+    }
+
+    // Test Polyphonic Chord Release Smoothness
+    console.log('[BrowserTest] Testing Polyphonic Chord Release Smoothness...');
+    await evaluate(`
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
+    `);
+    await new Promise(r => setTimeout(r, 120));
+    const chordReleaseTelemetry = await evaluate(`
+      (async () => {
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: '1', bubbles: true }));
+        let maxChordJump = 0;
+        for (let pass = 0; pass < 4; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxChordJump) maxChordJump = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+
+        await new Promise(r => setTimeout(r, 800));
+        const finalBuf = new Float32Array(512);
+        window.__RB26__.engine.analyserL.getFloatTimeDomainData(finalBuf);
+        let finalRms = 0;
+        for (let i = 0; i < finalBuf.length; i++) finalRms += finalBuf[i] * finalBuf[i];
+        finalRms = Math.sqrt(finalRms / finalBuf.length);
+        return { maxChordJump, finalRms };
+      })()
+    `);
+    console.log(`[BrowserTest] Chord release max jump: ${chordReleaseTelemetry.maxChordJump.toFixed(4)}, final RMS: ${chordReleaseTelemetry.finalRms.toFixed(6)}`);
+    if (chordReleaseTelemetry.maxChordJump >= 0.20) {
+      throw new Error(`Chord release pop discontinuity detected! Max jump: ${chordReleaseTelemetry.maxChordJump}`);
+    }
+    if (chordReleaseTelemetry.finalRms >= 0.04) {
+      throw new Error(`Chord did not decay to silence after release tail! Final RMS: ${chordReleaseTelemetry.finalRms}`);
+    }
+
+    // Restore previous dry/wet mix
+    await evaluate(`window.__RB26__.knobs.dry_wet_mix.setValue(${prevDryWet}, true)`);
+
+    // Test CRT Monitor High-Performance Rendering Benchmark (< 4.0ms per frame)
+    console.log('[BrowserTest] Testing CRT Monitor Rendering Performance Benchmark (< 4.0ms budget)...');
+    const crtBenchmark = await evaluate(`
+      (() => {
+        const display = window.__RB26__.display;
+        const modes = ['WAVE', 'EDC', 'LISSAJOUS', 'SPECTRUM'];
+        const results = {};
+
+        for (const mode of modes) {
+          display.setMode(mode);
+          for (let i = 0; i < 3; i++) display.draw();
+
+          const tStart = performance.now();
+          const iterations = 30;
+          for (let i = 0; i < iterations; i++) {
+            display.draw();
+          }
+          const tElapsed = performance.now() - tStart;
+          results[mode] = tElapsed / iterations;
+        }
+
+        display.setMode('WAVE');
+        return results;
+      })()
+    `);
+
+    for (const [mode, avgMs] of Object.entries(crtBenchmark)) {
+      console.log(`[BrowserTest] CRT Display ${mode} mode avg render time: ${avgMs.toFixed(3)} ms (budget < 4.0ms)`);
+      if (avgMs >= 4.0) {
+        throw new Error(`CRT Display rendering too slow in ${mode} mode! ${avgMs.toFixed(3)} ms exceeds 4.0ms budget`);
+      }
+    }
+
     // Test Vector Pad Bidirectional Knob Sync
     console.log('[BrowserTest] Testing Vector Pad Bidirectional Knob Sync...');
     await evaluate(`

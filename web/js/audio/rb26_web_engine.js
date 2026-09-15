@@ -1245,14 +1245,16 @@ export class Rb26WebEngine {
     osc.frequency.setValueAtTime(140, now);
     osc.frequency.exponentialRampToValueAtTime(45, now + 0.12);
 
-    gain.gain.setValueAtTime(0.55, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    gain.gain.setValueAtTime(0.0, now);
+    gain.gain.linearRampToValueAtTime(0.55, now + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    gain.gain.linearRampToValueAtTime(0.0, now + 0.355);
 
     osc.connect(gain);
     gain.connect(this.inputGain);
 
     osc.start(now);
-    osc.stop(now + 0.35);
+    osc.stop(now + 0.36);
   }
 
   triggerMallet() {
@@ -1265,13 +1267,15 @@ export class Rb26WebEngine {
     osc.frequency.setValueAtTime(110, now);
     osc.frequency.exponentialRampToValueAtTime(55, now + 0.045);
 
-    g.gain.setValueAtTime(0.85, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+    g.gain.setValueAtTime(0.0, now);
+    g.gain.linearRampToValueAtTime(0.85, now + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.085);
+    g.gain.linearRampToValueAtTime(0.0, now + 0.090);
 
     osc.connect(g);
     g.connect(this.inputGain);
     osc.start(now);
-    osc.stop(now + 0.090);
+    osc.stop(now + 0.095);
   }
 
   /**
@@ -1295,15 +1299,17 @@ export class Rb26WebEngine {
     filter.frequency.value = 1000;
 
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.45, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    gain.gain.setValueAtTime(0.0, now);
+    gain.gain.linearRampToValueAtTime(0.45, now + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+    gain.gain.linearRampToValueAtTime(0.0, now + 0.205);
 
     whiteNoise.connect(filter);
     filter.connect(gain);
     gain.connect(this.inputGain);
 
     whiteNoise.start(now);
-    whiteNoise.stop(now + 0.2);
+    whiteNoise.stop(now + 0.21);
   }
 
   triggerNoiseBurst(durationMs = 40) {
@@ -1383,9 +1389,10 @@ export class Rb26WebEngine {
       bodyFilter.gain.setValueAtTime(2.0, now);
 
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.setValueAtTime(0.0, now);
       gain.gain.linearRampToValueAtTime(0.12, now + 0.008);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.2);
+      gain.gain.linearRampToValueAtTime(0.0, now + 3.25);
 
       stringMix.connect(filter1);
       filter1.connect(filter2);
@@ -1395,8 +1402,8 @@ export class Rb26WebEngine {
 
       osc1.start(now);
       osc2.start(now);
-      osc1.stop(now + 3.2);
-      osc2.stop(now + 3.2);
+      osc1.stop(now + 3.3);
+      osc2.stop(now + 3.3);
     });
   }
 
@@ -1423,16 +1430,17 @@ export class Rb26WebEngine {
       filter.frequency.exponentialRampToValueAtTime(600, now + 4.5);
 
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.setValueAtTime(0.0, now);
       gain.gain.linearRampToValueAtTime(0.08, now + 1.2);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 4.5);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 4.5);
+      gain.gain.linearRampToValueAtTime(0.0, now + 4.55);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(this.inputGain);
 
       osc.start(now);
-      osc.stop(now + 4.5);
+      osc.stop(now + 4.6);
     });
   }
 }

@@ -627,6 +627,9 @@ export class BraunRb26App {
     if (this.engine) {
       if (this.isPowered) {
         if (!this.engine.isInitialized) await this.engine.init();
+        if (this.engine.analyserL && this.display && !this.display.analyserL) {
+          this.display.setAnalysers(this.engine.analyserL, this.engine.analyserR);
+        }
         if (this.engine.ctx && this.engine.ctx.state === 'suspended') {
           await this.engine.ctx.resume();
         }
@@ -1782,9 +1785,10 @@ export class BraunRb26App {
 
     // Master Voice Gain with 8ms anti-click attack and smooth exponential decay
     const voiceGain = ctx.createGain();
-    voiceGain.gain.setValueAtTime(0.0001, now);
+    voiceGain.gain.setValueAtTime(0.0, now);
     voiceGain.gain.linearRampToValueAtTime(velocity * 0.22, now + 0.008);
     voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+    voiceGain.gain.linearRampToValueAtTime(0.0, now + durationSec + 0.05);
 
     // Spruce Soundboard Resonant Peaking Formant Filter (~480–610 Hz, Q=1.2, +2dB)
     const bodyFilter = ctx.createBiquadFilter();
@@ -1832,7 +1836,6 @@ export class BraunRb26App {
     osc1.connect(osc1Gain);
     osc1Gain.connect(stringMixer);
     osc1.start(now);
-    osc1.stop(now + durationSec);
 
     // Osc 2: Sympathetic String Sine (+1.4 cents detune)
     const osc2 = ctx.createOscillator();
@@ -1844,7 +1847,6 @@ export class BraunRb26App {
     osc2.connect(osc2Gain);
     osc2Gain.connect(stringMixer);
     osc2.start(now);
-    osc2.stop(now + durationSec);
 
     // Osc 3: Octave Harmonic (+2.0 cents detune, faster decay)
     const osc3 = ctx.createOscillator();
@@ -1857,14 +1859,16 @@ export class BraunRb26App {
     osc3.connect(osc3Gain);
     osc3Gain.connect(stringMixer);
     osc3.start(now);
-    osc3.stop(now + Math.min(durationSec, 1.8));
 
     // Soft Felt Hammer Noise Transient (280 Hz Bandpass, 20ms burst)
+    // Smooth zero-start envelope to eliminate initial click pop
     const noiseLength = Math.max(128, Math.floor(ctx.sampleRate * thumpDuration));
     const noiseBuf = ctx.createBuffer(1, noiseLength, ctx.sampleRate);
     const nd = noiseBuf.getChannelData(0);
+    const attackSamples = Math.min(32, Math.floor(noiseLength * 0.15));
     for (let i = 0; i < noiseLength; i++) {
-      nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / noiseLength, 2.5);
+      const attackEnv = i < attackSamples ? (i / attackSamples) : 1.0;
+      nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / noiseLength, 2.5) * attackEnv;
     }
     const noiseSrc = ctx.createBufferSource();
     noiseSrc.buffer = noiseBuf;
@@ -1875,7 +1879,8 @@ export class BraunRb26App {
     hammerFilter.Q.setValueAtTime(2.0, now);
 
     const hammerGainNode = ctx.createGain();
-    hammerGainNode.gain.setValueAtTime(hammerThumpGain, now);
+    hammerGainNode.gain.setValueAtTime(0.0, now);
+    hammerGainNode.gain.linearRampToValueAtTime(hammerThumpGain, now + 0.002);
     hammerGainNode.gain.exponentialRampToValueAtTime(0.0001, now + thumpDuration);
 
     noiseSrc.connect(hammerFilter);
@@ -1891,25 +1896,46 @@ export class BraunRb26App {
     bodyFilter.connect(voiceGain);
     voiceGain.connect(this.engine.inputGain);
 
+    let isStopped = false;
+    const teardownVoice = (tailSec) => {
+      if (isStopped) return;
+      isStopped = true;
+      try {
+        const stopTime = ctx.currentTime + Math.max(0.1, tailSec);
+        osc1.stop(stopTime);
+        osc2.stop(stopTime);
+        osc3.stop(stopTime);
+        setTimeout(() => {
+          try {
+            voiceGain.disconnect();
+          } catch (_) {}
+        }, (stopTime - ctx.currentTime + 0.1) * 1000);
+      } catch (_) {}
+    };
+
+    // Auto-teardown when note naturally expires after durationSec
+    const naturalExpireTimer = setTimeout(() => {
+      teardownVoice(0.05);
+    }, (durationSec + 0.5) * 1000);
+
     return {
       release: (releaseSec = 0.28) => {
+        clearTimeout(naturalExpireTimer);
         try {
           const t = ctx.currentTime;
-          if (voiceGain.gain.cancelAndHoldAtTime) {
+          // Smooth exponential decay via setTargetAtTime with cancelAndHoldAtTime
+          // to eliminate timeline reset step discontinuities when cancelling active ramps
+          if (typeof voiceGain.gain.cancelAndHoldAtTime === 'function') {
             voiceGain.gain.cancelAndHoldAtTime(t);
           } else {
             voiceGain.gain.cancelScheduledValues(t);
-            voiceGain.gain.setValueAtTime(Math.max(0.0001, voiceGain.gain.value), t);
           }
-          voiceGain.gain.exponentialRampToValueAtTime(0.0001, t + releaseSec);
-          setTimeout(() => {
-            try {
-              osc1.stop();
-              osc2.stop();
-              osc3.stop();
-              voiceGain.disconnect();
-            } catch (_) {}
-          }, (releaseSec + 0.05) * 1000);
+          voiceGain.gain.setTargetAtTime(0.0, t, Math.max(0.005, releaseSec * 0.25));
+
+          // Ensure adequate release tail before stopping oscillators and unhooking nodes
+          // 4 * (releaseSec * 0.25) = releaseSec gives -35dB; 8 time constants = 2 * releaseSec gives -70dB
+          const tailSec = Math.max(0.5, releaseSec * 3.0);
+          teardownVoice(tailSec);
         } catch (_) {}
       }
     };
@@ -1936,20 +1962,33 @@ export class BraunRb26App {
 
     const strumMs = CHORD_SPEEDS[this.chordSpeed] ?? 50;
     const voices = [];
+    const timerIds = [];
+    let isReleased = false;
+    let releaseSec = 0.35;
 
     chord.freqs.forEach((freq, i) => {
       const jitter = strumMs > 0 ? (Math.random() - 0.5) * 6 : 0;
       const delay = Math.max(0, i * strumMs + jitter);
-      setTimeout(() => {
-        if (!this.isPowered) return;
+      const tid = setTimeout(() => {
+        if (!this.isPowered || isReleased) return;
         const midi = 69 + 12 * Math.log2(freq / 440);
         const v = this.playChime(midi, 0.68, 4.2);
-        if (v) voices.push(v);
+        if (v) {
+          if (isReleased) {
+            v.release(releaseSec);
+          } else {
+            voices.push(v);
+          }
+        }
       }, delay);
+      timerIds.push(tid);
     });
 
     return {
       release: (sec = 0.35) => {
+        isReleased = true;
+        releaseSec = sec;
+        timerIds.forEach((tid) => clearTimeout(tid));
         voices.forEach((v) => {
           if (v && typeof v.release === 'function') v.release(sec);
         });
@@ -2030,13 +2069,15 @@ export class BraunRb26App {
     osc.frequency.setValueAtTime(110, now);
     osc.frequency.exponentialRampToValueAtTime(55, now + 0.045);
 
-    g.gain.setValueAtTime(0.85, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+    g.gain.setValueAtTime(0.0, now);
+    g.gain.linearRampToValueAtTime(0.85, now + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.085);
+    g.gain.linearRampToValueAtTime(0.0, now + 0.090);
 
     osc.connect(g);
     g.connect(this.engine.inputGain);
     osc.start(now);
-    osc.stop(now + 0.090);
+    osc.stop(now + 0.095);
   }
 
   triggerMallet() {

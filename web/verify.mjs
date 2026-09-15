@@ -514,4 +514,111 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.strictEqual(typeof engine.connectInput, 'function', 'Rb26WebEngine must implement connectInput');
     });
   });
+
+  //----------------------------------------------------------------------------
+  describe('10. Anti-Click Voice Envelopes & CRT Display Performance Architecture', () => {
+    it('verifies anti-click attack ramping and zero-start initial envelope in playChime and exciters', () => {
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      const engineJs = fs.readFileSync(path.join(__dirname, 'js', 'audio', 'rb26_web_engine.js'), 'utf8');
+
+      // Chime voice master gain must initialize strictly at 0.0 before linear attack ramp
+      assert.ok(appJs.includes('voiceGain.gain.setValueAtTime(0.0, now)'), 'voiceGain must start strictly at 0.0 to prevent note press click');
+      assert.ok(appJs.includes('voiceGain.gain.linearRampToValueAtTime(velocity * 0.22, now + 0.008)'), 'voiceGain must ramp smoothly over 8ms attack');
+
+      // Hammer noise transient must start at 0.0 and ramp smoothly
+      assert.ok(appJs.includes('hammerGainNode.gain.setValueAtTime(0.0, now)'), 'hammer thump must initialize at 0.0');
+      assert.ok(appJs.includes('hammerGainNode.gain.linearRampToValueAtTime(hammerThumpGain, now + 0.002)'), 'hammer thump must ramp over 2ms');
+
+      // Acoustic hammer mallet must initialize at 0.0
+      assert.ok(appJs.includes('g.gain.setValueAtTime(0.0, now);') && appJs.includes('g.gain.linearRampToValueAtTime(0.85, now + 0.003)'),
+        'triggerHammerThud must ramp gain from 0.0 over 3ms');
+
+      // Engine transient exciters must start at gain 0.0
+      assert.ok(engineJs.includes('gain.gain.setValueAtTime(0.0, now);') && engineJs.includes('gain.gain.linearRampToValueAtTime(0.55, now + 0.003)'),
+        'triggerKick must ramp smoothly from 0.0');
+      assert.ok(engineJs.includes('g.gain.setValueAtTime(0.0, now);') && engineJs.includes('g.gain.linearRampToValueAtTime(0.85, now + 0.003)'),
+        'triggerMallet must ramp smoothly from 0.0');
+      assert.ok(engineJs.includes('gain.gain.setValueAtTime(0.0, now);') && engineJs.includes('gain.gain.linearRampToValueAtTime(0.45, now + 0.002)'),
+        'triggerSnare must ramp smoothly from 0.0');
+    });
+
+    it('verifies click-free setTargetAtTime release envelope without gain.value read discontinuity', () => {
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+
+      // Must not read voiceGain.gain.value or call setValueAtTime on release
+      assert.ok(!appJs.includes('setValueAtTime(Math.max(0.0001, voiceGain.gain.value)'),
+        'Must eliminate gain.value reading and setValueAtTime on release');
+      assert.ok(appJs.includes('voiceGain.gain.setTargetAtTime(0.0, t, Math.max(0.005, releaseSec * 0.25))'),
+        'Must use setTargetAtTime for C1-continuous exponential decay without step discontinuity');
+      assert.ok(appJs.includes('cancelAndHoldAtTime'),
+        'Must use cancelAndHoldAtTime to preserve instantaneous gain and prevent timeline reset step jumps on release');
+
+      // Must provide adequate release tail before stopping oscillators
+      assert.ok(appJs.includes('const tailSec = Math.max(0.5, releaseSec * 3.0)'),
+        'Must provide at least 8 to 12 time constants of release tail before stopping oscillators');
+
+      // Polyphonic chord playback must track pending timers and cancel them on release
+      assert.ok(appJs.includes('timerIds.forEach((tid) => clearTimeout(tid))'),
+        'playChord must clear pending strum timers on release to prevent late voices popping in');
+    });
+
+    it('verifies BraunCrtDisplay precomputed math tables and zero per-frame allocations', async () => {
+      const { BraunCrtDisplay } = await import('./js/ui/crt-display.js');
+      const mockCanvas = {
+        getContext: () => ({
+          resetTransform: () => {},
+          scale: () => {},
+          fillRect: () => {},
+          beginPath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          stroke: () => {},
+          fillText: () => {},
+          save: () => {},
+          restore: () => {},
+          drawImage: () => {}
+        }),
+        getBoundingClientRect: () => ({ width: 600, height: 200 }),
+        width: 600,
+        height: 200
+      };
+
+      const display = new BraunCrtDisplay(mockCanvas);
+      assert.strictEqual(display.fftSize, 512);
+      assert.ok(display._hannWindow instanceof Float32Array, 'Hann window must be precomputed Float32Array');
+      assert.strictEqual(display._hannWindow.length, 512);
+      assert.ok(Math.abs(display._hannWindow[0]) < 1e-6, 'Hann window start must be 0.0');
+      assert.ok(Math.abs(display._hannWindow[511]) < 1e-6, 'Hann window end must be 0.0');
+      assert.ok(Math.abs(display._hannWindow[256] - 1.0) < 0.01, 'Hann window center must be ~1.0');
+
+      assert.ok(display._bitRev instanceof Uint16Array, 'Bit-reversal table must be precomputed Uint16Array');
+      assert.strictEqual(display._bitRev.length, 512);
+
+      assert.ok(display._twiddleCos instanceof Float32Array, 'Twiddle cosine table must be precomputed Float32Array');
+      assert.ok(display._twiddleSin instanceof Float32Array, 'Twiddle sine table must be precomputed Float32Array');
+      assert.strictEqual(display._twiddleCos.length, 256);
+      assert.strictEqual(display._twiddleSin.length, 256);
+
+      assert.ok(display._barBinIndices instanceof Uint16Array, 'Frequency warping bins must be precomputed Uint16Array');
+      assert.strictEqual(display.numBars, 48);
+      assert.strictEqual(display._barBinIndices.length, 48);
+
+      // Verify monotonically increasing bin distribution
+      for (let i = 1; i < display.numBars; i++) {
+        assert.ok(display._barBinIndices[i] >= display._barBinIndices[i - 1],
+          `Bin ${i} (${display._barBinIndices[i]}) must be >= bin ${i - 1} (${display._barBinIndices[i - 1]})`);
+      }
+    });
+
+    it('verifies BraunCrtDisplay hardware-cached graticule architecture', () => {
+      const crtJs = fs.readFileSync(path.join(__dirname, 'js', 'ui', 'crt-display.js'), 'utf8');
+
+      assert.ok(crtJs.includes('_updateGraticuleCache'), 'Must implement offscreen graticule caching');
+      assert.ok(crtJs.includes('this._graticuleCanvas'), 'Must maintain _graticuleCanvas instance');
+      assert.ok(crtJs.includes('ctx.drawImage(this._graticuleCanvas, 0, 0)'), 'Must blit cached graticule in single drawImage pass');
+      assert.ok(crtJs.includes('targetW === this.canvas.width && targetH === this.canvas.height') ||
+                crtJs.includes('this.canvas.width === targetW && this.canvas.height === targetH'),
+        'Must guard against redundant canvas width/height mutations to preserve GPU textures');
+    });
+  });
 });
