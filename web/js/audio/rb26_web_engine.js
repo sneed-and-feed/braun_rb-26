@@ -13,7 +13,7 @@
  * - Curated zero-install sound generator (Impulse, 808 Kick/Snare, Felt Piano, Ambient Pad)
  */
 
-export const BUTTERWORTH_Q = Math.SQRT1_2; // Butterworth 2nd-order Q: 1 / sqrt(2) ~ 0.7071 (strictly flat passband)
+export const BUTTERWORTH_Q = -3.0103; // Butterworth 2nd-order Q in dB: 20 * log10(1 / sqrt(2)) = -3.0103 dB (maximally flat passband in Web Audio BiquadFilterNode)
 
 export class WebAudioPitchShifter {
   constructor(ctx, options = {}) {
@@ -207,6 +207,17 @@ export class Rb26WebEngine {
       limiterEnable: true
     };
 
+    // Precomputed click-free S-curve crossfade curves (64 steps, strictly smoothstep S(t) + (1 - S(t)) = 1.0)
+    const xfadeSteps = 64;
+    this._xfadeInCurve = new Float32Array(xfadeSteps);
+    this._xfadeOutCurve = new Float32Array(xfadeSteps);
+    for (let k = 0; k < xfadeSteps; k++) {
+      const t = k / (xfadeSteps - 1);
+      const s = t * t * (3 - 2 * t);
+      this._xfadeInCurve[k] = s;
+      this._xfadeOutCurve[k] = 1.0 - s;
+    }
+
     // Telemetry listeners
     this.onTelemetry = null;
   }
@@ -285,16 +296,17 @@ export class Rb26WebEngine {
     this.modalHouseholderSum = ctx.createGain();
     this.modalHouseholderSum.gain.setValueAtTime(-0.50, ctx.currentTime);
 
-    const effRt60 = Math.max(0.1, this.params.decayRt60Sec * this.params.bassRt60Mult);
+    const boundedBassMult = Math.min(1.4, Math.max(0.1, this.params.bassRt60Mult));
+    const effRt60 = Math.max(0.1, this.params.decayRt60Sec * boundedBassMult);
 
     for (let i = 0; i < 4; i++) {
       const d = ctx.createDelay(0.4);
       d.delayTime.setValueAtTime(modalTimes[i], ctx.currentTime);
 
-      // DC-blocking highpass filter (25 Hz)
+      // DC-blocking highpass filter (35 Hz 2nd-order Butterworth)
       const dcBlock = ctx.createBiquadFilter();
       dcBlock.type = 'highpass';
-      dcBlock.frequency.setValueAtTime(25, ctx.currentTime);
+      dcBlock.frequency.setValueAtTime(35, ctx.currentTime);
       dcBlock.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
       // Lowpass damping filter in modal loop: extinguishes high-frequency transients and prevents metallic ringing
@@ -309,7 +321,9 @@ export class Rb26WebEngine {
       inGain.connect(d);
 
       const g = ctx.createGain();
-      const fbGain = Math.min(0.96, Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.90);
+      // Low-frequency loop gain strictly < 0.88 to make sub-bass accumulation physically impossible
+      const calculatedFb = Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.86;
+      const fbGain = Math.min(0.875, calculatedFb);
       g.gain.setValueAtTime(this.isPowered ? fbGain : 0.0, ctx.currentTime);
 
       // Recirculating path with DC block + lowpass damping + Householder reflection
@@ -329,10 +343,10 @@ export class Rb26WebEngine {
       this.modalInputGains.push(inGain);
     }
 
-    // Sub-Mono Elliptical Filter on Modal Output
+    // Sub-Mono Elliptical Filter on Modal Output (35 Hz 2nd-order Butterworth)
     this.modalHighPass = ctx.createBiquadFilter();
     this.modalHighPass.type = 'highpass';
-    this.modalHighPass.frequency.setValueAtTime(28, ctx.currentTime);
+    this.modalHighPass.frequency.setValueAtTime(35, ctx.currentTime);
     this.modalHighPass.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
     this.modalBus.connect(this.modalHighPass);
 
@@ -398,10 +412,10 @@ export class Rb26WebEngine {
       xfadeA.gain.setValueAtTime(1.0, ctx.currentTime);
       xfadeB.gain.setValueAtTime(0.0, ctx.currentTime);
 
-      // DC-blocking highpass filter (30 Hz) in every recirculating delay path
+      // DC-blocking highpass filter (35 Hz Butterworth 2nd-order) in every recirculating delay path
       const dcBlock = ctx.createBiquadFilter();
       dcBlock.type = 'highpass';
-      dcBlock.frequency.setValueAtTime(30, ctx.currentTime);
+      dcBlock.frequency.setValueAtTime(35, ctx.currentTime);
       dcBlock.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
       // Lowpass damping filter in FDN loop: eliminates high-frequency runaway
@@ -691,12 +705,15 @@ export class Rb26WebEngine {
       }
       return;
     }
-    const effRt60 = Math.max(0.1, this.params.decayRt60Sec * this.params.bassRt60Mult);
+    const boundedBassMult = Math.min(1.4, Math.max(0.1, this.params.bassRt60Mult));
+    const effRt60 = Math.max(0.1, this.params.decayRt60Sec * boundedBassMult);
     const modalTimes = [0.071, 0.089, 0.107, 0.126];
     const now = this.ctx.currentTime;
 
     for (let i = 0; i < 4; i++) {
-      const fb = this.params.freezeHold ? 0.985 : Math.min(0.96, Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.90);
+      // Loop gain at low frequencies strictly < 0.88 to make sub-bass accumulation physically impossible
+      const calculatedFb = Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.86;
+      const fb = this.params.freezeHold ? 0.875 : Math.min(0.875, calculatedFb);
       this.modalFeedbackGains[i].gain.value = fb;
       this.modalFeedbackGains[i].gain.setTargetAtTime(fb, now, 0.02);
     }
@@ -976,6 +993,7 @@ export class Rb26WebEngine {
         }
         break;
       case 'bassRt60Mult':
+        this.params.bassRt60Mult = Math.min(1.4, Math.max(0.1, value));
         this._updateModalDecayGains();
         break;
       case 'punchDucking':
@@ -985,7 +1003,7 @@ export class Rb26WebEngine {
         break;
       case 'subMonoHz':
         if (this.modalHighPass) {
-          this.modalHighPass.frequency.setTargetAtTime(Math.max(20, value * 0.25), now, 0.02);
+          this.modalHighPass.frequency.setTargetAtTime(Math.max(35, value * 0.30), now, 0.02);
         }
         break;
       case 'highDampingHz':
@@ -1002,31 +1020,76 @@ export class Rb26WebEngine {
         break;
       }
       case 'roomSize': {
+        const val = Math.max(0.2, Math.min(2.0, Number(value) || 1.0));
+        this.params.roomSize = val;
+
+        if (!this.ctx || !this.fdnDelaysA || !this.fdnDelaysA.length) return;
+        const now = this.ctx.currentTime;
+
+        if (!this.isPowered) {
+          const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+          for (let i = 0; i < 8; i++) {
+            const targetDelayTime = fdnPrimes[i] * this.params.roomSize;
+            if (this.fdnDelaysA[i]) this.fdnDelaysA[i].delayTime.setValueAtTime(targetDelayTime, now);
+            if (this.fdnDelaysB[i]) this.fdnDelaysB[i].delayTime.setValueAtTime(targetDelayTime, now);
+          }
+          return;
+        }
+
         const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
         const nextBank = this._activeFdnBank === 'A' ? 'B' : 'A';
         const targetDelays = nextBank === 'A' ? this.fdnDelaysA : this.fdnDelaysB;
         const targetXf = nextBank === 'A' ? this.fdnXfadeA : this.fdnXfadeB;
         const currentXf = nextBank === 'A' ? this.fdnXfadeB : this.fdnXfadeA;
-        const xfadeSec = 0.045; // 45ms click-free crossfade
+        const xfadeSec = 0.080; // 80ms click-free S-curve crossfade (75-100 ms window)
 
-        // Set delayTime on the muted target bank before crossfading (zero Doppler pitch shift)
+        // 1. Strictly cancel overlapping scheduled crossfades and ensure inactive bank is 100% muted
+        for (let i = 0; i < 8; i++) {
+          if (targetXf && targetXf[i]) {
+            try {
+              if (typeof targetXf[i].gain.cancelAndHoldAtTime === 'function') {
+                targetXf[i].gain.cancelAndHoldAtTime(now);
+              } else {
+                targetXf[i].gain.cancelScheduledValues(now);
+              }
+            } catch (_) {
+              try { targetXf[i].gain.cancelScheduledValues(now); } catch (_) {}
+            }
+            try { targetXf[i].gain.setValueAtTime(0.0, now); } catch (_) {}
+          }
+          if (currentXf && currentXf[i]) {
+            try {
+              if (typeof currentXf[i].gain.cancelAndHoldAtTime === 'function') {
+                currentXf[i].gain.cancelAndHoldAtTime(now);
+              } else {
+                currentXf[i].gain.cancelScheduledValues(now);
+              }
+            } catch (_) {
+              try { currentXf[i].gain.cancelScheduledValues(now); } catch (_) {}
+            }
+            try { currentXf[i].gain.setValueAtTime(1.0, now); } catch (_) {}
+          }
+        }
+
+        // 2. Set delayTime on the 100% muted target bank before crossfading (zero Doppler pitch shift or sample jumps)
         for (let i = 0; i < 8; i++) {
           const targetDelayTime = fdnPrimes[i] * this.params.roomSize;
           if (targetDelays && targetDelays[i]) {
-            targetDelays[i].delayTime.setValueAtTime(targetDelayTime, now);
+            try { targetDelays[i].delayTime.setValueAtTime(targetDelayTime, now); } catch (_) {}
             this.fdnDelays[i] = targetDelays[i];
           }
+        }
+
+        // 3. Initiate smooth S-curve crossfade to target bank
+        for (let i = 0; i < 8; i++) {
           if (targetXf && targetXf[i]) {
-            try { targetXf[i].gain.cancelScheduledValues(now); } catch (_) {}
-            targetXf[i].gain.setValueAtTime(targetXf[i].gain.value, now);
-            targetXf[i].gain.linearRampToValueAtTime(1.0, now + xfadeSec);
+            try { targetXf[i].gain.setValueCurveAtTime(this._xfadeInCurve, now, xfadeSec); } catch (_) {}
           }
           if (currentXf && currentXf[i]) {
-            try { currentXf[i].gain.cancelScheduledValues(now); } catch (_) {}
-            currentXf[i].gain.setValueAtTime(currentXf[i].gain.value, now);
-            currentXf[i].gain.linearRampToValueAtTime(0.0, now + xfadeSec);
+            try { currentXf[i].gain.setValueCurveAtTime(this._xfadeOutCurve, now, xfadeSec); } catch (_) {}
           }
         }
+
         this._activeFdnBank = nextBank;
         this._updateFdnDecayGains();
         break;

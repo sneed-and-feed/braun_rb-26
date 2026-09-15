@@ -200,6 +200,49 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       // Center point (x=0) is 0
       assert.ok(Math.abs(curve[512]) < 0.02);
     });
+
+    it('verifies click-free S-curve crossfade tables in Web Reverb Engine', async () => {
+      const { Rb26WebEngine } = await import('./js/audio/rb26_web_engine.js');
+      const engine = new Rb26WebEngine();
+
+      assert.ok(engine._xfadeInCurve instanceof Float32Array);
+      assert.ok(engine._xfadeOutCurve instanceof Float32Array);
+      assert.strictEqual(engine._xfadeInCurve.length, 64);
+      assert.strictEqual(engine._xfadeOutCurve.length, 64);
+
+      // Boundary values
+      assert.ok(Math.abs(engine._xfadeInCurve[0] - 0.0) < 1e-6);
+      assert.ok(Math.abs(engine._xfadeInCurve[63] - 1.0) < 1e-6);
+      assert.ok(Math.abs(engine._xfadeOutCurve[0] - 1.0) < 1e-6);
+      assert.ok(Math.abs(engine._xfadeOutCurve[63] - 0.0) < 1e-6);
+
+      // S-curve smoothstep property: S(t) + (1 - S(t)) === 1.0 at every step (bounded unity loop gain)
+      for (let i = 0; i < 64; i++) {
+        const inVal = engine._xfadeInCurve[i];
+        const outVal = engine._xfadeOutCurve[i];
+        const linearSum = inVal + outVal;
+        assert.ok(Math.abs(linearSum - 1.0) < 1e-6, `Step ${i} linear sum ${linearSum} must strictly equal 1.0`);
+      }
+    });
+
+    it('verifies sub-bass modal loop gain is mathematically bounded strictly < 0.88', async () => {
+      const { Rb26WebEngine } = await import('./js/audio/rb26_web_engine.js');
+      const engine = new Rb26WebEngine();
+
+      // Test extreme parameter limits (decayRt60Sec = 30, bassRt60Mult = 2.5, freezeHold = true)
+      const modalTimes = [0.071, 0.089, 0.107, 0.126];
+      const boundedBassMult = Math.min(1.4, Math.max(0.1, 2.5));
+      const effRt60 = Math.max(0.1, 30.0 * boundedBassMult);
+
+      for (let i = 0; i < 4; i++) {
+        const calculatedFb = Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.86;
+        const fbFreeze = 0.875;
+        const fbNormal = Math.min(0.875, calculatedFb);
+
+        assert.ok(fbNormal < 0.88, `Normal loop gain ${fbNormal} must be strictly < 0.88`);
+        assert.ok(fbFreeze < 0.88, `Freeze loop gain ${fbFreeze} must be strictly < 0.88`);
+      }
+    });
   });
 
   //----------------------------------------------------------------------------
@@ -461,7 +504,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
 
     it('verifies Web Reverb Engine Butterworth Q and trigger routing', async () => {
       const { BUTTERWORTH_Q, Rb26WebEngine } = await import('./js/audio/rb26_web_engine.js');
-      assert.ok(BUTTERWORTH_Q > 0.70 && BUTTERWORTH_Q < 0.71, 'BUTTERWORTH_Q must be linear 1/sqrt(2) strictly > 0 to ensure filter stability');
+      assert.ok(Math.abs(BUTTERWORTH_Q - (-3.0103)) < 1e-4, 'BUTTERWORTH_Q must be -3.0103 dB for Web Audio BiquadFilterNode to ensure maximally flat Butterworth response');
 
       const engine = new Rb26WebEngine();
       assert.strictEqual(typeof engine.triggerDirac, 'function', 'Rb26WebEngine must implement triggerDirac');

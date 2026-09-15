@@ -380,6 +380,7 @@ async function runBrowserTest() {
     // Test Calibrated Reset
     console.log('[BrowserTest] Testing Calibrated Reset...');
     await evaluate(`document.getElementById('btn-reset-all').click()`);
+    await new Promise(r => setTimeout(r, 100));
     const defaultRt60 = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
     console.log(`[BrowserTest] Reset RT60 value: ${defaultRt60}s (expected 6.5s)`);
     if (Math.abs(defaultRt60 - 6.5) > 0.1) throw new Error(`Expected reset RT60 6.5, got ${defaultRt60}`);
@@ -403,6 +404,141 @@ async function runBrowserTest() {
     console.log(`[BrowserTest] Target room size: ${targetRoomSize} (expected 1.8), active bank: ${initialBank} -> ${activeBankAfter}`);
     if (Math.abs(targetRoomSize - 1.8) > 0.01) throw new Error(`Expected targetRoomSize 1.8, got ${targetRoomSize}`);
     if (activeBankAfter === initialBank) throw new Error('Expected active FDN bank to switch on room size change');
+
+    // Test Rapid Room Size Scrubbing Stress Test under Audio Excitation (Sub-Bass Bound & No Tape Scratch)
+    console.log('[BrowserTest] Testing rapid room size scrubbing under continuous audio excitation...');
+    await evaluate(`
+      document.getElementById('btn-audition-kick').click();
+      window.__RB26__.engine.triggerDirac();
+    `);
+
+    const scrubValues = [30, 195, 45, 175, 25, 160, 50, 140, 75, 100];
+    const scrubTelemetry = [];
+
+    for (const val of scrubValues) {
+      await evaluate(`window.__RB26__.knobs.room_size.setValue(${val}, true)`);
+      await new Promise(r => setTimeout(r, 30));
+
+      const frameData = await evaluate(`
+        (() => {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          let sumSq = 0;
+          let maxPeak = 0;
+          for (let i = 0; i < buf.length; i++) {
+            const abs = Math.abs(buf[i]);
+            if (abs > maxPeak) maxPeak = abs;
+            sumSq += buf[i] * buf[i];
+          }
+          const rms = Math.sqrt(sumSq / buf.length);
+          return { rms, maxPeak };
+        })()
+      `);
+      scrubTelemetry.push(frameData);
+    }
+
+    const peakMax = Math.max(...scrubTelemetry.map(t => t.maxPeak));
+    const scrubFinalRms = scrubTelemetry[scrubTelemetry.length - 1].rms;
+    console.log(`[BrowserTest] Rapid scrub telemetry: peak max = ${peakMax.toFixed(4)}, final RMS = ${scrubFinalRms.toFixed(6)}`);
+
+    for (let i = 0; i < scrubTelemetry.length; i++) {
+      if (scrubTelemetry[i].maxPeak > 1.05) {
+        throw new Error(`Output saturated/overloaded during rapid room size scrub! Peak: ${scrubTelemetry[i].maxPeak}`);
+      }
+      if (Number.isNaN(scrubTelemetry[i].rms) || !Number.isFinite(scrubTelemetry[i].rms)) {
+        throw new Error('NaN/Infinity encountered in audio telemetry during rapid room size scrub');
+      }
+    }
+
+    // Allow reverb tail to decay over 2.0s and verify contractive dissipation and zero runaway
+    const settlingProfile = [];
+    for (let i = 0; i < 4; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      const rms = await evaluate(`
+        (() => {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          let sum = 0;
+          for (let j = 0; j < buf.length; j++) sum += buf[j] * buf[j];
+          return Math.sqrt(sum / buf.length);
+        })()
+      `);
+      settlingProfile.push(rms);
+    }
+    console.log(`[BrowserTest] Post-scrub settling profile: ${settlingProfile.map(x => x.toFixed(6)).join(' -> ')}`);
+    const postScrubFinalRms = settlingProfile[settlingProfile.length - 1];
+    if (postScrubFinalRms > 0.5) {
+      throw new Error(`Sub-bass runaway drone detected after room size scrub! Final RMS: ${postScrubFinalRms}`);
+    }
+    if (postScrubFinalRms >= scrubFinalRms) {
+      throw new Error(`Audio energy did not decay after room size scrub! Start: ${scrubFinalRms}, Final: ${postScrubFinalRms}`);
+    }
+
+    // Test Direct Engine Rapid Room Size Scrubbing at High Frequency (Direct AudioParam Crossfade Queueing)
+    console.log('[BrowserTest] Testing direct engine rapid room size scrubbing (15ms intervals, audio excitation)...');
+    await evaluate(`
+      window.__RB26__.engine.triggerNoiseBurst();
+    `);
+    const directValues = [0.3, 1.9, 0.4, 1.8, 0.5, 1.6, 0.6, 1.3, 1.0];
+    const directTelemetry = [];
+    for (const val of directValues) {
+      await evaluate(`window.__RB26__.engine.setParam('roomSize', ${val})`);
+      await new Promise(r => setTimeout(r, 15));
+      const frameData = await evaluate(`
+        (() => {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          let sumSq = 0;
+          let maxPeak = 0;
+          for (let i = 0; i < buf.length; i++) {
+            const abs = Math.abs(buf[i]);
+            if (abs > maxPeak) maxPeak = abs;
+            sumSq += buf[i] * buf[i];
+          }
+          const rms = Math.sqrt(sumSq / buf.length);
+          return { rms, maxPeak };
+        })()
+      `);
+      directTelemetry.push(frameData);
+    }
+    const directPeakMax = Math.max(...directTelemetry.map(t => t.maxPeak));
+    console.log(`[BrowserTest] Direct engine scrub peak max = ${directPeakMax.toFixed(4)}`);
+    if (directPeakMax > 1.05) {
+      throw new Error(`Output overloaded during direct engine rapid room size scrub! Peak: ${directPeakMax}`);
+    }
+
+    // Verify DC-blocking attenuation: check sub-bass DC bin in frequency domain
+    const dcDb = await evaluate(`
+      (() => {
+        const freqBuf = new Float32Array(256);
+        window.__RB26__.engine.analyserL.getFloatFrequencyData(freqBuf);
+        return freqBuf[0];
+      })()
+    `);
+    console.log(`[BrowserTest] DC frequency bin level: ${dcDb.toFixed(2)} dBFS (must be < -50 dBFS)`);
+    if (dcDb > -50) {
+      throw new Error(`DC accumulation detected in feedback loop! Level: ${dcDb.toFixed(2)} dBFS`);
+    }
+
+    // Test Low-End Matrix Loop Gain Boundedness strictly < 0.88
+    console.log('[BrowserTest] Verifying low-end modal matrix loop gain is strictly < 0.88 across extreme damping settings...');
+    await evaluate(`
+      window.__RB26__.knobs.damping_low.setValue(2.5, true);
+      window.__RB26__.knobs.rt60_decay.setValue(30.0, true);
+      window.__RB26__.engine.setParam('freezeHold', true);
+    `);
+    const maxModalFb = await evaluate(`
+      Math.max(...window.__RB26__.engine.modalFeedbackGains.map(g => g.gain.value))
+    `);
+    console.log(`[BrowserTest] Maximum modal feedback gain under extreme settings: ${maxModalFb.toFixed(6)} (must be < 0.88)`);
+    if (maxModalFb >= 0.88) {
+      throw new Error(`Modal matrix loop gain not strictly bounded < 0.88! Found: ${maxModalFb}`);
+    }
+    await evaluate(`
+      window.__RB26__.knobs.damping_low.setValue(1.0, true);
+      window.__RB26__.knobs.rt60_decay.setValue(6.5, true);
+      window.__RB26__.engine.setParam('freezeHold', false);
+    `);
 
     // Test Piano Chord Trigger & FDN Feedback Loop Stability
     console.log('[BrowserTest] Testing felt piano chord audition and FDN stability...');

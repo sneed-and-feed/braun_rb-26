@@ -549,6 +549,7 @@ export class BraunRb26App {
     this._currentRoomSize = 1.0;
     this._roomSizeRafId = null;
     this._lastRoomSizeUpdateTime = 0;
+    this._roomSizeThrottleMs = 85; // Matches equal-power crossfade window (75-100 ms)
   }
 
   _updateRoomSize(targetNorm, immediate = false) {
@@ -556,6 +557,10 @@ export class BraunRb26App {
     const nowMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
     if (immediate || !this.engine) {
+      if (this._roomSizeRafId) {
+        clearTimeout(this._roomSizeRafId);
+        this._roomSizeRafId = null;
+      }
       this._currentRoomSize = this._targetRoomSize;
       if (this.engine) this.engine.setParam('roomSize', this._currentRoomSize);
       this._lastRoomSizeUpdateTime = nowMs;
@@ -564,9 +569,10 @@ export class BraunRb26App {
 
     if (Math.abs(this._targetRoomSize - this._currentRoomSize) < 0.001) return;
 
-    // Dual-bank crossfading in web engine transitions smoothly over 45ms without Doppler artifacts.
-    // Throttle parameter updates to >= 50ms intervals to prevent bank thrashing.
-    if (nowMs - this._lastRoomSizeUpdateTime >= 50) {
+    // Dual-bank crossfading in web engine transitions smoothly over 85ms without Doppler artifacts.
+    // Rate-limit parameter updates to >= 85ms intervals to prevent conflicting crossfades during rapid scrubs.
+    const elapsed = nowMs - this._lastRoomSizeUpdateTime;
+    if (elapsed >= this._roomSizeThrottleMs) {
       if (this._roomSizeRafId) {
         clearTimeout(this._roomSizeRafId);
         this._roomSizeRafId = null;
@@ -575,8 +581,9 @@ export class BraunRb26App {
       this._lastRoomSizeUpdateTime = nowMs;
       if (this.engine) this.engine.setParam('roomSize', this._currentRoomSize);
     } else {
+      // Debounce trailing edge to guarantee final knob position is committed after rapid scrub
       if (this._roomSizeRafId) clearTimeout(this._roomSizeRafId);
-      const remainingMs = Math.max(10, 50 - (nowMs - this._lastRoomSizeUpdateTime));
+      const remainingMs = Math.max(10, this._roomSizeThrottleMs - elapsed);
       this._roomSizeRafId = setTimeout(() => {
         this._roomSizeRafId = null;
         this._currentRoomSize = this._targetRoomSize;
@@ -597,12 +604,9 @@ export class BraunRb26App {
     if (this.display) this.display.setPower(this.isPowered);
 
     if (!this.isPowered) {
-      // Cancel active room size animation
+      // Cancel active room size debounce timer
       if (this._roomSizeRafId) {
-        const cancelAnim = (typeof cancelAnimationFrame === 'function')
-          ? cancelAnimationFrame
-          : clearTimeout;
-        cancelAnim(this._roomSizeRafId);
+        clearTimeout(this._roomSizeRafId);
         this._roomSizeRafId = null;
       }
       // Release any currently held voices
