@@ -261,6 +261,20 @@ export function quantizeMidiToScale(midi, rootPitchClass = 0, intervals = [0, 2,
   return normRoot + (baseOctave * 12) + bestInterval;
 }
 
+/**
+ * Computes sequential scale degree MIDI pitch for chime keys (zero duplicate notes).
+ * Maps key index (0 to 10) sequentially through scale degrees across octaves.
+ */
+export function getChimeMidiForDegree(degreeIndex, rootPitchClass = 0, intervals = [0, 2, 4, 7, 9]) {
+  const safeIntervals = (Array.isArray(intervals) && intervals.length > 0) ? intervals : [0, 2, 4, 7, 9];
+  const normRoot = ((rootPitchClass % 12) + 12) % 12;
+  const numDegrees = safeIntervals.length;
+  const octave = Math.floor(degreeIndex / numDegrees);
+  const degree = ((degreeIndex % numDegrees) + numDegrees) % numDegrees;
+  const semitonesFromRoot = octave * 12 + safeIntervals[degree];
+  return 60 + normRoot + semitonesFromRoot;
+}
+
 // ============================================================================
 // Lossless 16-bit 48kHz WAV Output Bus Recorder
 // ============================================================================
@@ -548,44 +562,28 @@ export class BraunRb26App {
       return;
     }
 
-    if (this._roomSizeRafId) return;
+    if (Math.abs(this._targetRoomSize - this._currentRoomSize) < 0.001) return;
 
-    const reqAnim = (typeof requestAnimationFrame === 'function')
-      ? requestAnimationFrame
-      : (cb) => setTimeout(cb, 16);
-
-    const smoothStep = () => {
-      if (!this.isPowered) {
+    // Dual-bank crossfading in web engine transitions smoothly over 45ms without Doppler artifacts.
+    // Throttle parameter updates to >= 50ms intervals to prevent bank thrashing.
+    if (nowMs - this._lastRoomSizeUpdateTime >= 50) {
+      if (this._roomSizeRafId) {
+        clearTimeout(this._roomSizeRafId);
         this._roomSizeRafId = null;
-        return;
       }
-      const diff = this._targetRoomSize - this._currentRoomSize;
-      if (Math.abs(diff) < 0.002) {
+      this._currentRoomSize = this._targetRoomSize;
+      this._lastRoomSizeUpdateTime = nowMs;
+      if (this.engine) this.engine.setParam('roomSize', this._currentRoomSize);
+    } else {
+      if (this._roomSizeRafId) clearTimeout(this._roomSizeRafId);
+      const remainingMs = Math.max(10, 50 - (nowMs - this._lastRoomSizeUpdateTime));
+      this._roomSizeRafId = setTimeout(() => {
+        this._roomSizeRafId = null;
         this._currentRoomSize = this._targetRoomSize;
-        if (this.engine) this.engine.setParam('roomSize', this._currentRoomSize);
         this._lastRoomSizeUpdateTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        this._roomSizeRafId = null;
-        return;
-      }
-
-      // Smooth bounded rate interpolation preventing live Doppler pitch glitches
-      const step = diff * 0.15;
-      const clampedStep = Math.sign(step) * Math.min(Math.abs(step), 0.035);
-      this._currentRoomSize += clampedStep;
-
-      // Throttle live audio engine parameter updates to >= 40ms intervals matching dual-bank crossfade cadence
-      const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      if (t - this._lastRoomSizeUpdateTime >= 40) {
-        this._lastRoomSizeUpdateTime = t;
-        if (this.engine) {
-          this.engine.setParam('roomSize', this._currentRoomSize);
-        }
-      }
-
-      this._roomSizeRafId = reqAnim(smoothStep);
-    };
-
-    this._roomSizeRafId = reqAnim(smoothStep);
+        if (this.engine) this.engine.setParam('roomSize', this._currentRoomSize);
+      }, remainingMs);
+    }
   }
 
   async setPower(isPowered) {
@@ -1550,12 +1548,13 @@ export class BraunRb26App {
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
     chimeKeys.forEach((keyEl, idx) => {
-      const midi = 60 + quantizeMidiToScale(idx * 2, this.rootPitchClass, intervals);
+      const midi = getChimeMidiForDegree(idx, this.rootPitchClass, intervals);
       const noteName = noteNames[midi % 12];
       const octave = Math.floor(midi / 12) - 1;
       const noteSpan = keyEl.querySelector('.braun-key-note');
       if (noteSpan) noteSpan.textContent = `${noteName}${octave}`;
       keyEl.setAttribute('data-midi', midi);
+      keyEl.setAttribute('data-note-offset', midi - 60);
     });
   }
 
@@ -1581,7 +1580,12 @@ export class BraunRb26App {
       // Continuous velocity: higher on key = softer (0.35), lower = firmer (0.85)
       const velocity = 0.35 + 0.50 * relY;
 
-      const midi = parseFloat(keyEl.getAttribute('data-midi')) || 60;
+      const keyIdx = parseInt(keyEl.getAttribute('data-key-index'), 10);
+      const scale = SCALES[this.currentScaleKey] || SCALES.BUDD_PENTATONIC;
+      const fallbackMidi = !isNaN(keyIdx)
+        ? getChimeMidiForDegree(keyIdx, this.rootPitchClass, scale.intervals)
+        : (keyEl.hasAttribute('data-note-offset') ? (60 + parseFloat(keyEl.getAttribute('data-note-offset'))) : 60);
+      const midi = parseFloat(keyEl.getAttribute('data-midi')) || fallbackMidi;
       this.playChime(midi, velocity);
 
       keyEl.classList.add('is-active');
@@ -1676,7 +1680,8 @@ export class BraunRb26App {
     if (chimeIdx !== -1) {
       const keyEl = document.querySelector(`.braun-chime-key[data-hotkey="${key}"]`);
       if (keyEl) {
-        const midi = parseFloat(keyEl.getAttribute('data-midi')) || (60 + chimeIdx * 2);
+        const scale = SCALES[this.currentScaleKey] || SCALES.BUDD_PENTATONIC;
+        const midi = parseFloat(keyEl.getAttribute('data-midi')) || getChimeMidiForDegree(chimeIdx, this.rootPitchClass, scale.intervals);
         const prevVoice = this._activeVoices ? this._activeVoices.get(key) : null;
         if (prevVoice && typeof prevVoice.release === 'function') {
           prevVoice.release(0.05);
@@ -1722,6 +1727,15 @@ export class BraunRb26App {
   // ==========================================================================
   // Audio Synthesis for Chimes, Pulses, Chords & Poisson
   // ==========================================================================
+
+  /**
+   * Play chime key by sequential scale degree index (0 to 10)
+   */
+  playChimeKey(degreeIndex, velocity = 0.70, durationSec = 3.5) {
+    const scale = SCALES[this.currentScaleKey] || SCALES.BUDD_PENTATONIC;
+    const midi = getChimeMidiForDegree(degreeIndex, this.rootPitchClass, scale.intervals);
+    return this.playChime(midi, velocity, durationSec);
+  }
 
   /**
    * Harold Budd Felt Piano / Acoustic Modeling (AS-42 Heritage)
@@ -1780,8 +1794,8 @@ export class BraunRb26App {
     const filter2 = ctx.createBiquadFilter();
     filter1.type = 'lowpass';
     filter2.type = 'lowpass';
-    filter1.Q.setValueAtTime(-3.0103, now); // Butterworth maximally flat response in dB (strictly <= 1.0 gain)
-    filter2.Q.setValueAtTime(-3.0103, now); // Butterworth maximally flat response in dB (strictly <= 1.0 gain)
+    filter1.Q.setValueAtTime(Math.SQRT1_2, now); // Butterworth maximally flat response (Q = 1 / sqrt(2))
+    filter2.Q.setValueAtTime(Math.SQRT1_2, now);
     filter1.frequency.setValueAtTime(maxCutoff, now);
     filter2.frequency.setValueAtTime(maxCutoff, now);
     filter1.frequency.exponentialRampToValueAtTime(restCutoff, now + filterDecayBase);
@@ -2019,6 +2033,26 @@ export class BraunRb26App {
     g.connect(this.engine.inputGain);
     osc.start(now);
     osc.stop(now + 0.090);
+  }
+
+  triggerMallet() {
+    return this.triggerHammerThud();
+  }
+
+  triggerNoiseBurst(durationMs = 40) {
+    return this.triggerPinkBurst(durationMs);
+  }
+
+  triggerSynthPad() {
+    if (!this.isPowered) return;
+    if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
+      try {
+        window.__JUCE__.backend.emitEvent('exciterTrigger', { type: 'pad' });
+      } catch (e) {}
+    }
+    if (this.engine && typeof this.engine.triggerSynthPad === 'function') {
+      this.engine.triggerSynthPad();
+    }
   }
 
   /**

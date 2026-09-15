@@ -408,7 +408,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
     });
 
     it('verifies scale quantizer and chord voicings in app.js', async () => {
-      const { quantizeMidiToScale, SCALES, CHORD_VOICINGS } = await import('./js/app.js');
+      const { quantizeMidiToScale, getChimeMidiForDegree, SCALES, CHORD_VOICINGS } = await import('./js/app.js');
 
       assert.strictEqual(Object.keys(SCALES).length, 8, 'Must provide 8 modal scales');
       assert.strictEqual(CHORD_VOICINGS.length, 12, 'Must provide 12 signature chord voicings');
@@ -420,6 +420,55 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.strictEqual(quantizeMidiToScale(62, 0, intervals), 62); // D4 -> D4
       assert.strictEqual(quantizeMidiToScale(65, 0, intervals), 64); // F4 -> E4 (nearest 4)
       assert.strictEqual(quantizeMidiToScale(67, 0, intervals), 67); // G4 -> G4
+
+      // Test negative scale degree wrapping without producing NaN
+      assert.strictEqual(getChimeMidiForDegree(-1, 0, intervals), 57, 'Degree -1 in C Pentatonic must be A3 (57)');
+      assert.strictEqual(getChimeMidiForDegree(-2, 0, intervals), 55, 'Degree -2 in C Pentatonic must be G3 (55)');
+      assert.strictEqual(getChimeMidiForDegree(-5, 0, intervals), 48, 'Degree -5 in C Pentatonic must be C3 (48)');
+
+      // Test empty intervals fallback
+      assert.strictEqual(getChimeMidiForDegree(0, 0, []), 60, 'Empty intervals must fall back gracefully to C4');
+
+      // Test chime degree indexing for C Pentatonic across 11 keys: C4, D4, E4, G4, A4, C5, D5, E5, G5, A5, C6
+      const expectedPentatonic = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84];
+      const actualPentatonic = [];
+      for (let i = 0; i < 11; i++) {
+        actualPentatonic.push(getChimeMidiForDegree(i, 0, intervals));
+      }
+      assert.deepStrictEqual(actualPentatonic, expectedPentatonic, 'Chime keys must strictly index scale degrees sequentially without duplicate notes');
+
+      // Verify all 8 modal scales produce strictly ascending sequential pitches across 11 keys with zero duplicates
+      for (const [scaleKey, scale] of Object.entries(SCALES)) {
+        const notes = [];
+        for (let i = 0; i < 11; i++) {
+          notes.push(getChimeMidiForDegree(i, 0, scale.intervals));
+        }
+        for (let i = 1; i < notes.length; i++) {
+          assert.ok(notes[i] > notes[i - 1], `Scale ${scaleKey} key ${i} (${notes[i]}) must be strictly greater than key ${i - 1} (${notes[i - 1]})`);
+        }
+      }
+
+      // Verify index.html static DOM contains explicit data-midi attributes matching expectedPentatonic
+      const indexPath = path.join(__dirname, 'index.html');
+      const indexHtml = fs.readFileSync(indexPath, 'utf8');
+      expectedPentatonic.forEach((expectedMidi, idx) => {
+        assert.ok(
+          indexHtml.includes(`data-key-index="${idx}"`) && indexHtml.includes(`data-midi="${expectedMidi}"`),
+          `index.html must specify data-midi="${expectedMidi}" on chime key ${idx}`
+        );
+      });
+    });
+
+    it('verifies Web Reverb Engine Butterworth Q and trigger routing', async () => {
+      const { BUTTERWORTH_Q, Rb26WebEngine } = await import('./js/audio/rb26_web_engine.js');
+      assert.ok(BUTTERWORTH_Q > 0.70 && BUTTERWORTH_Q < 0.71, 'BUTTERWORTH_Q must be linear 1/sqrt(2) strictly > 0 to ensure filter stability');
+
+      const engine = new Rb26WebEngine();
+      assert.strictEqual(typeof engine.triggerDirac, 'function', 'Rb26WebEngine must implement triggerDirac');
+      assert.strictEqual(typeof engine.triggerMallet, 'function', 'Rb26WebEngine must implement triggerMallet');
+      assert.strictEqual(typeof engine.triggerNoiseBurst, 'function', 'Rb26WebEngine must implement triggerNoiseBurst');
+      assert.strictEqual(typeof engine.triggerSynthPad, 'function', 'Rb26WebEngine must implement triggerSynthPad');
+      assert.strictEqual(typeof engine.connectInput, 'function', 'Rb26WebEngine must implement connectInput');
     });
   });
 });

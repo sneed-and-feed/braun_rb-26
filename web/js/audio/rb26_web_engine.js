@@ -13,7 +13,7 @@
  * - Curated zero-install sound generator (Impulse, 808 Kick/Snare, Felt Piano, Ambient Pad)
  */
 
-export const BUTTERWORTH_Q = -3.0103; // Butterworth 2nd-order Q: 20 * log10(1 / sqrt(2)) dB (strictly <= 1.0 peak gain)
+export const BUTTERWORTH_Q = Math.SQRT1_2; // Butterworth 2nd-order Q: 1 / sqrt(2) ~ 0.7071 (strictly flat passband)
 
 export class WebAudioPitchShifter {
   constructor(ctx, options = {}) {
@@ -355,11 +355,11 @@ export class Rb26WebEngine {
 
     // --- 8-Line Householder FDN Late Tank with Golden-Ratio LFO Modulation ---
     this.fdnInputBus = ctx.createGain();
-    this.fdnInputBus.gain.setValueAtTime(0.35, ctx.currentTime);
+    this.fdnInputBus.gain.setValueAtTime(0.85, ctx.currentTime);
     this.highPass2.connect(this.fdnInputBus);
 
     this.fdnSumBus = ctx.createGain();
-    this.fdnSumBus.gain.setValueAtTime(0.25, ctx.currentTime); // Bound diffuse sum below unity loop gain
+    this.fdnSumBus.gain.setValueAtTime(0.85, ctx.currentTime); // Bound diffuse sum below unity loop gain
 
     this.fdnDelays = [];
     this.fdnDelaysA = [];
@@ -1034,7 +1034,7 @@ export class Rb26WebEngine {
       case 'freezeHold': {
         const isFrozen = Boolean(value);
         if (this.fdnInputBus) {
-          this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 0.35, now, 0.02);
+          this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 0.85, now, 0.02);
         }
         this._updateFdnDecayGains();
         this._updateModalDecayGains();
@@ -1140,6 +1140,15 @@ export class Rb26WebEngine {
   //============================================================================
 
   /**
+   * Connect external audio source to input gain
+   */
+  connectInput(audioNode) {
+    if (audioNode && this.inputGain) {
+      audioNode.connect(this.inputGain);
+    }
+  }
+
+  /**
    * Dirac Delta Impulse Click
    */
   triggerImpulse() {
@@ -1153,6 +1162,10 @@ export class Rb26WebEngine {
     src.buffer = buffer;
     src.connect(this.inputGain);
     src.start();
+  }
+
+  triggerDirac() {
+    this.triggerImpulse();
   }
 
   /**
@@ -1177,6 +1190,25 @@ export class Rb26WebEngine {
 
     osc.start(now);
     osc.stop(now + 0.35);
+  }
+
+  triggerMallet() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.setValueAtTime(110, now);
+    osc.frequency.exponentialRampToValueAtTime(55, now + 0.045);
+
+    g.gain.setValueAtTime(0.85, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+
+    osc.connect(g);
+    g.connect(this.inputGain);
+    osc.start(now);
+    osc.stop(now + 0.090);
   }
 
   /**
@@ -1209,6 +1241,31 @@ export class Rb26WebEngine {
 
     whiteNoise.start(now);
     whiteNoise.stop(now + 0.2);
+  }
+
+  triggerNoiseBurst(durationMs = 40) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const length = Math.max(16, Math.floor((durationMs / 1000) * ctx.sampleRate));
+    const buf = ctx.createBuffer(1, length, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < length; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      const pink = (b0 + b1 + b2 + white * 0.5362) * 0.25;
+
+      const win = Math.sin((Math.PI * i) / Math.max(1, length - 1));
+      d[i] = pink * win * 0.85;
+    }
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.inputGain);
+    src.start();
   }
 
   /**

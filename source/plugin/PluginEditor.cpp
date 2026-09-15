@@ -673,9 +673,13 @@ void BRAUN_RB26AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
         const float dur = obj->hasProperty("duration") ? static_cast<float>(obj->getProperty("duration")) : 40.0f;
         processorRef.getExciterEngine().triggerPinkBurstAsync(dur);
     }
-    else if (type.equalsIgnoreCase("hammer"))
+    else if (type.equalsIgnoreCase("hammer") || type.equalsIgnoreCase("mallet"))
     {
         processorRef.getExciterEngine().triggerHammerThudAsync(0.7f);
+    }
+    else if (type.equalsIgnoreCase("pad"))
+    {
+        processorRef.getExciterEngine().triggerChordAsync(3, 60.0f, 0.7f, rb26::StrumSpeed::Slow);
     }
     else if (type.equalsIgnoreCase("poisson"))
     {
