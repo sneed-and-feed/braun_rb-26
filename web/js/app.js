@@ -522,12 +522,12 @@ export class BraunRb26App {
     this.engine = new Rb26WebEngine();
     this.knobs = {};
     this.display = null;
-    this.isPowered = false;
-    this.currentPresetKey = 'DEFAULT';
     this.isJuce = Boolean(
       typeof window !== 'undefined' &&
       (window.__IS_JUCE__ || window.__JUCE__?.backend || window.location?.hostname === 'juce.backend')
     );
+    this.isPowered = this.isJuce;
+    this.currentPresetKey = 'DEFAULT';
 
     // Master Utilities
     this.abBuffer = new ReverbComparisonBuffer(this);
@@ -692,89 +692,121 @@ export class BraunRb26App {
 
   _initJuceBridge() {
     if (typeof window === 'undefined') return;
-    const backend = window.__JUCE__?.backend;
-    if (!backend) return;
-    this.isJuce = true;
 
-    if (typeof backend.addEventListener === 'function') {
-      backend.addEventListener('paramUpdate', (data) => {
-        if (!data || !data.id) return;
-        if (data.id === 'power' || data.apvtsId === 'power') {
-          const nextPower = data.value > 0.5;
-          if (this.isPowered !== nextPower) {
-            this.setPower(nextPower);
+    const setupBackend = () => {
+      const backend = window.__JUCE__?.backend;
+      if (!backend || this._juceBridgeInitialized) return;
+      this._juceBridgeInitialized = true;
+      this.isJuce = true;
+
+      // Ensure power status reflects in UI
+      if (this.isPowered) {
+        const powerBtn = document.getElementById('btn-power');
+        if (powerBtn) {
+          powerBtn.classList.add('is-active');
+          const statusText = powerBtn.querySelector('.braun-status-text');
+          if (statusText) statusText.textContent = 'POWER ON';
+        }
+      }
+
+      if (typeof backend.addEventListener === 'function') {
+        backend.addEventListener('paramUpdate', (data) => {
+          if (!data || !data.id) return;
+          if (data.id === 'power' || data.apvtsId === 'power') {
+            const nextPower = data.value > 0.5;
+            if (this.isPowered !== nextPower) {
+              this.setPower(nextPower);
+            }
+            return;
           }
-          return;
-        }
 
-        const apvtsToKnob = {
-          pre_delay_ms: { key: 'predelay', scale: 1 },
-          preDelayMs: { key: 'predelay', scale: 1 },
-          diffusion_density: { key: 'diffusion', scale: 100 },
-          diffusionDensity: { key: 'diffusion', scale: 100 },
-          low_crossover_hz: { key: 'low_crossover', scale: 1 },
-          lowCrossoverHz: { key: 'low_crossover', scale: 1 },
-          bass_rt60_mult: { key: 'damping_low', scale: 1 },
-          bassRt60Mult: { key: 'damping_low', scale: 1 },
-          punch_ducking: { key: 'low_punch', scale: 100 },
-          punchDucking: { key: 'low_punch', scale: 100 },
-          sub_mono_hz: { key: 'mono_bass', scale: 1 },
-          subMonoHz: { key: 'mono_bass', scale: 1 },
-          decay_rt60_sec: { key: 'rt60_decay', scale: 1 },
-          decayRt60Sec: { key: 'rt60_decay', scale: 1 },
-          room_size: { key: 'room_size', scale: 100 },
-          roomSize: { key: 'room_size', scale: 100 },
-          high_damping_hz: { key: 'damping_high', scale: 1 },
-          highDampingHz: { key: 'damping_high', scale: 1 },
-          shimmer_send: { key: 'shimmer_send', scale: 100 },
-          shimmerSend: { key: 'shimmer_send', scale: 100 },
-          dimmer_send: { key: 'dimmer_send', scale: 100 },
-          dimmerSend: { key: 'dimmer_send', scale: 100 },
-          pitch_blend: { key: 'shimmer_dimmer_blend', scale: 100 },
-          pitchBlend: { key: 'shimmer_dimmer_blend', scale: 100 },
-          pitch_feedback: { key: 'pitch_regen', scale: 100 },
-          pitchFeedback: { key: 'pitch_regen', scale: 100 },
-          tail_mod_rate_hz: { key: 'tail_mod_rate', scale: 1 },
-          tailModRateHz: { key: 'tail_mod_rate', scale: 1 },
-          tail_mod_depth_ms: { key: 'tail_mod_depth', scale: 100 / 3.0 },
-          tailModDepthMs: { key: 'tail_mod_depth', scale: 100 / 3.0 },
-          tail_bloom_ms: { key: 'tail_bloom', scale: 1 },
-          tailBloomMs: { key: 'tail_bloom', scale: 1 },
-          stereo_width: { key: 'stereo_width', scale: 100 },
-          stereoWidth: { key: 'stereo_width', scale: 100 },
-          early_late_mix: { key: 'early_late_mix', scale: 100 },
-          earlyLateMix: { key: 'early_late_mix', scale: 100 },
-          dry_wet_mix: { key: 'dry_wet_mix', scale: 100 },
-          dryWetMix: { key: 'dry_wet_mix', scale: 100 },
-          output_trim_db: { key: 'output_trim', scale: 1 },
-          outputTrimDb: { key: 'output_trim', scale: 1 }
-        };
+          const apvtsToKnob = {
+            pre_delay_ms: { key: 'predelay', scale: 1 },
+            preDelayMs: { key: 'predelay', scale: 1 },
+            diffusion_density: { key: 'diffusion', scale: 100 },
+            diffusionDensity: { key: 'diffusion', scale: 100 },
+            low_crossover_hz: { key: 'low_crossover', scale: 1 },
+            lowCrossoverHz: { key: 'low_crossover', scale: 1 },
+            bass_rt60_mult: { key: 'damping_low', scale: 1 },
+            bassRt60Mult: { key: 'damping_low', scale: 1 },
+            punch_ducking: { key: 'low_punch', scale: 100 },
+            punchDucking: { key: 'low_punch', scale: 100 },
+            sub_mono_hz: { key: 'mono_bass', scale: 1 },
+            subMonoHz: { key: 'mono_bass', scale: 1 },
+            decay_rt60_sec: { key: 'rt60_decay', scale: 1 },
+            decayRt60Sec: { key: 'rt60_decay', scale: 1 },
+            room_size: { key: 'room_size', scale: 100 },
+            roomSize: { key: 'room_size', scale: 100 },
+            high_damping_hz: { key: 'damping_high', scale: 1 },
+            highDampingHz: { key: 'damping_high', scale: 1 },
+            shimmer_send: { key: 'shimmer_send', scale: 100 },
+            shimmerSend: { key: 'shimmer_send', scale: 100 },
+            dimmer_send: { key: 'dimmer_send', scale: 100 },
+            dimmerSend: { key: 'dimmer_send', scale: 100 },
+            pitch_blend: { key: 'shimmer_dimmer_blend', scale: 100 },
+            pitchBlend: { key: 'shimmer_dimmer_blend', scale: 100 },
+            pitch_feedback: { key: 'pitch_regen', scale: 100 },
+            pitchFeedback: { key: 'pitch_regen', scale: 100 },
+            tail_mod_rate_hz: { key: 'tail_mod_rate', scale: 1 },
+            tailModRateHz: { key: 'tail_mod_rate', scale: 1 },
+            tail_mod_depth_ms: { key: 'tail_mod_depth', scale: 100 / 3.0 },
+            tailModDepthMs: { key: 'tail_mod_depth', scale: 100 / 3.0 },
+            tail_bloom_ms: { key: 'tail_bloom', scale: 1 },
+            tailBloomMs: { key: 'tail_bloom', scale: 1 },
+            stereo_width: { key: 'stereo_width', scale: 100 },
+            stereoWidth: { key: 'stereo_width', scale: 100 },
+            early_late_mix: { key: 'early_late_mix', scale: 100 },
+            earlyLateMix: { key: 'early_late_mix', scale: 100 },
+            dry_wet_mix: { key: 'dry_wet_mix', scale: 100 },
+            dryWetMix: { key: 'dry_wet_mix', scale: 100 },
+            output_trim_db: { key: 'output_trim', scale: 1 },
+            outputTrimDb: { key: 'output_trim', scale: 1 }
+          };
 
-        const entry = apvtsToKnob[data.id] || apvtsToKnob[data.apvtsId];
-        if (entry) {
-          const knob = this.knobs[entry.key];
-          if (knob && typeof knob.setValue === 'function') {
-            knob.setValue(data.value * entry.scale, false);
+          const entry = apvtsToKnob[data.id] || apvtsToKnob[data.apvtsId];
+          if (entry) {
+            const knob = this.knobs[entry.key];
+            if (knob && typeof knob.setValue === 'function') {
+              knob.setValue(data.value * entry.scale, false);
+            }
           }
-        }
-      });
+        });
 
-      backend.addEventListener('scopeFrame', (data) => {
-        if (data && data.samples && this.display) {
-          const s = new Float32Array(data.samples);
-          this.display.pushAudio(s, s);
-        }
-      });
+        backend.addEventListener('scopeFrame', (data) => {
+          if (data && data.samples && this.display) {
+            const s = new Float32Array(data.samples);
+            this.display.pushAudio(s, s);
+          }
+        });
 
-      backend.addEventListener('telemetryFrame', (frame) => {
-        if (frame && this.display) {
-          this.display.pushTelemetry(frame.lowEnergy || 0, frame.midEnergy || 0, frame.highEnergy || 0);
-        }
-      });
+        backend.addEventListener('telemetryFrame', (frame) => {
+          if (frame && this.display) {
+            this.display.pushTelemetry(frame.lowEnergy || 0, frame.midEnergy || 0, frame.highEnergy || 0);
+          }
+        });
 
-      try {
-        backend.emitEvent('paramChange', { id: 'requestSync', value: 0 });
-      } catch (e) {}
+        try {
+          backend.emitEvent('paramChange', { id: 'requestSync', value: 0 });
+        } catch (e) {}
+      }
+    };
+
+    if (window.__JUCE__?.backend) {
+      setupBackend();
+    } else {
+      let attempts = 0;
+      const poll = setInterval(() => {
+        attempts++;
+        if (window.__JUCE__?.backend) {
+          clearInterval(poll);
+          setupBackend();
+        } else if (attempts >= 100) {
+          clearInterval(poll);
+        }
+      }, 50);
+      if (typeof poll.unref === 'function') {
+        poll.unref();
+      }
     }
   }
 
@@ -1046,6 +1078,11 @@ export class BraunRb26App {
     // Power button
     const powerBtn = document.getElementById('btn-power');
     if (powerBtn) {
+      if (this.isPowered) {
+        powerBtn.classList.add('is-active');
+        const statusText = powerBtn.querySelector('.braun-status-text');
+        if (statusText) statusText.textContent = 'POWER ON';
+      }
       powerBtn.addEventListener('click', async () => {
         await this.setPower(!this.isPowered);
       });
@@ -2181,42 +2218,37 @@ export class BraunRb26App {
 
           // Smooth exponential decay via setTargetAtTime with cancelAndHoldAtTime
           // to eliminate timeline reset step discontinuities when cancelling active ramps
+          let gainHeld = false;
           if (typeof voiceGain.gain.cancelAndHoldAtTime === 'function') {
             try {
               voiceGain.gain.cancelAndHoldAtTime(cancelTime);
+              gainHeld = true;
             } catch (_) {}
           }
-          try {
-            voiceGain.gain.cancelScheduledValues(cancelTime);
-          } catch (_) {}
-
-          // Explicitly anchor timeline at safeGain to prevent timeline snapback
-          voiceGain.gain.setValueAtTime(safeGain, cancelTime);
+          if (!gainHeld) {
+            try {
+              voiceGain.gain.cancelScheduledValues(cancelTime);
+            } catch (_) {}
+            voiceGain.gain.setValueAtTime(safeGain, cancelTime);
+          }
           voiceGain.gain.setTargetAtTime(0.0, t, Math.max(0.005, releaseSec * 0.25));
 
-          // Fade stringMixer linearly to digital zero
-          if (stringMixer && stringMixer.gain) {
-            try {
-              if (typeof stringMixer.gain.cancelAndHoldAtTime === 'function') {
-                try { stringMixer.gain.cancelAndHoldAtTime(cancelTime); } catch (_) {}
-              }
-              stringMixer.gain.cancelScheduledValues(cancelTime);
-              stringMixer.gain.setValueAtTime(1.0, cancelTime);
-              stringMixer.gain.linearRampToValueAtTime(0.0, cancelTime + releaseSec);
-            } catch (_) {}
-          }
-
-          // Harold Budd acoustic felt damping: absorb high-frequency energy immediately on release
+          // Harold Budd acoustic felt damping: absorb high-frequency energy smoothly on release
           const dampedCutoff = Math.max(160, f0 * 1.05);
           [filter1, filter2].forEach((f) => {
             if (f && f.frequency) {
               try {
+                let filterHeld = false;
                 if (typeof f.frequency.cancelAndHoldAtTime === 'function') {
-                  try { f.frequency.cancelAndHoldAtTime(cancelTime); } catch (_) {}
+                  try {
+                    f.frequency.cancelAndHoldAtTime(cancelTime);
+                    filterHeld = true;
+                  } catch (_) {}
                 }
-                f.frequency.cancelScheduledValues(cancelTime);
-                const curCut = Math.max(20, Math.min(20000, f.frequency.value || restCutoff));
-                f.frequency.setValueAtTime(curCut, cancelTime);
+                if (!filterHeld) {
+                  f.frequency.cancelScheduledValues(cancelTime);
+                  f.frequency.setValueAtTime(restCutoff, cancelTime);
+                }
                 f.frequency.exponentialRampToValueAtTime(dampedCutoff, cancelTime + releaseSec);
               } catch (_) {}
             }

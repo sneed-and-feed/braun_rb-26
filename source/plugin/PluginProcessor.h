@@ -72,7 +72,7 @@ private:
     rb26::Rb26ReverbEngine reverbEngine;
     rb26::AcousticExciterEngine exciterEngine;
     rb26::Rb26AtomicPointers atomicPointers;
-    std::atomic<bool> isPoweredOn { false };
+    std::atomic<bool> isPoweredOn { true };
 
     // Visualizer waveform circular buffer
     std::atomic<int> scopeWritePos { 0 };

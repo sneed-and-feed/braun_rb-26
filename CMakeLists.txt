@@ -285,6 +285,23 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/BraunLookAndFeelTests.cpp")
     add_test(NAME Rb26LookAndFeelTests COMMAND rb26_laf_tests)
 endif()
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/WebResourceTests.cpp" AND TARGET BraunRb26WebAssets)
+    add_executable(rb26_web_resource_tests
+        source/tests/WebResourceTests.cpp
+    )
+    target_include_directories(rb26_web_resource_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/source
+    )
+    target_link_libraries(rb26_web_resource_tests PRIVATE
+        BraunRb26WebAssets
+        juce::juce_core
+        juce::juce_gui_extra
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
+    )
+    add_test(NAME Rb26WebResourceTests COMMAND rb26_web_resource_tests)
+endif()
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/CMakeLists.txt")
     add_subdirectory(source/tests)
 endif()

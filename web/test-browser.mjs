@@ -397,7 +397,7 @@ async function runBrowserTest() {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     `);
     // Allow CSS transition (0.12s ease) to fully settle to steady-state
-    await new Promise((r) => setTimeout(r, 180));
+    await new Promise((r) => setTimeout(r, 350));
 
     const impulseStatus = await evaluate(`
       (() => {
@@ -1168,8 +1168,8 @@ async function runBrowserTest() {
       throw new Error(`Output overloaded during direct engine rapid room size scrub! Peak: ${directPeakMax}`);
     }
 
-    // Allow brief settling pause before reading frequency domain bin
-    await new Promise(r => setTimeout(r, 300));
+    // Allow settling pause before reading frequency domain bin (analyser has 0.8 smoothing)
+    await new Promise(r => setTimeout(r, 700));
 
     // Verify DC-blocking attenuation: check sub-bass DC bin in frequency domain
     const dcDb = await evaluate(`

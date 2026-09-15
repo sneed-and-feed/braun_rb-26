@@ -11,9 +11,12 @@
 #include <windows.h>
 #endif
 
-// Optional BinaryData inclusion if assets were generated
+// BinaryData inclusion for embedded web assets
 #if __has_include(<BinaryData.h>)
 #include <BinaryData.h>
+#define RB26_HAS_BINARY_DATA 1
+#elif __has_include("BinaryData.h")
+#include "BinaryData.h"
 #define RB26_HAS_BINARY_DATA 1
 #else
 #define RB26_HAS_BINARY_DATA 0
@@ -119,6 +122,45 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
     font-size: 11px;
     cursor: pointer;
   }
+  .exciter-bar {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .exciter-cluster { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .exciter-btn {
+    background: var(--knob-cap);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  .exciter-btn:active { background: var(--braun-orange); color: #fff; }
+  .chime-btn {
+    flex: 1;
+    min-width: 28px;
+    height: 38px;
+    background: #202226;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .chime-btn:active { background: var(--braun-orange); color: #fff; }
 </style>
 </head>
 <body>
@@ -127,7 +169,10 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
     <h1>BRAUN RB-26</h1>
     <p>STUDIO REVERBERATION UNIT — WENIGER, ABER BESSER</p>
   </div>
-  <div class="badge">ACTIVE</div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button id="btnPower" style="background:var(--braun-orange); color:#fff; padding:4px 10px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; border:none; letter-spacing:1px;">POWER ON</button>
+    <div class="badge">ACTIVE</div>
+  </div>
 </header>
 
 <div class="crt-container">
@@ -141,10 +186,30 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
   </div>
 </div>
 
+<div class="exciter-bar">
+  <div class="deck-header">DECK 07 — ON-BOARD ACOUSTIC EXCITER & AUDITION</div>
+  <div class="exciter-cluster">
+    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">LABORATORY:</span>
+    <button class="exciter-btn" onclick="emitExciter({type:'dirac'})">DIRAC IMPULSE [SPACE]</button>
+    <button class="exciter-btn" onclick="emitExciter({type:'pink',duration:40})">PINK BURST [40 MS]</button>
+    <button class="exciter-btn" onclick="emitExciter({type:'hammer'})">ACOUSTIC HAMMER [78 HZ]</button>
+    <button class="exciter-btn" id="btnPoisson" onclick="togglePoisson()">POISSON CLOCK</button>
+  </div>
+  <div class="exciter-cluster" style="margin-top:4px;">
+    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">CHIMES (A–'):</span>
+    <div style="display:flex; gap:4px; flex:1;" id="chimeRow"></div>
+  </div>
+  <div class="exciter-cluster" style="margin-top:4px;">
+    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">CHORDS (1–=):</span>
+    <div style="display:flex; gap:4px; flex-wrap:wrap; flex:1;" id="chordRow"></div>
+  </div>
+</div>
+
 <div class="rack-grid" id="deckContainer">
   <!-- Controls rendered dynamically via JS -->
 </div>
-
+)html"
+R"html(
 <script>
 const paramsMeta = [
   { id: 'pre_delay_ms', webId: 'preDelayMs', label: 'Pre-Delay', deck: 'Input & Pre-Delay', min: 0, max: 500, def: 20, unit: 'ms' },
@@ -235,6 +300,93 @@ function emitParam(id, value) {
   }
 }
 
+function emitExciter(data) {
+  if (window.__JUCE__ && window.__JUCE__.backend) {
+    window.__JUCE__.backend.emitEvent('exciterTrigger', data);
+  }
+}
+
+// Power toggle
+let isPowered = true;
+const pBtn = document.getElementById('btnPower');
+if (pBtn) {
+  pBtn.addEventListener('click', () => {
+    isPowered = !isPowered;
+    pBtn.textContent = isPowered ? 'POWER ON' : 'STANDBY';
+    pBtn.style.background = isPowered ? 'var(--braun-orange)' : 'var(--knob-cap)';
+    emitParam('power', isPowered ? 1.0 : 0.0);
+  });
+}
+
+// Chime Strip keys (A-')
+const chimeNotes = [
+  { k: 'a', m: 60, l: 'C4' }, { k: 's', m: 62, l: 'D4' }, { k: 'd', m: 64, l: 'E4' },
+  { k: 'f', m: 67, l: 'G4' }, { k: 'g', m: 69, l: 'A4' }, { k: 'h', m: 72, l: 'C5' },
+  { k: 'j', m: 74, l: 'D5' }, { k: 'k', m: 76, l: 'E5' }, { k: 'l', m: 79, l: 'G5' },
+  { k: ';', m: 81, l: 'A5' }, { k: "'", m: 84, l: 'C6' }
+];
+const chimeRow = document.getElementById('chimeRow');
+if (chimeRow) {
+  chimeNotes.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'chime-btn';
+    b.innerHTML = `<div>${c.k.toUpperCase()}</div><div style="font-size:9px;color:var(--text-dim);">${c.l}</div>`;
+    b.onmousedown = () => emitExciter({ type: 'note', midi: c.m, velocity: 0.75, duration: 3.5 });
+    chimeRow.appendChild(b);
+  });
+}
+
+// Chords (1-=)
+const chordNames = [
+  '1 PAVILION', '2 PLATEAUX', '3 DEEP 5TH', '4 ETHEREAL', '5 LYDIAN', '6 SOLAR BEAT',
+  '7 AVALON', '8 BLADE RUNNER', '9 MIN7 9', '0 SUS4 7', '- MAJOR 9', '= CLUSTER'
+];
+const chordKeys = ['1','2','3','4','5','6','7','8','9','0','-','='];
+const chordRow = document.getElementById('chordRow');
+if (chordRow) {
+  chordNames.forEach((name, idx) => {
+    const b = document.createElement('button');
+    b.className = 'exciter-btn';
+    b.style.fontSize = '10px';
+    b.style.padding = '4px 8px';
+    b.textContent = name;
+    b.onmousedown = () => emitExciter({ type: 'chord', chordIndex: idx, speed: 'med' });
+    chordRow.appendChild(b);
+  });
+}
+
+// Poisson generator toggle
+let poissonRunning = false;
+function togglePoisson() {
+  poissonRunning = !poissonRunning;
+  const btn = document.getElementById('btnPoisson');
+  if (btn) {
+    btn.style.color = poissonRunning ? 'var(--braun-orange)' : 'var(--text-main)';
+    btn.style.borderColor = poissonRunning ? 'var(--braun-orange)' : 'var(--border-color)';
+  }
+  emitExciter({ type: 'poisson', enable: poissonRunning, epm: 18.0, humanize: 0.5 });
+}
+
+// Computer keyboard bindings
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    emitExciter({ type: 'dirac' });
+    return;
+  }
+  const cn = chimeNotes.find(c => c.k === e.key.toLowerCase());
+  if (cn) {
+    emitExciter({ type: 'note', midi: cn.m, velocity: 0.75, duration: 3.5 });
+    return;
+  }
+  const ci = chordKeys.indexOf(e.key);
+  if (ci >= 0) {
+    emitExciter({ type: 'chord', chordIndex: ci, speed: 'med' });
+    return;
+  }
+});
+
 // Visualizer oscilloscope canvas
 const canvas = document.getElementById('scopeCanvas');
 const ctx = canvas.getContext('2d');
@@ -267,6 +419,15 @@ requestAnimationFrame(drawScope);
 if (window.__JUCE__ && window.__JUCE__.backend) {
   window.__JUCE__.backend.addEventListener('paramUpdate', (data) => {
     if (!data || !data.id) return;
+    if (data.id === 'power' || data.apvtsId === 'power') {
+      const p = data.value > 0.5;
+      isPowered = p;
+      if (pBtn) {
+        pBtn.textContent = p ? 'POWER ON' : 'STANDBY';
+        pBtn.style.background = p ? 'var(--braun-orange)' : 'var(--knob-cap)';
+      }
+      return;
+    }
     const p = paramsMeta.find(m => m.id === data.id || m.webId === data.id);
     if (!p) return;
     const ctrl = document.getElementById('ctrl_' + p.id);
@@ -647,6 +808,12 @@ void BRAUN_RB26AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
 
     const juce::String type = obj->getProperty("type").toString();
 
+    // Auto-wake DSP engine to ensure audio output on exciter interaction
+    if (!processorRef.isPower())
+    {
+        processorRef.setPower(true);
+    }
+
     if (type.equalsIgnoreCase("note"))
     {
         const float midi = static_cast<float>(obj->getProperty("midi"));
@@ -696,16 +863,37 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
 {
     juce::String path = url;
 
-    // Strip virtual hostname
+    // Strip virtual hostname (both with and without trailing slash, supporting https, http, and juce protocols)
     if (path.startsWithIgnoreCase("https://juce.backend/"))
         path = path.substring(21);
     else if (path.startsWithIgnoreCase("http://juce.backend/"))
         path = path.substring(20);
+    else if (path.startsWithIgnoreCase("juce://juce.backend/"))
+        path = path.substring(20);
+    else if (path.startsWithIgnoreCase("https://juce.backend"))
+        path = path.substring(20);
+    else if (path.startsWithIgnoreCase("http://juce.backend"))
+        path = path.substring(19);
+    else if (path.startsWithIgnoreCase("juce://juce.backend"))
+        path = path.substring(19);
 
     const int queryIdx = path.indexOfChar('?');
     if (queryIdx >= 0) path = path.substring(0, queryIdx);
     const int hashIdx = path.indexOfChar('#');
     if (hashIdx >= 0) path = path.substring(0, hashIdx);
+
+    while (path.startsWithChar('/') || path.startsWithChar('\\') || path.startsWith("./"))
+    {
+        if (path.startsWithChar('/') || path.startsWithChar('\\'))
+            path = path.substring(1);
+        else if (path.startsWith("./"))
+            path = path.substring(2);
+    }
+
+    if (path.startsWithIgnoreCase("web/"))
+        path = path.substring(4);
+    else if (path.startsWithIgnoreCase("ui/"))
+        path = path.substring(3);
 
     while (path.startsWithChar('/') || path.startsWithChar('\\'))
         path = path.substring(1);
@@ -717,11 +905,16 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
     if (path.endsWithIgnoreCase(".html") || path.endsWithIgnoreCase(".htm")) mimeType = "text/html; charset=utf-8";
     else if (path.endsWithIgnoreCase(".css")) mimeType = "text/css; charset=utf-8";
     else if (path.endsWithIgnoreCase(".js") || path.endsWithIgnoreCase(".mjs")) mimeType = "text/javascript; charset=utf-8";
-    else if (path.endsWithIgnoreCase(".json")) mimeType = "application/json";
+    else if (path.endsWithIgnoreCase(".json")) mimeType = "application/json; charset=utf-8";
     else if (path.endsWithIgnoreCase(".svg")) mimeType = "image/svg+xml";
     else if (path.endsWithIgnoreCase(".png")) mimeType = "image/png";
+    else if (path.endsWithIgnoreCase(".jpg") || path.endsWithIgnoreCase(".jpeg")) mimeType = "image/jpeg";
+    else if (path.endsWithIgnoreCase(".woff2")) mimeType = "font/woff2";
+    else if (path.endsWithIgnoreCase(".woff")) mimeType = "font/woff";
+    else if (path.endsWithIgnoreCase(".ttf")) mimeType = "font/ttf";
+    else if (path.endsWithIgnoreCase(".wasm")) mimeType = "application/wasm";
 
-    // 1. Search local filesystem (rb-26/ui, rb-26/web, ui, web)
+    // 1. Search local filesystem (for live dev iteration)
     auto checkDiskFile = [&](const juce::File& file) -> std::optional<juce::WebBrowserComponent::Resource> {
         if (file.existsAsFile())
         {
@@ -737,25 +930,87 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
     };
 
     const juce::File cwd = juce::File::getCurrentWorkingDirectory();
-    if (auto res = checkDiskFile(cwd.getChildFile("ui").getChildFile(path))) return res;
     if (auto res = checkDiskFile(cwd.getChildFile("web").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile("rb-26/ui").getChildFile(path))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("ui").getChildFile(path))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("braun_rb-26/web").getChildFile(path))) return res;
     if (auto res = checkDiskFile(cwd.getChildFile("rb-26/web").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile(path))) return res;
 
     // Search relative to executable
     auto dir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentExecutableFile).getParentDirectory();
     for (int depth = 0; depth < 5; ++depth)
     {
-        if (auto res = checkDiskFile(dir.getChildFile("ui").getChildFile(path))) return res;
         if (auto res = checkDiskFile(dir.getChildFile("web").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile("rb-26/ui").getChildFile(path))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("ui").getChildFile(path))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("braun_rb-26/web").getChildFile(path))) return res;
         if (auto res = checkDiskFile(dir.getChildFile("rb-26/web").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile(path))) return res;
         dir = dir.getParentDirectory();
     }
 
-    // 2. Embedded fallback HTML
+    // 2. Unpack from embedded binary zip archive (BraunRb26WebAssets)
+#if RB26_HAS_BINARY_DATA
+    if (BinaryData::web_assets_rb26_zipSize > 0 && BinaryData::web_assets_rb26_zip != nullptr)
+    {
+        juce::MemoryInputStream memStream(BinaryData::web_assets_rb26_zip, static_cast<size_t>(BinaryData::web_assets_rb26_zipSize), false);
+        juce::ZipFile zip(memStream);
+
+        juce::String normalizedPath = path.replaceCharacter('\\', '/');
+        while (normalizedPath.startsWithChar('/') || normalizedPath.startsWith("./"))
+        {
+            if (normalizedPath.startsWithChar('/')) normalizedPath = normalizedPath.substring(1);
+            else if (normalizedPath.startsWith("./")) normalizedPath = normalizedPath.substring(2);
+        }
+        if (normalizedPath.startsWithIgnoreCase("web/")) normalizedPath = normalizedPath.substring(4);
+        else if (normalizedPath.startsWithIgnoreCase("ui/")) normalizedPath = normalizedPath.substring(3);
+
+        int entryIndex = zip.getIndexOfFileName(normalizedPath);
+        if (entryIndex < 0)
+        {
+            // Search all entries case-insensitively without leading slashes, ./, or web/ prefixes
+            for (int i = 0; i < zip.getNumEntries(); ++i)
+            {
+                const auto* entry = zip.getEntry(i);
+                if (entry != nullptr)
+                {
+                    juce::String name = entry->filename.replaceCharacter('\\', '/');
+                    while (name.startsWithChar('/') || name.startsWith("./"))
+                    {
+                        if (name.startsWithChar('/'))
+                            name = name.substring(1);
+                        else if (name.startsWith("./"))
+                            name = name.substring(2);
+                    }
+                    if (name.startsWithIgnoreCase("web/")) name = name.substring(4);
+                    else if (name.startsWithIgnoreCase("ui/")) name = name.substring(3);
+
+                    if (name.equalsIgnoreCase(normalizedPath))
+                    {
+                        entryIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (entryIndex >= 0)
+        {
+            const auto* entry = zip.getEntry(entryIndex);
+            if (entry != nullptr)
+            {
+                std::unique_ptr<juce::InputStream> stream(zip.createStreamForEntry(*entry));
+                if (stream != nullptr)
+                {
+                    juce::MemoryBlock mb;
+                    stream->readIntoMemoryBlock(mb, -1);
+                    std::vector<std::byte> data(mb.getSize());
+                    std::memcpy(data.data(), mb.getData(), mb.getSize());
+                    return juce::WebBrowserComponent::Resource { std::move(data), mimeType };
+                }
+            }
+        }
+    }
+#endif
+
+    // 3. Embedded fallback HTML (only if disk and binary assets both unavailable)
     if (path.equalsIgnoreCase("index.html"))
     {
         const size_t len = std::strlen(kEmbeddedBraunFallbackHtml);

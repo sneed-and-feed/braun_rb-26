@@ -136,13 +136,34 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     outChannels[0] = buffer.getWritePointer(0);
     outChannels[1] = (numChannels > 1) ? buffer.getWritePointer(1) : outChannels[0];
 
-    // Standby Power Gating: If powered down, output clean silence
+    // Standby Power Gating: If powered down, output clean silence unless awakened by MIDI Note-On
     if (!isPoweredOn.load(std::memory_order_relaxed))
     {
-        buffer.clear();
-        pushScopeSamples(outChannels[0], outChannels[1], numSamples);
-        midiMessages.clear();
-        return;
+        bool hasNoteOn = false;
+        for (const auto metadata : midiMessages)
+        {
+            if (metadata.numBytes >= 3)
+            {
+                const auto* rawData = metadata.data;
+                if ((rawData[0] & 0xF0) == 0x90 && rawData[2] > 0)
+                {
+                    hasNoteOn = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasNoteOn)
+        {
+            isPoweredOn.store(true, std::memory_order_relaxed);
+        }
+        else
+        {
+            buffer.clear();
+            pushScopeSamples(outChannels[0], outChannels[1], numSamples);
+            midiMessages.clear();
+            return;
+        }
     }
 
     // Wait-free POD snapshot load with std::memory_order_relaxed (0 locks, 0 memory allocs)
