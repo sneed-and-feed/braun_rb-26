@@ -44,6 +44,9 @@ void Rb26ReverbEngine::prepare(double sampleRate, int maxBlockSize) noexcept {
     mOutputTrimSmoother.setSampleRate(fs);
     mOutputTrimSmoother.reset(dbToGain(mParams.outputTrimDb));
 
+    mPitchFeedbackSmoother.setSampleRate(fs);
+    mPitchFeedbackSmoother.reset(mParams.pitchFeedback);
+
     mPreDelayBufferL.assign(kPreDelayBufferCapacity, 0.0f);
     mPreDelayBufferR.assign(kPreDelayBufferCapacity, 0.0f);
     mPreDelayWriteIndex = 0;
@@ -100,24 +103,27 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
                            params.tailModDepthMs,
                            params.tailBloomMs);
 
+    // Pass 0.0f internal feedback to pitch shifter: feedback loop is closed via FDN tank
     mPitchShifter.setParameters(params.shimmerSend,
                                 params.dimmerSend,
                                 params.shimmerInterval,
                                 params.dimmerInterval,
                                 params.pitchBlend,
-                                params.pitchFeedback);
+                                0.0f);
 
     mPreDelaySmoother.setTarget(params.preDelayMs);
     mDryWetSmoother.setTarget(params.dryWetMix);
     mEarlyLateSmoother.setTarget(params.earlyLateMix);
     mStereoWidthSmoother.setTarget(params.stereoWidth);
     mOutputTrimSmoother.setTarget(dbToGain(params.outputTrimDb));
+    mPitchFeedbackSmoother.setTarget(std::clamp(params.pitchFeedback, 0.0f, 0.95f));
 }
 
 void Rb26ReverbEngine::process(const float* const* inputChannels,
                               float* const* outputChannels,
                               int numChannels,
-                              int numSamples) noexcept {
+                              int numSamples,
+                              const float* const* auxReverbChannels) noexcept {
     if (!inputChannels || !outputChannels || numChannels <= 0 || numSamples <= 0) [[unlikely]] {
         return;
     }
@@ -126,6 +132,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
     const float* inL = inputChannels[0];
     const float* inR = (numChannels > 1 && inputChannels[1]) ? inputChannels[1] : inL;
+    const float* auxL = (auxReverbChannels && auxReverbChannels[0]) ? auxReverbChannels[0] : nullptr;
+    const float* auxR = (auxReverbChannels && numChannels > 1 && auxReverbChannels[1]) ? auxReverbChannels[1] : auxL;
 
     float* outL = outputChannels[0];
     float* outR = (numChannels > 1 && outputChannels[1]) ? outputChannels[1] : nullptr;
@@ -135,6 +143,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
     for (int n = 0; n < numSamples; ++n) {
         const float xL = inL[n];
         const float xR = inR[n];
+        const float tankInL = xL + (auxL ? auxL[n] : 0.0f);
+        const float tankInR = xR + (auxR ? auxR[n] : 0.0f);
 
         // 1. Pre-Delay
         const float curPreMs = mPreDelaySmoother.next();
@@ -142,8 +152,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             std::clamp((curPreMs * 0.001f) * fs, 0.0f, static_cast<float>(kPreDelayBufferCapacity - 1))
         );
 
-        mPreDelayBufferL[mPreDelayWriteIndex] = flushDenormal(xL);
-        mPreDelayBufferR[mPreDelayWriteIndex] = flushDenormal(xR);
+        mPreDelayBufferL[mPreDelayWriteIndex] = flushDenormal(tankInL);
+        mPreDelayBufferR[mPreDelayWriteIndex] = flushDenormal(tankInR);
 
         const size_t preReadIdx = (mPreDelayWriteIndex + kPreDelayBufferCapacity - preDelaySamples) & kPreDelayBufferMask;
         const float preL = mPreDelayBufferL[preReadIdx];
@@ -160,8 +170,10 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mEarlyReflections.processSample(highInL, highInR, earlyL, earlyR);
 
         // 4. Late Reverb Tank (8-Line Householder FDN) & Bidirectional Pitch Shifting Feedback
+        const float fb = mPitchFeedbackSmoother.next();
+        const float safePitchFb = fb * 0.30f;
         float lateL = 0.0f, lateR = 0.0f;
-        mFdnTank.processSample(highInL, highInR, mLastPitchFbL, mLastPitchFbR, lateL, lateR);
+        mFdnTank.processSample(highInL, highInR, mLastPitchFbL * safePitchFb, mLastPitchFbR * safePitchFb, lateL, lateR);
 
         // Feed late reverberation into PitchShifter to calculate next recirculation sample
         mPitchShifter.processSample(lateL, lateR, mLastPitchFbL, mLastPitchFbR);
@@ -170,8 +182,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         const float elMix = mEarlyLateSmoother.next();
         const float earlyGain = std::cos(elMix * kHalfPi);
         const float lateGain  = std::sin(elMix * kHalfPi);
-        const float highReverbL = earlyGain * earlyL + lateGain * lateL;
-        const float highReverbR = earlyGain * earlyR + lateGain * lateR;
+        const float highReverbL = earlyGain * earlyL + lateGain * (lateL + mLastPitchFbL * 0.85f);
+        const float highReverbR = earlyGain * earlyR + lateGain * (lateR + mLastPitchFbR * 0.85f);
 
         // 6. Recombine High-Band Reverb with Pristine Low-Band Modal Reverb
         float wetL = highReverbL + lowReverbL;

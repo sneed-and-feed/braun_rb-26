@@ -173,7 +173,8 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         // Synthesize exciter voices, Poisson generative clock, chords, and lab pulses
         exciterEngine.process(directBus, reverbBus, chunkSize);
 
-        // Sum external input with exciter reverb injection bus
+        const bool isReverbAndDirect = (exciterEngine.getParameters().routing == rb26::ExciterRouting::ReverbAndDirect);
+
         float combinedInL[kMaxChunk];
         float combinedInR[kMaxChunk];
 
@@ -182,23 +183,28 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
         for (int i = 0; i < chunkSize; ++i)
         {
-            combinedInL[i] = extInL[i] + exciterReverbL[i];
-            combinedInR[i] = extInR[i] + exciterReverbR[i];
+            // If ReverbAndDirect: route exciter into primary input bus for unified dry/wet mixing
+            combinedInL[i] = extInL[i] + (isReverbAndDirect ? exciterDirectL[i] : 0.0f);
+            combinedInR[i] = extInR[i] + (isReverbAndDirect ? exciterDirectR[i] : 0.0f);
         }
 
         const float* chunkIn[2] = { combinedInL, combinedInR };
         float* chunkOut[2] = { outChannels[0] + samplesProcessed, (numChannels > 1 ? outChannels[1] + samplesProcessed : nullptr) };
 
-        // Process core reverb engine
-        reverbEngine.process(chunkIn, chunkOut, std::min(numChannels, 2), chunkSize);
+        // If ReverbOnly: route exciter directly into reverb tank aux input, bypassing dry path
+        const float* auxReverb[2] = { exciterReverbL, exciterReverbR };
+        const float* const* auxPtr = isReverbAndDirect ? nullptr : auxReverb;
 
-        // Blend direct exciter audio onto output bus if routing is ReverbAndDirect
+        // Process core reverb engine
+        reverbEngine.process(chunkIn, chunkOut, std::min(numChannels, 2), chunkSize, auxPtr);
+
+        // Guarantee zero hard clipping: apply master soft limiter to final output bus
         for (int i = 0; i < chunkSize; ++i)
         {
-            outChannels[0][samplesProcessed + i] += exciterDirectL[i];
+            outChannels[0][samplesProcessed + i] = rb26::softLimit(outChannels[0][samplesProcessed + i]);
             if (numChannels > 1)
             {
-                outChannels[1][samplesProcessed + i] += exciterDirectR[i];
+                outChannels[1][samplesProcessed + i] = rb26::softLimit(outChannels[1][samplesProcessed + i]);
             }
         }
 

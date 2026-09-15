@@ -19,34 +19,34 @@ namespace rb26 {
 
 struct Rb26Parameters {
     // Input / Pre-Delay
-    float preDelayMs = 20.0f;       // 0.0 - 500.0 ms
-    float dryWetMix = 0.35f;        // 0.0 - 1.0 (0% - 100%)
+    float preDelayMs = 24.0f;       // 0.0 - 500.0 ms
+    float dryWetMix = 0.40f;        // 0.0 - 1.0 (0% - 100%)
     float earlyLateMix = 0.50f;     // 0.0 - 1.0 (0% - 100%)
     
     // Low-End Decoupled Engine
     float lowCrossoverHz = 180.0f;  // 60.0 - 400.0 Hz
     float bassRt60Mult = 1.0f;      // 0.2 - 4.0x
-    float punchDucking = 0.40f;     // 0.0 - 1.0
+    float punchDucking = 0.65f;     // 0.0 - 1.0
     float subMonoHz = 120.0f;       // 20.0 - 250.0 Hz
     
     // Reverb Tank (FDN)
-    float roomSize = 0.65f;         // 0.1 - 2.0
-    float decayRt60Sec = 3.5f;      // 0.2 - 30.0 s
-    float highDampingHz = 6500.0f;  // 1000.0 - 20000.0 Hz
+    float roomSize = 1.0f;          // 0.1 - 2.0
+    float decayRt60Sec = 6.5f;      // 0.2 - 30.0 s
+    float highDampingHz = 7500.0f;  // 1000.0 - 20000.0 Hz
     float diffusionDensity = 0.75f; // 0.0 - 1.0
     bool freezeHold = false;        // true/false
     
     // Bidirectional Pitch Diffusion
-    float shimmerSend = 0.30f;      // 0.0 - 1.0
-    float dimmerSend = 0.25f;       // 0.0 - 1.0
+    float shimmerSend = 0.40f;      // 0.0 - 1.0
+    float dimmerSend = 0.35f;       // 0.0 - 1.0
     int shimmerInterval = 12;       // +7, +12, +24 semitones
     int dimmerInterval = -12;       // -12, -24 semitones
     float pitchBlend = 0.0f;        // -1.0 (Dimmer) to +1.0 (Shimmer)
-    float pitchFeedback = 0.50f;    // 0.0 - 0.95
+    float pitchFeedback = 0.45f;    // 0.0 - 0.95
     
     // Tail-Level Pitch Modulation
-    float tailModRateHz = 0.85f;    // 0.05 - 5.0 Hz
-    float tailModDepthMs = 1.2f;    // 0.0 - 5.0 ms
+    float tailModRateHz = 0.65f;    // 0.05 - 5.0 Hz
+    float tailModDepthMs = 2.25f;   // 0.0 - 5.0 ms
     float tailBloomMs = 85.0f;      // 20.0 - 300.0 ms
     
     // Master Bus
@@ -80,7 +80,8 @@ public:
     void process(const float* const* inputChannels,
                  float* const* outputChannels,
                  int numChannels,
-                 int numSamples) noexcept;
+                 int numSamples,
+                 const float* const* auxReverbChannels = nullptr) noexcept;
 
     // Telemetry for CRT display (lock-free SPSC)
     struct VisualizerFrame {
@@ -116,6 +117,7 @@ private:
     OnePoleSmoother mEarlyLateSmoother;
     OnePoleSmoother mStereoWidthSmoother;
     OnePoleSmoother mOutputTrimSmoother;
+    OnePoleSmoother mPitchFeedbackSmoother;
 
     // Pitch feedback state between FDN tank and PitchShifter
     float mLastPitchFbL { 0.0f };

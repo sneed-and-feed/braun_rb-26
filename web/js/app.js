@@ -848,7 +848,7 @@ export class BraunRb26App {
   _initDisplay() {
     const canvas = document.getElementById('scope-canvas');
     if (canvas) {
-      this.display = new BraunCrtDisplay(canvas, { mode: 'EDC', isPowered: this.isPowered });
+      this.display = new BraunCrtDisplay(canvas, { mode: 'EDC', isPowered: this.isPowered, isJuce: this.isJuce });
       this.display.start();
 
       this.engine.onTelemetry = (l, r, lowE, midE, highE) => {
@@ -2339,6 +2339,11 @@ export class BraunRb26App {
       const win = Math.sin((Math.PI * i) / (length - 1));
       d[i] = pink * win * 0.85;
     }
+
+    let dcSum = 0;
+    for (let i = 0; i < length; i++) dcSum += d[i];
+    const mean = dcSum / length;
+    for (let i = 0; i < length; i++) d[i] -= mean;
 
     const src = ctx.createBufferSource();
     src.buffer = buf;

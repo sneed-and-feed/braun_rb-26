@@ -53,15 +53,16 @@ void ChimeVoice::trigger(float midiNote, float velocity, float durationSec) noex
         const float t60 = baseDecay / kChimeModeDecayFactors[i];
         mDecayCoeff[i] = std::exp(-6.907755f / (t60 * mSampleRate));
 
-        // Harold Budd felt piano amplitude weighting
+        // Harold Budd felt piano amplitude weighting with calibrated studio headroom (-18 dBFS to -12 dBFS)
+        static constexpr float kVoiceHeadroom = 0.22f;
         static constexpr std::array<float, kNumChimeModes> baseModeAmps = { 0.52f, 0.22f, 0.08f, 0.03f };
         const float velScale = (i == 0) ? 1.0f : std::pow(mVelocity, 0.5f + 0.3f * static_cast<float>(i));
-        mAmp[i] = baseModeAmps[i] * velScale * mVelocity;
+        mAmp[i] = baseModeAmps[i] * velScale * mVelocity * kVoiceHeadroom;
         mEnv[i] = 1.0f;
     }
 
     // Soft felt hammer noise transient burst (20 ms contact decay)
-    mNoiseEnv = mVelocity * 0.20f;
+    mNoiseEnv = mVelocity * 0.20f * 0.22f;
     mNoiseDecay = std::exp(-6.907755f / (0.020f * mSampleRate));
 }
 
@@ -589,10 +590,12 @@ void AcousticExciterEngine::process(float* outL, float* outR, int numSamples) no
         // 4. Synthesize precision laboratory impulse generator
         mLabGen.processSample(sampL, sampR);
 
-        // 5. Apply smooth level gain
+        // 5. Apply smooth level gain & soft saturation knee
         const float gain = mLevelSmoother.next();
         sampL *= gain;
         sampR *= gain;
+        sampL = applySmoothBoundaryKnee(sampL, 0.75f, 1.0f);
+        sampR = applySmoothBoundaryKnee(sampR, 0.75f, 1.0f);
 
         outL[n] = flushDenormal(sampL);
         outR[n] = flushDenormal(sampR);
@@ -640,10 +643,12 @@ void AcousticExciterEngine::process(float* const* directBus, float* const* rever
         // 4. Synthesize precision laboratory impulse generator
         mLabGen.processSample(sampL, sampR);
 
-        // 5. Apply smooth level gain
+        // 5. Apply smooth level gain & soft saturation knee
         const float gain = mLevelSmoother.next();
         sampL *= gain;
         sampR *= gain;
+        sampL = applySmoothBoundaryKnee(sampL, 0.75f, 1.0f);
+        sampR = applySmoothBoundaryKnee(sampR, 0.75f, 1.0f);
 
         sampL = flushDenormal(sampL);
         sampR = flushDenormal(sampR);
@@ -715,10 +720,12 @@ void AcousticExciterEngine::process(float* const* directBus, float* const* rever
         // 4. Synthesize precision laboratory impulse generator
         mLabGen.processSample(sampL, sampR);
 
-        // 5. Apply smooth level gain
+        // 5. Apply smooth level gain & soft saturation knee
         const float gain = mLevelSmoother.next();
         sampL *= gain;
         sampR *= gain;
+        sampL = applySmoothBoundaryKnee(sampL, 0.75f, 1.0f);
+        sampR = applySmoothBoundaryKnee(sampR, 0.75f, 1.0f);
 
         sampL = flushDenormal(sampL);
         sampR = flushDenormal(sampR);

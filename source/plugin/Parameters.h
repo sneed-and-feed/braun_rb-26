@@ -96,26 +96,26 @@ struct ParameterMetadata {
 
 inline const std::array<ParameterMetadata, 24>& getParameterMetadataTable() {
     static const std::array<ParameterMetadata, 24> table {{
-        { "pre_delay_ms",       "preDelayMs",       "Pre-Delay",             "ms",   0.0f,    500.0f,   20.0f,  false, false },
-        { "dry_wet_mix",        "dryWetMix",        "Dry / Wet Mix",         "%",    0.0f,    1.0f,     0.35f,  false, false },
+        { "pre_delay_ms",       "preDelayMs",       "Pre-Delay",             "ms",   0.0f,    500.0f,   24.0f,  false, false },
+        { "dry_wet_mix",        "dryWetMix",        "Dry / Wet Mix",         "%",    0.0f,    1.0f,     0.40f,  false, false },
         { "early_late_mix",     "earlyLateMix",     "Early / Late Mix",      "%",    0.0f,    1.0f,     0.50f,  false, false },
         { "low_crossover_hz",   "lowCrossoverHz",   "Low Crossover Freq",    "Hz",   60.0f,   400.0f,   180.0f, false, false },
         { "bass_rt60_mult",     "bassRt60Mult",     "Bass RT60 Multiplier",  "x",    0.2f,    4.0f,     1.0f,   false, false },
-        { "punch_ducking",      "punchDucking",     "Punch Ducking",         "%",    0.0f,    1.0f,     0.40f,  false, false },
+        { "punch_ducking",      "punchDucking",     "Punch Ducking",         "%",    0.0f,    1.0f,     0.65f,  false, false },
         { "sub_mono_hz",        "subMonoHz",        "Sub Mono Freq",         "Hz",   20.0f,   250.0f,   120.0f, false, false },
-        { "room_size",          "roomSize",         "Room Size",             "",     0.1f,    2.0f,     0.65f,  false, false },
-        { "decay_rt60_sec",     "decayRt60Sec",     "Decay Time (RT60)",     "s",    0.2f,    30.0f,    3.5f,   false, false },
-        { "high_damping_hz",    "highDampingHz",    "High Damping Freq",     "Hz",   1000.0f, 20000.0f, 6500.0f,false, false },
+        { "room_size",          "roomSize",         "Room Size",             "",     0.1f,    2.0f,     1.0f,   false, false },
+        { "decay_rt60_sec",     "decayRt60Sec",     "Decay Time (RT60)",     "s",    0.2f,    30.0f,    6.5f,   false, false },
+        { "high_damping_hz",    "highDampingHz",    "High Damping Freq",     "Hz",   1000.0f, 20000.0f, 7500.0f,false, false },
         { "diffusion_density",  "diffusionDensity", "Diffusion Density",     "%",    0.0f,    1.0f,     0.75f,  false, false },
         { "freeze_hold",        "freezeHold",       "Freeze Hold",           "",     0.0f,    1.0f,     0.0f,   true,  false },
-        { "shimmer_send",       "shimmerSend",      "Shimmer Send",          "%",    0.0f,    1.0f,     0.30f,  false, false },
-        { "dimmer_send",        "dimmerSend",       "Dimmer Send",           "%",    0.0f,    1.0f,     0.25f,  false, false },
+        { "shimmer_send",       "shimmerSend",      "Shimmer Send",          "%",    0.0f,    1.0f,     0.40f,  false, false },
+        { "dimmer_send",        "dimmerSend",       "Dimmer Send",           "%",    0.0f,    1.0f,     0.35f,  false, false },
         { "shimmer_interval",   "shimmerInterval",  "Shimmer Interval",      "st",   0.0f,    2.0f,     1.0f,   false, true  },
         { "dimmer_interval",    "dimmerInterval",   "Dimmer Interval",       "st",   0.0f,    1.0f,     0.0f,   false, true  },
         { "pitch_blend",        "pitchBlend",       "Pitch Blend (Dim/Shim)","",     -1.0f,   1.0f,     0.0f,   false, false },
-        { "pitch_feedback",     "pitchFeedback",    "Pitch Feedback",        "%",    0.0f,    0.95f,    0.50f,  false, false },
-        { "tail_mod_rate_hz",   "tailModRateHz",    "Tail Mod Rate",         "Hz",   0.05f,   5.0f,     0.85f,  false, false },
-        { "tail_mod_depth_ms",  "tailModDepthMs",   "Tail Mod Depth",        "ms",   0.0f,    5.0f,     1.2f,   false, false },
+        { "pitch_feedback",     "pitchFeedback",    "Pitch Feedback",        "%",    0.0f,    0.95f,    0.45f,  false, false },
+        { "tail_mod_rate_hz",   "tailModRateHz",    "Tail Mod Rate",         "Hz",   0.05f,   5.0f,     0.65f,  false, false },
+        { "tail_mod_depth_ms",  "tailModDepthMs",   "Tail Mod Depth",        "ms",   0.0f,    5.0f,     2.25f,  false, false },
         { "tail_bloom_ms",      "tailBloomMs",      "Tail Bloom Attack",     "ms",   20.0f,   300.0f,   85.0f,  false, false },
         { "stereo_width",       "stereoWidth",      "Stereo Width",          "%",    0.0f,    2.0f,     1.0f,   false, false },
         { "output_trim_db",     "outputTrimDb",     "Output Trim",           "dB",   -24.0f,  12.0f,    0.0f,   false, false },
@@ -128,26 +128,26 @@ inline const std::array<ParameterMetadata, 24>& getParameterMetadataTable() {
 // Lock-Free Plain-Old-Data (POD) Parameter Snapshot Structure
 // ============================================================================
 struct alignas(16) Rb26ParameterSnapshot {
-    float preDelayMs       { 20.0f };
-    float dryWetMix        { 0.35f };
+    float preDelayMs       { 24.0f };
+    float dryWetMix        { 0.40f };
     float earlyLateMix     { 0.50f };
     float lowCrossoverHz   { 180.0f };
     float bassRt60Mult     { 1.0f };
-    float punchDucking     { 0.40f };
+    float punchDucking     { 0.65f };
     float subMonoHz        { 120.0f };
-    float roomSize         { 0.65f };
-    float decayRt60Sec     { 3.5f };
-    float highDampingHz    { 6500.0f };
+    float roomSize         { 1.0f };
+    float decayRt60Sec     { 6.5f };
+    float highDampingHz    { 7500.0f };
     float diffusionDensity { 0.75f };
     bool  freezeHold       { false };
-    float shimmerSend      { 0.30f };
-    float dimmerSend       { 0.25f };
+    float shimmerSend      { 0.40f };
+    float dimmerSend       { 0.35f };
     int   shimmerInterval  { 12 };
     int   dimmerInterval   { -12 };
     float pitchBlend       { 0.0f };
-    float pitchFeedback    { 0.50f };
-    float tailModRateHz    { 0.85f };
-    float tailModDepthMs   { 1.2f };
+    float pitchFeedback    { 0.45f };
+    float tailModRateHz    { 0.65f };
+    float tailModDepthMs   { 2.25f };
     float tailBloomMs      { 85.0f };
     float stereoWidth      { 1.0f };
     float outputTrimDb     { 0.0f };
@@ -283,20 +283,20 @@ struct Rb26AtomicPointers {
 inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // 1. Pre-Delay (0.0 - 500.0 ms, default 20.0 ms, skew 0.5 for fine low ms resolution)
+    // 1. Pre-Delay (0.0 - 500.0 ms, default 24.0 ms, skew 0.5 for fine low ms resolution)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::preDelayMs,
         "Pre-Delay",
         juce::NormalisableRange<float>(0.0f, 500.0f, 0.1f, 0.5f),
-        20.0f,
+        24.0f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
-    // 2. Dry/Wet Mix (0.0 - 1.0, default 0.35)
+    // 2. Dry/Wet Mix (0.0 - 1.0, default 0.40)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::dryWetMix,
         "Dry / Wet Mix",
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
-        0.35f,
+        0.40f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
     // 3. Early/Late Mix (0.0 - 1.0, default 0.50)
@@ -323,12 +323,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         1.0f,
         juce::AudioParameterFloatAttributes().withLabel("x")));
 
-    // 6. Punch Ducking (0.0 - 1.0, default 0.40)
+    // 6. Punch Ducking (0.0 - 1.0, default 0.65)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::punchDucking,
         "Punch Ducking",
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
-        0.40f,
+        0.65f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
     // 7. Sub Mono Maker Frequency (20.0 - 250.0 Hz, default 120.0 Hz)
@@ -339,27 +339,27 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         120.0f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")));
 
-    // 8. Room Size (0.1 - 2.0, default 0.65)
+    // 8. Room Size (0.1 - 2.0, default 1.0)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::roomSize,
         "Room Size",
         juce::NormalisableRange<float>(0.1f, 2.0f, 0.01f, 1.0f),
-        0.65f));
+        1.0f));
 
-    // 9. Decay Time RT60 (0.2 - 30.0 s, default 3.5 s, logarithmic skew 0.35)
+    // 9. Decay Time RT60 (0.2 - 30.0 s, default 6.5 s, logarithmic skew 0.35)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::decayRt60Sec,
         "Decay Time (RT60)",
         juce::NormalisableRange<float>(0.2f, 30.0f, 0.01f, 0.35f),
-        3.5f,
+        6.5f,
         juce::AudioParameterFloatAttributes().withLabel("s")));
 
-    // 10. High Damping Frequency (1000.0 - 20000.0 Hz, default 6500.0 Hz, log skew 0.35)
+    // 10. High Damping Frequency (1000.0 - 20000.0 Hz, default 7500.0 Hz, log skew 0.35)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::highDampingHz,
         "High Damping Freq",
         juce::NormalisableRange<float>(1000.0f, 20000.0f, 1.0f, 0.35f),
-        6500.0f,
+        7500.0f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")));
 
     // 11. Diffusion Density (0.0 - 1.0, default 0.75)
@@ -376,20 +376,20 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Freeze Hold",
         false));
 
-    // 13. Shimmer Send (0.0 - 1.0, default 0.30)
+    // 13. Shimmer Send (0.0 - 1.0, default 0.40)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::shimmerSend,
         "Shimmer Send",
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
-        0.30f,
+        0.40f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
-    // 14. Dimmer Send (0.0 - 1.0, default 0.25)
+    // 14. Dimmer Send (0.0 - 1.0, default 0.35)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::dimmerSend,
         "Dimmer Send",
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
-        0.25f,
+        0.35f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
     // 15. Shimmer Pitch Interval (+7, +12, +24 semitones, default +12)
@@ -413,28 +413,28 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f, 1.0f),
         0.0f));
 
-    // 18. Pitch Feedback (0.0 - 0.95, default 0.50)
+    // 18. Pitch Feedback (0.0 - 0.95, default 0.45)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::pitchFeedback,
         "Pitch Feedback",
         juce::NormalisableRange<float>(0.0f, 0.95f, 0.001f, 1.0f),
-        0.50f,
+        0.45f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
-    // 19. Tail Mod Rate (0.05 - 5.0 Hz, default 0.85 Hz, skew 0.5)
+    // 19. Tail Mod Rate (0.05 - 5.0 Hz, default 0.65 Hz, skew 0.5)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::tailModRateHz,
         "Tail Mod Rate",
         juce::NormalisableRange<float>(0.05f, 5.0f, 0.01f, 0.5f),
-        0.85f,
+        0.65f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")));
 
-    // 20. Tail Mod Depth (0.0 - 5.0 ms, default 1.2 ms)
+    // 20. Tail Mod Depth (0.0 - 5.0 ms, default 2.25 ms)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::tailModDepthMs,
         "Tail Mod Depth",
         juce::NormalisableRange<float>(0.0f, 5.0f, 0.01f, 1.0f),
-        1.2f,
+        2.25f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
     // 21. Tail Bloom Attack (20.0 - 300.0 ms, default 85.0 ms, skew 0.6)

@@ -39,8 +39,13 @@ export class BraunCrtDisplay {
 
     // Buffers for real-time audio analysis
     this.bufferSize = 512;
+    this.fftSize = 512;
     this.timeDataL = new Float32Array(this.bufferSize);
     this.timeDataR = new Float32Array(this.bufferSize);
+    this.minDecibels = -95;
+    this.maxDecibels = -10;
+    this.freqDataL = new Float32Array(this.fftSize >> 1);
+    this.isJuce = options.isJuce ?? false;
 
     // EDC waterfall history buffers
     this.historySize = 128;
@@ -236,6 +241,15 @@ export class BraunCrtDisplay {
         this.timeDataL = new Float32Array(size);
         this.timeDataR = new Float32Array(size);
         this.bufferSize = size;
+      }
+      if (!this.freqDataL || this.freqDataL.length !== (size >> 1)) {
+        this.freqDataL = new Float32Array(size >> 1);
+      }
+      if (typeof this.analyserL.minDecibels === 'number') {
+        this.minDecibels = this.analyserL.minDecibels;
+      }
+      if (typeof this.analyserL.maxDecibels === 'number') {
+        this.maxDecibels = this.analyserL.maxDecibels;
       }
       if (!this.isRunning) this.start();
     }
@@ -646,7 +660,13 @@ export class BraunCrtDisplay {
   }
 
   _drawSpectrum(ctx, w, h) {
-    this._computeFft();
+    const isJuce = Boolean(this.isJuce || (typeof window !== 'undefined' && (window.__IS_JUCE__ || window.__JUCE__)));
+    const hasAnalyser = !isJuce && Boolean(this.analyserL && typeof this.analyserL.getFloatFrequencyData === 'function');
+    if (hasAnalyser) {
+      this.analyserL.getFloatFrequencyData(this.freqDataL);
+    } else {
+      this._computeFft();
+    }
 
     ctx.save();
     ctx.font = this.fontMono;
@@ -663,14 +683,23 @@ export class BraunCrtDisplay {
     const maxBarH = h * 0.80;
     const barX = this._barX;
     const bw = this._barW;
+    const minDb = this.minDecibels;
+    const maxDb = this.maxDecibels;
+    const dbRangeInv = 1.0 / (maxDb - minDb);
 
     for (let b = 0; b < numBars; b++) {
       const binIdx = barIndices[b];
-      const r = real[binIdx];
-      const im = imag[binIdx];
-      const mag = Math.sqrt(r * r + im * im) * 4.0;
-      const db = 20 * Math.log10(Math.max(mag, 1e-4));
-      const normVal = Math.max(0, Math.min(1.0, (db + 60) * (1 / 60)));
+      let db;
+      if (hasAnalyser) {
+        db = this.freqDataL[binIdx];
+      } else {
+        const r = real[binIdx];
+        const im = imag[binIdx];
+        const normMag = (4.0 * Math.sqrt(r * r + im * im)) / this.fftSize;
+        db = 20 * Math.log10(Math.max(normMag, 1.0e-5));
+      }
+
+      const normVal = Math.max(0, Math.min(1.0, (db - minDb) * dbRangeInv));
 
       // Smooth decay
       this.spectrumBars[b] = Math.max(normVal, this.spectrumBars[b] * 0.88);

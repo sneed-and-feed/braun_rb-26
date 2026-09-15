@@ -233,58 +233,75 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     const float shimmerWeight = sSend * std::cos(blendAngle);
     const float dimmerWeight  = dSend * std::sin(blendAngle);
 
-    // 1. Shimmer Loop: Inject dry + pitch feedback, filter (600Hz-8kHz, 250Hz DC), shift, saturate
-    const float shimInL = inL + fb * mRecircShimmerL;
-    const float shimInR = inR + fb * mRecircShimmerR;
+    // Bounded internal feedback gain strictly avoiding dual-closed-loop runaway
+    const float safeFb = std::clamp(fb * 0.35f, 0.0f, 0.35f);
 
-    const float shimFiltL = mShimmerFilterL.process(shimInL);
-    const float shimFiltR = mShimmerFilterR.process(shimInR);
+    // 1. Shimmer Loop: Scale input by send weight, inject bounded feedback, filter, shift, saturate
+    float shimSatL = 0.0f;
+    float shimSatR = 0.0f;
+    if (shimmerWeight > 1.0e-5f || std::abs(mRecircShimmerL) > 1.0e-5f || std::abs(mRecircShimmerR) > 1.0e-5f) {
+        const float shimInL = inL * shimmerWeight + safeFb * mRecircShimmerL;
+        const float shimInR = inR * shimmerWeight + safeFb * mRecircShimmerR;
 
-    float shimRawL = mShimmerShifterL.processSample(shimFiltL);
-    float shimRawR = mShimmerShifterR.processSample(shimFiltR);
+        const float shimFiltL = mShimmerFilterL.process(shimInL);
+        const float shimFiltR = mShimmerFilterR.process(shimInR);
 
-    // If BarberShimmer mode is active, crossfade shimmer signal with continuous Shepard spiral
-    if (spiralDepth > 0.001f && mSpiralMode == static_cast<int>(ShepardPitchSpiral::SpiralMode::BarberShimmer)) {
-        float spiralOutL = 0.0f, spiralOutR = 0.0f;
-        mShepardSpiral.processSample(shimFiltL, shimFiltR, spiralOutL, spiralOutR);
-        shimRawL = (1.0f - spiralDepth) * shimRawL + spiralDepth * spiralOutL;
-        shimRawR = (1.0f - spiralDepth) * shimRawR + spiralDepth * spiralOutR;
+        float shimRawL = mShimmerShifterL.processSample(shimFiltL);
+        float shimRawR = mShimmerShifterR.processSample(shimFiltR);
+
+        // If BarberShimmer mode is active, crossfade shimmer signal with continuous Shepard spiral
+        if (spiralDepth > 0.001f && mSpiralMode == static_cast<int>(ShepardPitchSpiral::SpiralMode::BarberShimmer)) {
+            float spiralOutL = 0.0f, spiralOutR = 0.0f;
+            mShepardSpiral.processSample(shimFiltL, shimFiltR, spiralOutL, spiralOutR);
+            shimRawL = (1.0f - spiralDepth) * shimRawL + spiralDepth * spiralOutL;
+            shimRawR = (1.0f - spiralDepth) * shimRawR + spiralDepth * spiralOutR;
+        }
+
+        shimSatL = mShimmerSaturatorL.processSample(shimRawL);
+        shimSatR = mShimmerSaturatorR.processSample(shimRawR);
+
+        mRecircShimmerL = shimSatL;
+        mRecircShimmerR = shimSatR;
+    } else {
+        mRecircShimmerL = 0.0f;
+        mRecircShimmerR = 0.0f;
     }
 
-    const float shimSatL = mShimmerSaturatorL.processSample(shimRawL);
-    const float shimSatR = mShimmerSaturatorR.processSample(shimRawR);
+    // 2. Dimmer Loop: Scale input by send weight, inject bounded feedback, filter, shift, saturate
+    float dimSatL = 0.0f;
+    float dimSatR = 0.0f;
+    if (dimmerWeight > 1.0e-5f || std::abs(mRecircDimmerL) > 1.0e-5f || std::abs(mRecircDimmerR) > 1.0e-5f) {
+        const float dimInL = inL * dimmerWeight + safeFb * mRecircDimmerL;
+        const float dimInR = inR * dimmerWeight + safeFb * mRecircDimmerR;
 
-    mRecircShimmerL = shimSatL;
-    mRecircShimmerR = shimSatR;
+        const float dimFiltL = mDimmerFilterL.process(dimInL);
+        const float dimFiltR = mDimmerFilterR.process(dimInR);
 
-    // 2. Dimmer Loop: Inject dry + pitch feedback, filter (60Hz-1.2kHz), shift, saturate
-    const float dimInL = inL + fb * mRecircDimmerL;
-    const float dimInR = inR + fb * mRecircDimmerR;
+        float dimRawL = mDimmerShifterL.processSample(dimFiltL);
+        float dimRawR = mDimmerShifterR.processSample(dimFiltR);
 
-    const float dimFiltL = mDimmerFilterL.process(dimInL);
-    const float dimFiltR = mDimmerFilterR.process(dimInR);
+        // If BarberDimmer or PartchLattice mode is active, crossfade dimmer signal with Shepard spiral
+        if (spiralDepth > 0.001f && (mSpiralMode == static_cast<int>(ShepardPitchSpiral::SpiralMode::BarberDimmer) ||
+                                     mSpiralMode == static_cast<int>(ShepardPitchSpiral::SpiralMode::PartchLattice))) {
+            float spiralOutL = 0.0f, spiralOutR = 0.0f;
+            mShepardSpiral.processSample(dimFiltL, dimFiltR, spiralOutL, spiralOutR);
+            dimRawL = (1.0f - spiralDepth) * dimRawL + spiralDepth * spiralOutL;
+            dimRawR = (1.0f - spiralDepth) * dimRawR + spiralDepth * spiralOutR;
+        }
 
-    float dimRawL = mDimmerShifterL.processSample(dimFiltL);
-    float dimRawR = mDimmerShifterR.processSample(dimFiltR);
+        dimSatL = mDimmerSaturatorL.processSample(dimRawL);
+        dimSatR = mDimmerSaturatorR.processSample(dimRawR);
 
-    // If BarberDimmer or PartchLattice mode is active, crossfade dimmer signal with Shepard spiral
-    if (spiralDepth > 0.001f && (mSpiralMode == static_cast<int>(ShepardPitchSpiral::SpiralMode::BarberDimmer) ||
-                                 mSpiralMode == static_cast<int>(ShepardPitchSpiral::SpiralMode::PartchLattice))) {
-        float spiralOutL = 0.0f, spiralOutR = 0.0f;
-        mShepardSpiral.processSample(dimFiltL, dimFiltR, spiralOutL, spiralOutR);
-        dimRawL = (1.0f - spiralDepth) * dimRawL + spiralDepth * spiralOutL;
-        dimRawR = (1.0f - spiralDepth) * dimRawR + spiralDepth * spiralOutR;
+        mRecircDimmerL = dimSatL;
+        mRecircDimmerR = dimSatR;
+    } else {
+        mRecircDimmerL = 0.0f;
+        mRecircDimmerR = 0.0f;
     }
 
-    const float dimSatL = mDimmerSaturatorL.processSample(dimRawL);
-    const float dimSatR = mDimmerSaturatorR.processSample(dimRawR);
-
-    mRecircDimmerL = dimSatL;
-    mRecircDimmerR = dimSatR;
-
-    // 3. Composite Output: Equal-power weighted sum of Shimmer and Dimmer
-    outL = flushDenormal(shimmerWeight * shimSatL + dimmerWeight * dimSatL);
-    outR = flushDenormal(shimmerWeight * shimSatR + dimmerWeight * dimSatR);
+    // 3. Composite Output: Sum of already send-weighted Shimmer and Dimmer
+    outL = flushDenormal(shimSatL + dimSatL);
+    outR = flushDenormal(shimSatR + dimSatR);
 }
 
 void PitchShifter::process(const float* inL,

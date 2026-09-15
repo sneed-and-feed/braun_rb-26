@@ -242,7 +242,7 @@ export class Rb26WebEngine {
 
     // --- Input Stage with Calibrated Headroom ---
     this.inputGain = ctx.createGain();
-    const inputLinear = Math.pow(10, this.params.inputTrimDb / 20) * 0.85;
+    const inputLinear = Math.pow(10, this.params.inputTrimDb / 20) * 1.0;
     this.inputGain.gain.setValueAtTime(inputLinear, ctx.currentTime);
 
     this.preDelayNode = ctx.createDelay(0.5);
@@ -352,7 +352,7 @@ export class Rb26WebEngine {
 
     // --- Early Reflections (12-Tap Decorrelated Cluster) ---
     this.earlyReflectionsBus = ctx.createGain();
-    this.earlyReflectionsBus.gain.setValueAtTime(0.50, ctx.currentTime);
+    this.earlyReflectionsBus.gain.setValueAtTime(0.707, ctx.currentTime);
     const erTimes = [0.007, 0.013, 0.019, 0.023, 0.029, 0.037, 0.043, 0.053, 0.061, 0.071, 0.083, 0.097];
     const erGains = [0.85, 0.78, 0.72, 0.65, 0.58, 0.52, 0.46, 0.40, 0.35, 0.30, 0.25, 0.20];
 
@@ -360,7 +360,7 @@ export class Rb26WebEngine {
       const d = ctx.createDelay(0.2);
       d.delayTime.setValueAtTime(erTimes[i], ctx.currentTime);
       const g = ctx.createGain();
-      g.gain.setValueAtTime(erGains[i] * 0.10, ctx.currentTime);
+      g.gain.setValueAtTime(erGains[i] * 0.35, ctx.currentTime);
 
       this.highPass2.connect(d);
       d.connect(g);
@@ -369,7 +369,7 @@ export class Rb26WebEngine {
 
     // --- 8-Line Householder FDN Late Tank with Golden-Ratio LFO Modulation ---
     this.fdnInputBus = ctx.createGain();
-    this.fdnInputBus.gain.setValueAtTime(0.85, ctx.currentTime);
+    this.fdnInputBus.gain.setValueAtTime(1.0, ctx.currentTime);
     this.highPass2.connect(this.fdnInputBus);
 
     this.fdnSumBus = ctx.createGain();
@@ -525,10 +525,10 @@ export class Rb26WebEngine {
     this.dimmerLp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.shimmerSendGain = ctx.createGain();
-    this.shimmerSendGain.gain.setValueAtTime(this.params.shimmerSend * 0.50, ctx.currentTime);
+    this.shimmerSendGain.gain.setValueAtTime(this.params.shimmerSend, ctx.currentTime);
 
     this.dimmerSendGain = ctx.createGain();
-    this.dimmerSendGain.gain.setValueAtTime(this.params.dimmerSend * 0.50, ctx.currentTime);
+    this.dimmerSendGain.gain.setValueAtTime(this.params.dimmerSend, ctx.currentTime);
 
     // Routing into Shimmer: FDN Sum -> Send -> HPF -> LPF1 -> LPF2 -> PitchShifter
     this.hermiteSaturator.connect(this.shimmerSendGain);
@@ -545,7 +545,7 @@ export class Rb26WebEngine {
 
     // Pitch Blend Macro & Recirculation Feedback
     this.pitchReturnBus = ctx.createGain();
-    this.pitchReturnBus.gain.setValueAtTime(0.60, ctx.currentTime);
+    this.pitchReturnBus.gain.setValueAtTime(0.85, ctx.currentTime);
     this.pitchBlendGainShim = ctx.createGain();
     this.pitchBlendGainDim = ctx.createGain();
 
@@ -582,8 +582,11 @@ export class Rb26WebEngine {
     // --- Master Bus & Summing ---
     this.earlyMixGain = ctx.createGain();
     this.lateMixGain = ctx.createGain();
-    this.earlyMixGain.gain.setValueAtTime(1.0 - this.params.earlyLateMix, ctx.currentTime);
-    this.lateMixGain.gain.setValueAtTime(this.params.earlyLateMix, ctx.currentTime);
+    const elMix = this.params.earlyLateMix;
+    const earlyGain = Math.cos(elMix * 0.5 * Math.PI);
+    const lateGain = Math.sin(elMix * 0.5 * Math.PI);
+    this.earlyMixGain.gain.setValueAtTime(earlyGain, ctx.currentTime);
+    this.lateMixGain.gain.setValueAtTime(lateGain, ctx.currentTime);
 
     this.earlyReflectionsBus.connect(this.earlyMixGain);
     this.hermiteSaturator.connect(this.lateMixGain);
@@ -629,6 +632,12 @@ export class Rb26WebEngine {
     this.analyserR = ctx.createAnalyser();
     this.analyserL.fftSize = 512;
     this.analyserR.fftSize = 512;
+    this.analyserL.minDecibels = -95;
+    this.analyserL.maxDecibels = -10;
+    this.analyserR.minDecibels = -95;
+    this.analyserR.maxDecibels = -10;
+    this.analyserL.smoothingTimeConstant = 0.8;
+    this.analyserR.smoothingTimeConstant = 0.8;
 
     const splitter = ctx.createChannelSplitter(2);
     this.masterLimiter.connect(splitter);
@@ -970,17 +979,20 @@ export class Rb26WebEngine {
         }
         break;
       case 'inputTrimDb': {
-        const lin = Math.pow(10, value / 20) * 0.85;
+        const lin = Math.pow(10, value / 20) * 1.0;
         this.inputGain.gain.setTargetAtTime(lin, now, 0.02);
         break;
       }
       case 'dryWetMix':
         this._updateDryWetGains();
         break;
-      case 'earlyLateMix':
-        this.earlyMixGain.gain.setTargetAtTime(1.0 - value, now, 0.02);
-        this.lateMixGain.gain.setTargetAtTime(value, now, 0.02);
+      case 'earlyLateMix': {
+        const eg = Math.cos(value * 0.5 * Math.PI);
+        const lg = Math.sin(value * 0.5 * Math.PI);
+        this.earlyMixGain.gain.setTargetAtTime(eg, now, 0.02);
+        this.lateMixGain.gain.setTargetAtTime(lg, now, 0.02);
         break;
+      }
       case 'lowCrossoverHz':
         this.lowPass1.frequency.setTargetAtTime(value, now, 0.02);
         this.lowPass2.frequency.setTargetAtTime(value, now, 0.02);
@@ -1041,7 +1053,9 @@ export class Rb26WebEngine {
         const targetDelays = nextBank === 'A' ? this.fdnDelaysA : this.fdnDelaysB;
         const targetXf = nextBank === 'A' ? this.fdnXfadeA : this.fdnXfadeB;
         const currentXf = nextBank === 'A' ? this.fdnXfadeB : this.fdnXfadeA;
-        const xfadeSec = 0.080; // 80ms click-free S-curve crossfade (75-100 ms window)
+        const elapsed = (this._lastRoomSizeTime !== undefined) ? (now - this._lastRoomSizeTime) : 1.0;
+        this._lastRoomSizeTime = now;
+        const xfadeSec = Math.max(0.012, Math.min(0.080, elapsed > 0.005 ? elapsed : 0.080));
 
         // 1. Strictly cancel overlapping scheduled crossfades and ensure inactive bank is 100% muted
         for (let i = 0; i < 8; i++) {
@@ -1097,7 +1111,7 @@ export class Rb26WebEngine {
       case 'freezeHold': {
         const isFrozen = Boolean(value);
         if (this.fdnInputBus) {
-          this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 0.85, now, 0.02);
+          this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 1.0, now, 0.02);
         }
         this._updateFdnDecayGains();
         this._updateModalDecayGains();
@@ -1105,12 +1119,12 @@ export class Rb26WebEngine {
       }
       case 'shimmerSend':
         if (this.shimmerSendGain) {
-          this.shimmerSendGain.gain.setTargetAtTime(value * 0.50, now, 0.02);
+          this.shimmerSendGain.gain.setTargetAtTime(value, now, 0.02);
         }
         break;
       case 'dimmerSend':
         if (this.dimmerSendGain) {
-          this.dimmerSendGain.gain.setTargetAtTime(value * 0.50, now, 0.02);
+          this.dimmerSendGain.gain.setTargetAtTime(value, now, 0.02);
         }
         break;
       case 'shimmerInterval':
@@ -1364,6 +1378,11 @@ export class Rb26WebEngine {
       const win = Math.sin((Math.PI * i) / Math.max(1, length - 1));
       d[i] = pink * win * 0.85;
     }
+
+    let dcSum = 0;
+    for (let i = 0; i < length; i++) dcSum += d[i];
+    const mean = dcSum / length;
+    for (let i = 0; i < length; i++) d[i] -= mean;
 
     const src = ctx.createBufferSource();
     src.buffer = buf;

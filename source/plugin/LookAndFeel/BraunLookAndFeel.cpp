@@ -633,7 +633,11 @@ void CrtVisualizerComponent::drawSpectrum(juce::Graphics& g, juce::Rectangle<flo
         }
         mag /= (float)step;
 
-        float barHeight = juce::jlimit(2.0f, area.getHeight() * 0.8f, mag * area.getHeight() * 2.5f);
+        // Calibrate magnitude against [-95.0f, -10.0f] dBFS range matching Web CRT visualizer
+        const float db = 20.0f * std::log10(std::max(mag, 1.0e-5f));
+        const float normVal = std::clamp((db - (-95.0f)) / (-10.0f - (-95.0f)), 0.0f, 1.0f);
+        const float maxBarH = area.getHeight() * 0.8f;
+        const float barHeight = juce::jlimit(2.0f, maxBarH, normVal * maxBarH);
         auto barRect = juce::Rectangle<float>(startX + (float)b * bandWidth + 1.0f,
                                               bottomY - barHeight,
                                               bandWidth - 2.0f,
