@@ -215,21 +215,21 @@ async function runBrowserTest() {
     console.log(`[BrowserTest] localStorage braun_rb26_theme: "${savedTheme}"`);
     if (savedTheme !== 'dark') throw new Error(`Expected localStorage theme to be "dark", got "${savedTheme}"`);
 
-    // Test Preset Loading (Classic + Non-Euclidean)
+    // Test Preset Loading (Classic + Companion)
     console.log('[BrowserTest] Testing preset loading (AMBIENT_GUITAR_CLOUD)...');
     await evaluate(`window.__RB26__.loadPreset('AMBIENT_GUITAR_CLOUD')`);
     const rt60Val = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
-    console.log(`[BrowserTest] Loaded AMBIENT_GUITAR_CLOUD RT60: ${rt60Val}s (expected 16s)`);
-    if (Math.abs(rt60Val - 16.0) > 0.1) {
-      throw new Error(`Expected RT60 approx 16.0, got ${rt60Val}`);
+    console.log(`[BrowserTest] Loaded AMBIENT_GUITAR_CLOUD RT60: ${rt60Val}s (expected 9.5s)`);
+    if (Math.abs(rt60Val - 9.5) > 0.1) {
+      throw new Error(`Expected RT60 approx 9.5, got ${rt60Val}`);
     }
 
-    console.log('[BrowserTest] Testing Non-Euclidean preset loading (POINCARE_CAVITY)...');
-    await evaluate(`window.__RB26__.loadPreset('POINCARE_CAVITY')`);
-    const poincareRt60 = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
-    console.log(`[BrowserTest] Loaded POINCARE_CAVITY RT60: ${poincareRt60}s (expected 8.5s)`);
-    if (Math.abs(poincareRt60 - 8.5) > 0.1) {
-      throw new Error(`Expected RT60 approx 8.5, got ${poincareRt60}`);
+    console.log('[BrowserTest] Testing companion preset loading (AS42_SHIMMER_COMPANION)...');
+    await evaluate(`window.__RB26__.loadPreset('AS42_SHIMMER_COMPANION')`);
+    const as42Rt60 = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
+    console.log(`[BrowserTest] Loaded AS42_SHIMMER_COMPANION RT60: ${as42Rt60}s (expected 8.5s)`);
+    if (Math.abs(as42Rt60 - 8.5) > 0.1) {
+      throw new Error(`Expected RT60 approx 8.5, got ${as42Rt60}`);
     }
 
     // Test A/B Comparison Buffer
@@ -587,42 +587,223 @@ async function runBrowserTest() {
       throw new Error(`Rapid staccato pop detected! Max jump: ${staccatoTelemetry.maxStaccatoJump}`);
     }
 
-    // Test Polyphonic Chord Release Smoothness
-    console.log('[BrowserTest] Testing Polyphonic Chord Release Smoothness...');
-    await evaluate(`
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
-    `);
-    await new Promise(r => setTimeout(r, 120));
-    const chordReleaseTelemetry = await evaluate(`
+    // Test Keyboard Chime Key Sustain (100ms & 500ms Hold) and Keyup Smoothness
+    console.log('[BrowserTest] Testing Keyboard Chime Key Sustain (100ms & 500ms Hold) and Keyup Smoothness...');
+    const chimeHoldResult = await evaluate(`
       (async () => {
-        window.dispatchEvent(new KeyboardEvent('keyup', { key: '1', bubbles: true }));
-        let maxChordJump = 0;
-        for (let pass = 0; pass < 4; pass++) {
+        let chimeInvocations = 0;
+        const origPlayChime = window.__RB26__.playChime;
+        window.__RB26__.playChime = function(...args) {
+          chimeInvocations++;
+          return origPlayChime.apply(this, args);
+        };
+
+        // 1. Chime short hold (100ms)
+        chimeInvocations = 0;
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', repeat: true, bubbles: true }));
+        await new Promise(r => setTimeout(r, 100));
+        const invocationsDuring100ms = chimeInvocations;
+
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
+        let maxJump100ms = 0;
+        for (let pass = 0; pass < 5; pass++) {
           const buf = new Float32Array(512);
           window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
           for (let i = 1; i < buf.length; i++) {
             const diff = Math.abs(buf[i] - buf[i - 1]);
-            if (diff > maxChordJump) maxChordJump = diff;
+            if (diff > maxJump100ms) maxJump100ms = diff;
           }
           await new Promise(r => setTimeout(r, 10));
         }
+        await new Promise(r => setTimeout(r, 300));
+        const invocationsAfter100msKeyUp = chimeInvocations;
+        const activeVoicesAfter100ms = window.__RB26__._activeVoices.size;
 
-        await new Promise(r => setTimeout(r, 800));
+        // 2. Chime sustained hold (500ms) with repeated typematic events
+        chimeInvocations = 0;
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
+        for (let i = 0; i < 5; i++) {
+          await new Promise(r => setTimeout(r, 80));
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', repeat: true, bubbles: true }));
+          // Test resilience against unflagged repeat events
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', repeat: false, bubbles: true }));
+        }
+        await new Promise(r => setTimeout(r, 100));
+        const invocationsDuring500ms = chimeInvocations;
+
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 's', bubbles: true }));
+        let maxJump500ms = 0;
+        for (let pass = 0; pass < 5; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxJump500ms) maxJump500ms = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+        await new Promise(r => setTimeout(r, 300));
+        const invocationsAfter500msKeyUp = chimeInvocations;
+        const activeVoicesAfter500ms = window.__RB26__._activeVoices.size;
+
+        window.__RB26__.playChime = origPlayChime;
+
+        return {
+          invocationsDuring100ms,
+          invocationsAfter100msKeyUp,
+          maxJump100ms,
+          activeVoicesAfter100ms,
+          invocationsDuring500ms,
+          invocationsAfter500msKeyUp,
+          maxJump500ms,
+          activeVoicesAfter500ms
+        };
+      })()
+    `);
+    console.log('[BrowserTest] Chime hold 100ms: calls during hold =', chimeHoldResult.invocationsDuring100ms, ', after keyup =', chimeHoldResult.invocationsAfter100msKeyUp, ', max jump =', chimeHoldResult.maxJump100ms.toFixed(4));
+    console.log('[BrowserTest] Chime hold 500ms: calls during hold =', chimeHoldResult.invocationsDuring500ms, ', after keyup =', chimeHoldResult.invocationsAfter500msKeyUp, ', max jump =', chimeHoldResult.maxJump500ms.toFixed(4));
+    if (chimeHoldResult.invocationsDuring100ms !== 1) throw new Error(`Expected exactly 1 chime invocation during 100ms hold, got ${chimeHoldResult.invocationsDuring100ms}`);
+    if (chimeHoldResult.invocationsAfter100msKeyUp !== 1) throw new Error(`Expected 0 secondary chime triggers on 100ms keyup, got ${chimeHoldResult.invocationsAfter100msKeyUp}`);
+    if (chimeHoldResult.maxJump100ms >= 0.05) throw new Error(`Chime 100ms release jump exceeds 0.05 threshold: ${chimeHoldResult.maxJump100ms}`);
+    if (chimeHoldResult.activeVoicesAfter100ms !== 0) throw new Error(`Expected 0 active voices after 100ms keyup, got ${chimeHoldResult.activeVoicesAfter100ms}`);
+    if (chimeHoldResult.invocationsDuring500ms !== 1) throw new Error(`Expected exactly 1 chime invocation during 500ms hold, got ${chimeHoldResult.invocationsDuring500ms}`);
+    if (chimeHoldResult.invocationsAfter500msKeyUp !== 1) throw new Error(`Expected 0 secondary chime triggers on 500ms keyup, got ${chimeHoldResult.invocationsAfter500msKeyUp}`);
+    if (chimeHoldResult.maxJump500ms >= 0.05) throw new Error(`Chime 500ms release jump exceeds 0.05 threshold: ${chimeHoldResult.maxJump500ms}`);
+    if (chimeHoldResult.activeVoicesAfter500ms !== 0) throw new Error(`Expected 0 active voices after 500ms keyup, got ${chimeHoldResult.activeVoicesAfter500ms}`);
+
+    // Test Keyboard Chord Key Sustain (100ms & 500ms Hold) and Keyup Smoothness
+    console.log('[BrowserTest] Testing Keyboard Chord Key Sustain (100ms & 500ms Hold) and Keyup Smoothness...');
+    const chordHoldResult = await evaluate(`
+      (async () => {
+        let chordInvocations = 0;
+        const origPlayChord = window.__RB26__.playChord;
+        window.__RB26__.playChord = function(...args) {
+          chordInvocations++;
+          return origPlayChord.apply(this, args);
+        };
+
+        const chordBtn0 = document.querySelector('.braun-chord-btn[data-chord-index="0"]');
+        const chordBtn1 = document.querySelector('.braun-chord-btn[data-chord-index="1"]');
+
+        // 1. Chord short hold (100ms) on key '1'
+        chordInvocations = 0;
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', repeat: true, bubbles: true }));
+        await new Promise(r => setTimeout(r, 100));
+        const chordDuring100ms = chordInvocations;
+        const btn0ActiveDuringHold = chordBtn0 ? chordBtn0.classList.contains('is-active') : false;
+
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: '1', bubbles: true }));
+        let maxChordJump100ms = 0;
+        for (let pass = 0; pass < 5; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxChordJump100ms) maxChordJump100ms = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+        await new Promise(r => setTimeout(r, 400));
+        const chordAfter100msKeyUp = chordInvocations;
+        const activeVoicesAfterChord100ms = window.__RB26__._activeVoices.size;
+        const btn0ActiveAfterKeyUp = chordBtn0 ? chordBtn0.classList.contains('is-active') : false;
+
+        // 2. Chord sustained hold (500ms) on key '2' with repeated typematic events
+        chordInvocations = 0;
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', bubbles: true }));
+        for (let i = 0; i < 5; i++) {
+          await new Promise(r => setTimeout(r, 80));
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', repeat: true, bubbles: true }));
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', repeat: false, bubbles: true }));
+        }
+        await new Promise(r => setTimeout(r, 100));
+        const chordDuring500ms = chordInvocations;
+        const btn1ActiveDuringHold = chordBtn1 ? chordBtn1.classList.contains('is-active') : false;
+
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: '2', bubbles: true }));
+        let maxChordJump500ms = 0;
+        for (let pass = 0; pass < 5; pass++) {
+          const buf = new Float32Array(512);
+          window.__RB26__.engine.analyserL.getFloatTimeDomainData(buf);
+          for (let i = 1; i < buf.length; i++) {
+            const diff = Math.abs(buf[i] - buf[i - 1]);
+            if (diff > maxChordJump500ms) maxChordJump500ms = diff;
+          }
+          await new Promise(r => setTimeout(r, 10));
+        }
+        await new Promise(r => setTimeout(r, 600));
+        const chordAfter500msKeyUp = chordInvocations;
+        const activeVoicesAfterChord500ms = window.__RB26__._activeVoices.size;
+        const btn1ActiveAfterKeyUp = chordBtn1 ? chordBtn1.classList.contains('is-active') : false;
+
+        // Verify decay after release tail
         const finalBuf = new Float32Array(512);
         window.__RB26__.engine.analyserL.getFloatTimeDomainData(finalBuf);
         let finalRms = 0;
         for (let i = 0; i < finalBuf.length; i++) finalRms += finalBuf[i] * finalBuf[i];
         finalRms = Math.sqrt(finalRms / finalBuf.length);
-        return { maxChordJump, finalRms };
+
+        window.__RB26__.playChord = origPlayChord;
+
+        return {
+          chordDuring100ms,
+          chordAfter100msKeyUp,
+          maxChordJump100ms,
+          activeVoicesAfterChord100ms,
+          btn0ActiveDuringHold,
+          btn0ActiveAfterKeyUp,
+          chordDuring500ms,
+          chordAfter500msKeyUp,
+          maxChordJump500ms,
+          activeVoicesAfterChord500ms,
+          btn1ActiveDuringHold,
+          btn1ActiveAfterKeyUp,
+          finalRms
+        };
       })()
     `);
-    console.log(`[BrowserTest] Chord release max jump: ${chordReleaseTelemetry.maxChordJump.toFixed(4)}, final RMS: ${chordReleaseTelemetry.finalRms.toFixed(6)}`);
-    if (chordReleaseTelemetry.maxChordJump >= 0.20) {
-      throw new Error(`Chord release pop discontinuity detected! Max jump: ${chordReleaseTelemetry.maxChordJump}`);
-    }
-    if (chordReleaseTelemetry.finalRms >= 0.04) {
-      throw new Error(`Chord did not decay to silence after release tail! Final RMS: ${chordReleaseTelemetry.finalRms}`);
-    }
+    console.log('[BrowserTest] Chord hold 100ms: calls during hold =', chordHoldResult.chordDuring100ms, ', after keyup =', chordHoldResult.chordAfter100msKeyUp, ', max jump =', chordHoldResult.maxChordJump100ms.toFixed(4));
+    console.log('[BrowserTest] Chord hold 500ms: calls during hold =', chordHoldResult.chordDuring500ms, ', after keyup =', chordHoldResult.chordAfter500msKeyUp, ', max jump =', chordHoldResult.maxChordJump500ms.toFixed(4), ', final RMS =', chordHoldResult.finalRms.toFixed(6));
+    if (chordHoldResult.chordDuring100ms !== 1) throw new Error(`Expected exactly 1 chord invocation during 100ms hold, got ${chordHoldResult.chordDuring100ms}`);
+    if (chordHoldResult.chordAfter100msKeyUp !== 1) throw new Error(`Expected 0 secondary chord triggers on 100ms keyup, got ${chordHoldResult.chordAfter100msKeyUp}`);
+    if (!chordHoldResult.btn0ActiveDuringHold) throw new Error('Expected chord button 0 to be active during hold');
+    if (chordHoldResult.btn0ActiveAfterKeyUp) throw new Error('Expected chord button 0 to clear active class on keyup');
+    if (chordHoldResult.maxChordJump100ms >= 0.05) throw new Error(`Chord 100ms release jump exceeds 0.05 threshold: ${chordHoldResult.maxChordJump100ms}`);
+    if (chordHoldResult.activeVoicesAfterChord100ms !== 0) throw new Error(`Expected 0 active voices after chord 100ms keyup, got ${chordHoldResult.activeVoicesAfterChord100ms}`);
+
+    if (chordHoldResult.chordDuring500ms !== 1) throw new Error(`Expected exactly 1 chord invocation during 500ms hold, got ${chordHoldResult.chordDuring500ms}`);
+    if (chordHoldResult.chordAfter500msKeyUp !== 1) throw new Error(`Expected 0 secondary chord triggers on 500ms keyup, got ${chordHoldResult.chordAfter500msKeyUp}`);
+    if (!chordHoldResult.btn1ActiveDuringHold) throw new Error('Expected chord button 1 to be active during hold');
+    if (chordHoldResult.btn1ActiveAfterKeyUp) throw new Error('Expected chord button 1 to clear active class on keyup');
+    if (chordHoldResult.maxChordJump500ms >= 0.05) throw new Error(`Chord 500ms release jump exceeds 0.05 threshold: ${chordHoldResult.maxChordJump500ms}`);
+    if (chordHoldResult.activeVoicesAfterChord500ms !== 0) throw new Error(`Expected 0 active voices after chord 500ms keyup, got ${chordHoldResult.activeVoicesAfterChord500ms}`);
+    if (chordHoldResult.finalRms >= 0.04) throw new Error(`Chord did not decay to silence after release tail! Final RMS: ${chordHoldResult.finalRms}`);
+
+    // Test Window Blur Safety Release
+    console.log('[BrowserTest] Testing Window Blur Safety Release...');
+    const blurResult = await evaluate(`
+      (() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true }));
+        const voicesBeforeBlur = window.__RB26__._activeVoices.size;
+        const heldKeysBeforeBlur = window.__RB26__._heldKeys.size;
+
+        window.dispatchEvent(new Event('blur'));
+
+        const voicesAfterBlur = window.__RB26__._activeVoices.size;
+        const heldKeysAfterBlur = window.__RB26__._heldKeys.size;
+        const activeButtonsAfterBlur = document.querySelectorAll('.braun-chime-key.is-active, .braun-chord-btn.is-active').length;
+
+        return { voicesBeforeBlur, heldKeysBeforeBlur, voicesAfterBlur, heldKeysAfterBlur, activeButtonsAfterBlur };
+      })()
+    `);
+    console.log('[BrowserTest] Window blur result: before =', blurResult.voicesBeforeBlur, 'voices,', blurResult.heldKeysBeforeBlur, 'keys; after =', blurResult.voicesAfterBlur, 'voices,', blurResult.heldKeysAfterBlur, 'keys,', blurResult.activeButtonsAfterBlur, 'active DOM elements');
+    if (blurResult.voicesBeforeBlur === 0) throw new Error('Expected active voices before blur');
+    if (blurResult.voicesAfterBlur !== 0) throw new Error(`Expected 0 active voices after window blur, got ${blurResult.voicesAfterBlur}`);
+    if (blurResult.heldKeysAfterBlur !== 0) throw new Error(`Expected 0 held keys after window blur, got ${blurResult.heldKeysAfterBlur}`);
+    if (blurResult.activeButtonsAfterBlur !== 0) throw new Error(`Expected 0 active DOM button styles after window blur, got ${blurResult.activeButtonsAfterBlur}`);
 
     // Restore previous dry/wet mix
     await evaluate(`window.__RB26__.knobs.dry_wet_mix.setValue(${prevDryWet}, true)`);

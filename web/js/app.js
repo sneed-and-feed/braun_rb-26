@@ -3,7 +3,7 @@
  * @brief Application Coordinator, Master Utilities & Exciter Controller for BRAUN RB-26 Web Showcase
  * Features:
  * - Bulletproof Lifecycle Guard & Audio Context Unlock
- * - Curated 12-Preset Factory Bank + User Preset Persistence in LocalStorage
+ * - Curated 10-Preset Factory Bank + User Preset Persistence in LocalStorage
  * - RFC 8259 JSON Patch Export & Drag-and-Drop Chassis Load
  * - Instant A/B Comparison Buffer with Copy Utilities
  * - Lossless 16-bit 48kHz WAV Master Output Bus Recorder
@@ -52,7 +52,7 @@ export const CHORD_VOICINGS = [
   { id: 'CLUSTER', name: 'CLUSTER', freqs: [220.00, 233.08, 246.94, 261.63, 277.18] }    // Inharmonic Cluster (A3, Bb3, B3, C4, C#4)
 ];
 
-// Curated 12 Factory Presets (8 Classic + 4 Non-Euclidean Spaces)
+// Curated 10 Studio Factory Presets
 export const FACTORY_PRESETS = {
   DEFAULT: {
     name: 'CALIBRATED DEFAULT',
@@ -70,143 +70,13 @@ export const FACTORY_PRESETS = {
   AMBIENT_GUITAR_CLOUD: {
     name: 'AMBIENT GUITAR CLOUD',
     params: {
-      predelay: 45.0, diffusion: 90, input_trim: -2.0,
-      low_crossover: 220, damping_low: 1.2, low_punch: 40, mono_bass: 140,
-      rt60_decay: 16.0, room_size: 140, damping_high: 9500, decay_hold: false,
-      shimmer_send: 70, dimmer_send: 20, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 45, pitch_regen: 60,
-      tail_mod_rate: 0.40, tail_mod_depth: 70, tail_bloom: 120,
-      stereo_width: 150, early_late_mix: 75, dry_wet_mix: 65, output_trim: -1.5,
-      soft_limiter: true
-    }
-  },
-  ETHEREAL_SYNTH_PAD: {
-    name: 'ETHEREAL SYNTH PAD',
-    params: {
-      predelay: 35.0, diffusion: 80, input_trim: 0.0,
-      low_crossover: 160, damping_low: 0.9, low_punch: 50, mono_bass: 100,
-      rt60_decay: 10.5, room_size: 120, damping_high: 8500, decay_hold: false,
-      shimmer_send: 55, dimmer_send: 50, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 10, pitch_regen: 50,
-      tail_mod_rate: 0.80, tail_mod_depth: 55, tail_bloom: 90,
-      stereo_width: 140, early_late_mix: 60, dry_wet_mix: 50, output_trim: 0.0,
-      soft_limiter: true
-    }
-  },
-  CLUB_KICK_TIGHT: {
-    name: 'CLUB KICK TIGHT',
-    params: {
-      predelay: 10.0, diffusion: 60, input_trim: 0.0,
-      low_crossover: 140, damping_low: 0.5, low_punch: 90, mono_bass: 90,
-      rt60_decay: 1.2, room_size: 45, damping_high: 5000, decay_hold: false,
-      shimmer_send: 0, dimmer_send: 0, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 0, pitch_regen: 0,
-      tail_mod_rate: 0.20, tail_mod_depth: 10, tail_bloom: 30,
-      stereo_width: 90, early_late_mix: 30, dry_wet_mix: 25, output_trim: 0.0,
-      soft_limiter: true
-    }
-  },
-  DARK_SUB_DRONE: {
-    name: 'DARK SUB DRONE',
-    params: {
-      predelay: 60.0, diffusion: 85, input_trim: -1.0,
-      low_crossover: 280, damping_low: 2.0, low_punch: 30, mono_bass: 160,
-      rt60_decay: 14.0, room_size: 150, damping_high: 4200, decay_hold: false,
-      shimmer_send: 10, dimmer_send: 85, shimmer_interval: 12, dimmer_interval: -24,
-      shimmer_dimmer_blend: -80, pitch_regen: 65,
-      tail_mod_rate: 0.35, tail_mod_depth: 40, tail_bloom: 140,
-      stereo_width: 110, early_late_mix: 80, dry_wet_mix: 60, output_trim: -2.0,
-      soft_limiter: true
-    }
-  },
-  CATHEDRAL_SHIMMER: {
-    name: 'CATHEDRAL SHIMMER',
-    params: {
-      predelay: 50.0, diffusion: 95, input_trim: -2.0,
-      low_crossover: 200, damping_low: 1.0, low_punch: 45, mono_bass: 120,
-      rt60_decay: 22.0, room_size: 180, damping_high: 11000, decay_hold: false,
-      shimmer_send: 80, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 75, pitch_regen: 70,
-      tail_mod_rate: 0.50, tail_mod_depth: 65, tail_bloom: 150,
-      stereo_width: 160, early_late_mix: 85, dry_wet_mix: 70, output_trim: -3.0,
-      soft_limiter: true
-    }
-  },
-  INFINITE_FREEZE_DRONE: {
-    name: 'INFINITE FREEZE DRONE',
-    params: {
-      predelay: 20.0, diffusion: 90, input_trim: 0.0,
-      low_crossover: 180, damping_low: 1.0, low_punch: 50, mono_bass: 120,
-      rt60_decay: 30.0, room_size: 120, damping_high: 8000, decay_hold: true,
-      shimmer_send: 45, dimmer_send: 40, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 10, pitch_regen: 55,
-      tail_mod_rate: 0.70, tail_mod_depth: 60, tail_bloom: 85,
-      stereo_width: 130, early_late_mix: 70, dry_wet_mix: 55, output_trim: -1.0,
-      soft_limiter: true
-    }
-  },
-  SUB_BASS_PRESERVER: {
-    name: 'SUB-BASS PRESERVER',
-    params: {
-      predelay: 15.0, diffusion: 70, input_trim: 0.0,
-      low_crossover: 180, damping_low: 0.8, low_punch: 85, mono_bass: 150,
-      rt60_decay: 4.5, room_size: 80, damping_high: 6500, decay_hold: false,
-      shimmer_send: 25, dimmer_send: 20, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 0, pitch_regen: 35,
-      tail_mod_rate: 0.40, tail_mod_depth: 30, tail_bloom: 60,
-      stereo_width: 100, early_late_mix: 45, dry_wet_mix: 35, output_trim: 0.0,
-      soft_limiter: true
-    }
-  },
-  POINCARE_CAVITY: {
-    name: 'POINCARE HYPERBOLIC CAVITY',
-    params: {
-      predelay: 12.0, diffusion: 98, input_trim: 0.0,
-      low_crossover: 240, damping_low: 1.4, low_punch: 70, mono_bass: 130,
-      rt60_decay: 8.5, room_size: 160, damping_high: 6800, decay_hold: false,
-      shimmer_send: 30, dimmer_send: 45, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: -20, pitch_regen: 50,
-      tail_mod_rate: 1.20, tail_mod_depth: 60, tail_bloom: 65,
-      stereo_width: 175, early_late_mix: 65, dry_wet_mix: 45, output_trim: 0.0,
-      soft_limiter: true
-    }
-  },
-  WHISPERING_GALLERY: {
-    name: 'WHISPERING GALLERY CAUSTIC',
-    params: {
-      predelay: 8.0, diffusion: 95, input_trim: 0.0,
-      low_crossover: 180, damping_low: 0.7, low_punch: 55, mono_bass: 110,
-      rt60_decay: 14.5, room_size: 190, damping_high: 14000, decay_hold: false,
-      shimmer_send: 75, dimmer_send: 10, shimmer_interval: 7, dimmer_interval: -12,
-      shimmer_dimmer_blend: 80, pitch_regen: 65,
-      tail_mod_rate: 0.85, tail_mod_depth: 45, tail_bloom: 50,
-      stereo_width: 160, early_late_mix: 80, dry_wet_mix: 55, output_trim: -1.0,
-      soft_limiter: true
-    }
-  },
-  SPRUCE_SOUNDBOARD: {
-    name: 'ANHARMONIC SPRUCE SOUNDBOARD',
-    params: {
-      predelay: 18.0, diffusion: 85, input_trim: 0.0,
-      low_crossover: 320, damping_low: 1.8, low_punch: 75, mono_bass: 140,
-      rt60_decay: 5.2, room_size: 95, damping_high: 8200, decay_hold: false,
-      shimmer_send: 20, dimmer_send: 30, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: -15, pitch_regen: 40,
-      tail_mod_rate: 0.45, tail_mod_depth: 35, tail_bloom: 75,
-      stereo_width: 125, early_late_mix: 55, dry_wet_mix: 40, output_trim: 0.0,
-      soft_limiter: true
-    }
-  },
-  KLANGDOM_SPHERE: {
-    name: 'STOCKHAUSEN KLANGDOM SPHERE',
-    params: {
-      predelay: 35.0, diffusion: 92, input_trim: -1.0,
-      low_crossover: 200, damping_low: 1.1, low_punch: 50, mono_bass: 125,
-      rt60_decay: 18.0, room_size: 175, damping_high: 10500, decay_hold: false,
-      shimmer_send: 60, dimmer_send: 50, shimmer_interval: 12, dimmer_interval: -24,
-      shimmer_dimmer_blend: 20, pitch_regen: 60,
-      tail_mod_rate: 0.60, tail_mod_depth: 65, tail_bloom: 110,
-      stereo_width: 200, early_late_mix: 70, dry_wet_mix: 60, output_trim: -1.5,
+      predelay: 45.0, diffusion: 85, input_trim: 0.0,
+      low_crossover: 200, damping_low: 0.85, low_punch: 50, mono_bass: 140,
+      rt60_decay: 9.5, room_size: 130, damping_high: 9500, decay_hold: false,
+      shimmer_send: 48, dimmer_send: 0, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 100, pitch_regen: 42,
+      tail_mod_rate: 0.40, tail_mod_depth: 28, tail_bloom: 110,
+      stereo_width: 140, early_late_mix: 70, dry_wet_mix: 55, output_trim: 0.0,
       soft_limiter: true
     }
   },
@@ -222,8 +92,104 @@ export const FACTORY_PRESETS = {
       stereo_width: 120, early_late_mix: 55, dry_wet_mix: 45, output_trim: 0.0,
       soft_limiter: true
     }
+  },
+  SOFT_FELT_ACOUSTIC_HALL: {
+    name: 'SOFT FELT ACOUSTIC HALL',
+    params: {
+      predelay: 20.0, diffusion: 78, input_trim: 0.0,
+      low_crossover: 160, damping_low: 0.95, low_punch: 55, mono_bass: 110,
+      rt60_decay: 4.8, room_size: 90, damping_high: 5600, decay_hold: false,
+      shimmer_send: 15, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 20, pitch_regen: 25,
+      tail_mod_rate: 0.45, tail_mod_depth: 25, tail_bloom: 70,
+      stereo_width: 110, early_late_mix: 45, dry_wet_mix: 38, output_trim: 0.0,
+      soft_limiter: true
+    }
+  },
+  GERMAN_PLATE_140: {
+    name: 'GERMAN PLATE 140',
+    params: {
+      predelay: 10.0, diffusion: 92, input_trim: 0.0,
+      low_crossover: 220, damping_low: 0.8, low_punch: 70, mono_bass: 130,
+      rt60_decay: 3.8, room_size: 85, damping_high: 8500, decay_hold: false,
+      shimmer_send: 20, dimmer_send: 0, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 100, pitch_regen: 20,
+      tail_mod_rate: 0.80, tail_mod_depth: 20, tail_bloom: 45,
+      stereo_width: 130, early_late_mix: 40, dry_wet_mix: 35, output_trim: 0.0,
+      soft_limiter: true
+    }
+  },
+  CATHEDRAL_DIFFUSION: {
+    name: 'CATHEDRAL DIFFUSION',
+    params: {
+      predelay: 45.0, diffusion: 95, input_trim: -1.0,
+      low_crossover: 180, damping_low: 0.9, low_punch: 45, mono_bass: 120,
+      rt60_decay: 18.0, room_size: 175, damping_high: 10000, decay_hold: false,
+      shimmer_send: 65, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 75, pitch_regen: 55,
+      tail_mod_rate: 0.50, tail_mod_depth: 45, tail_bloom: 140,
+      stereo_width: 160, early_late_mix: 80, dry_wet_mix: 65, output_trim: -2.0,
+      soft_limiter: true
+    }
+  },
+  ETHEREAL_SYNTH_PAD: {
+    name: 'ETHEREAL SYNTH PAD',
+    params: {
+      predelay: 35.0, diffusion: 80, input_trim: 0.0,
+      low_crossover: 160, damping_low: 0.9, low_punch: 50, mono_bass: 100,
+      rt60_decay: 10.5, room_size: 120, damping_high: 8500, decay_hold: false,
+      shimmer_send: 55, dimmer_send: 40, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 25, pitch_regen: 45,
+      tail_mod_rate: 0.70, tail_mod_depth: 45, tail_bloom: 90,
+      stereo_width: 140, early_late_mix: 60, dry_wet_mix: 50, output_trim: 0.0,
+      soft_limiter: true
+    }
+  },
+  BLOOM_SHIMMER_VOID: {
+    name: 'BLOOM SHIMMER VOID',
+    params: {
+      predelay: 50.0, diffusion: 88, input_trim: -0.5,
+      low_crossover: 190, damping_low: 0.85, low_punch: 45, mono_bass: 130,
+      rt60_decay: 14.0, room_size: 150, damping_high: 9000, decay_hold: false,
+      shimmer_send: 60, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 80, pitch_regen: 50,
+      tail_mod_rate: 0.55, tail_mod_depth: 50, tail_bloom: 160,
+      stereo_width: 150, early_late_mix: 75, dry_wet_mix: 60, output_trim: -1.0,
+      soft_limiter: true
+    }
+  },
+  INFINITE_ETHEREAL_FREEZE: {
+    name: 'INFINITE ETHEREAL FREEZE',
+    params: {
+      predelay: 20.0, diffusion: 90, input_trim: 0.0,
+      low_crossover: 180, damping_low: 1.0, low_punch: 50, mono_bass: 120,
+      rt60_decay: 30.0, room_size: 120, damping_high: 8000, decay_hold: true,
+      shimmer_send: 45, dimmer_send: 30, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 20, pitch_regen: 50,
+      tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
+      stereo_width: 130, early_late_mix: 70, dry_wet_mix: 55, output_trim: -1.0,
+      soft_limiter: true
+    }
+  },
+  SUB_BASS_PRESERVER: {
+    name: 'SUB-BASS PRESERVER',
+    params: {
+      predelay: 15.0, diffusion: 70, input_trim: 0.0,
+      low_crossover: 180, damping_low: 0.8, low_punch: 85, mono_bass: 150,
+      rt60_decay: 4.5, room_size: 80, damping_high: 6500, decay_hold: false,
+      shimmer_send: 25, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 10, pitch_regen: 35,
+      tail_mod_rate: 0.40, tail_mod_depth: 30, tail_bloom: 60,
+      stereo_width: 100, early_late_mix: 45, dry_wet_mix: 35, output_trim: 0.0,
+      soft_limiter: true
+    }
   }
 };
+
+// Aliases for identifier compatibility
+FACTORY_PRESETS['SUB-BASS_PRESERVER'] = FACTORY_PRESETS.SUB_BASS_PRESERVER;
+FACTORY_PRESETS['CATHEDRAL_SHIMMER'] = FACTORY_PRESETS.CATHEDRAL_DIFFUSION;
+FACTORY_PRESETS['INFINITE_FREEZE_DRONE'] = FACTORY_PRESETS.INFINITE_ETHEREAL_FREEZE;
 
 /**
  * Quantizes an incoming MIDI pitch to the closest degree in the selected scale.
@@ -1523,8 +1489,13 @@ export class BraunRb26App {
         // Release any currently active voice on this button before re-triggering
         if (this._activeChordButtons.has(btn)) {
           const oldVoice = this._activeChordButtons.get(btn);
-          if (oldVoice && typeof oldVoice.release === 'function') oldVoice.release(0.05);
+          if (oldVoice && typeof oldVoice.release === 'function') oldVoice.release(0.28);
           this._activeChordButtons.delete(btn);
+        }
+        if (this._activeVoices && this._activeVoices.has(hotkey)) {
+          const oldKeyVoice = this._activeVoices.get(hotkey);
+          if (oldKeyVoice && typeof oldKeyVoice.release === 'function') oldKeyVoice.release(0.28);
+          this._activeVoices.delete(hotkey);
         }
 
         const voice = this.playChord(chordIndex);
@@ -1634,7 +1605,7 @@ export class BraunRb26App {
       e.stopPropagation();
 
       // Ignore browser typematic auto-repeat events so sustained notes hold cleanly rather than stuttering at OS repeat speed
-      if (e.repeat) {
+      if (e.repeat || (this._heldKeys && this._heldKeys.has(key))) {
         return;
       }
 
@@ -1657,6 +1628,32 @@ export class BraunRb26App {
       }
       this._handleKeyboardKeyUp(e);
     }, { capture: true });
+
+    // Safety release: clean up sustained voices and visual states if window loses focus
+    window.addEventListener('blur', () => {
+      if (this._activeVoices) {
+        this._activeVoices.forEach((voice) => {
+          if (voice && typeof voice.release === 'function') {
+            try { voice.release(0.28); } catch (_) {}
+          }
+        });
+        this._activeVoices.clear();
+      }
+      if (this._activeChordButtons) {
+        this._activeChordButtons.forEach((voice, btn) => {
+          if (voice && typeof voice.release === 'function') {
+            try { voice.release(0.28); } catch (_) {}
+          }
+          if (btn && btn.classList) btn.classList.remove('is-active');
+        });
+        this._activeChordButtons.clear();
+      }
+      if (this._heldKeys) {
+        this._heldKeys.clear();
+      }
+      const activeEls = document.querySelectorAll('.braun-chime-key.is-active, .braun-chord-btn.is-active, #btn-audition-impulse.is-active, #btn-pulse-dirac.is-active');
+      activeEls.forEach((el) => el.classList.remove('is-active'));
+    });
   }
 
   _updateChimeKeyLabels() {
@@ -1797,7 +1794,7 @@ export class BraunRb26App {
         const midi = parseFloat(keyEl.getAttribute('data-midi')) || getChimeMidiForDegree(chimeIdx, this.rootPitchClass, scale.intervals);
         const prevVoice = this._activeVoices ? this._activeVoices.get(key) : null;
         if (prevVoice && typeof prevVoice.release === 'function') {
-          prevVoice.release(0.05);
+          prevVoice.release(0.28);
         }
         const voice = this.playChime(midi, 0.70);
         if (voice && this._activeVoices) {
@@ -1817,15 +1814,20 @@ export class BraunRb26App {
     const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
     const chordIdx = chordHotkeys.indexOf(key);
     if (chordIdx !== -1) {
+      const chordBtn = document.querySelector(`.braun-chord-btn[data-chord-index="${chordIdx}"]`);
+      if (chordBtn && this._activeChordButtons && this._activeChordButtons.has(chordBtn)) {
+        const oldBtnVoice = this._activeChordButtons.get(chordBtn);
+        if (oldBtnVoice && typeof oldBtnVoice.release === 'function') oldBtnVoice.release(0.28);
+        this._activeChordButtons.delete(chordBtn);
+      }
       const prevVoice = this._activeVoices ? this._activeVoices.get(key) : null;
       if (prevVoice && typeof prevVoice.release === 'function') {
-        prevVoice.release(0.05);
+        prevVoice.release(0.28);
       }
       const voice = this.playChord(chordIdx);
       if (voice && this._activeVoices) {
         this._activeVoices.set(key, voice);
       }
-      const chordBtn = document.querySelector(`.braun-chord-btn[data-chord-index="${chordIdx}"]`);
       if (chordBtn) {
         chordBtn.classList.add('is-active');
       }
@@ -2076,7 +2078,7 @@ export class BraunRb26App {
         const v = this.playChime(midi, 0.68, 4.2);
         if (!v) return;
         if (isReleased) {
-          if (typeof v.release === 'function') v.release(0.01);
+          if (typeof v.release === 'function') v.release(releaseSec);
           return;
         }
         voices.push(v);

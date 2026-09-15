@@ -109,9 +109,9 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     const float diffL = processAllpass(1, processAllpass(0, inL, mDiffusionDensity), mDiffusionDensity);
     const float diffR = processAllpass(3, processAllpass(2, inR, mDiffusionDensity), mDiffusionDensity);
 
-    // Sum diffused input and pitch feedback
-    const float dryL = diffL * freezeIn + pitchFbL;
-    const float dryR = diffR * freezeIn + pitchFbR;
+    // Sum diffused input and pitch feedback with contractive loop gain headroom
+    const float dryL = diffL * freezeIn + pitchFbL * 0.50f;
+    const float dryR = diffR * freezeIn + pitchFbR * 0.50f;
     const float mid = 0.70710678f * (dryL + dryR);
     const float side = 0.70710678f * (dryL - dryR);
 

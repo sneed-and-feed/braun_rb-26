@@ -152,29 +152,24 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
 
   //----------------------------------------------------------------------------
   describe('4. Factory Presets and Sound Engine Integrity', () => {
-    it('verifies factory presets contain all 12 curated sound patches', () => {
+    it('verifies factory presets contain all 10 curated studio sound patches', () => {
       const presetsPath = path.join(__dirname, 'presets', 'factory_presets.json');
       const json = JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
 
       assert.strictEqual(json.device, 'BRAUN_RB26');
-      assert.strictEqual(json.presets.length, 12, 'Must contain exactly 12 presets (8 classic + 4 Non-Euclidean spaces)');
+      assert.strictEqual(json.presets.length, 10, 'Must contain exactly 10 curated studio presets');
 
       const ids = json.presets.map((p) => p.id);
-      // 8 Classic Presets
-      assert.ok(ids.includes('DEFAULT'));
-      assert.ok(ids.includes('AMBIENT_GUITAR_CLOUD'));
-      assert.ok(ids.includes('ETHEREAL_SYNTH_PAD'));
-      assert.ok(ids.includes('CLUB_KICK_TIGHT'));
-      assert.ok(ids.includes('DARK_SUB_DRONE'));
-      assert.ok(ids.includes('CATHEDRAL_SHIMMER'));
-      assert.ok(ids.includes('INFINITE_FREEZE_DRONE'));
-      assert.ok(ids.includes('SUB-BASS_PRESERVER'));
-
-      // 4 Non-Euclidean Spatial Manifolds
-      assert.ok(ids.includes('POINCARE_CAVITY'), 'Must include POINCARE_CAVITY');
-      assert.ok(ids.includes('WHISPERING_GALLERY'), 'Must include WHISPERING_GALLERY');
-      assert.ok(ids.includes('SPRUCE_SOUNDBOARD'), 'Must include SPRUCE_SOUNDBOARD');
-      assert.ok(ids.includes('KLANGDOM_SPHERE'), 'Must include KLANGDOM_SPHERE');
+      assert.ok(ids.includes('DEFAULT'), 'Must include DEFAULT');
+      assert.ok(ids.includes('AMBIENT_GUITAR_CLOUD'), 'Must include AMBIENT_GUITAR_CLOUD');
+      assert.ok(ids.includes('AS42_SHIMMER_COMPANION'), 'Must include AS42_SHIMMER_COMPANION');
+      assert.ok(ids.includes('SOFT_FELT_ACOUSTIC_HALL'), 'Must include SOFT_FELT_ACOUSTIC_HALL');
+      assert.ok(ids.includes('GERMAN_PLATE_140'), 'Must include GERMAN_PLATE_140');
+      assert.ok(ids.includes('CATHEDRAL_DIFFUSION'), 'Must include CATHEDRAL_DIFFUSION');
+      assert.ok(ids.includes('ETHEREAL_SYNTH_PAD'), 'Must include ETHEREAL_SYNTH_PAD');
+      assert.ok(ids.includes('BLOOM_SHIMMER_VOID'), 'Must include BLOOM_SHIMMER_VOID');
+      assert.ok(ids.includes('INFINITE_ETHEREAL_FREEZE'), 'Must include INFINITE_ETHEREAL_FREEZE');
+      assert.ok(ids.includes('SUB_BASS_PRESERVER') || ids.includes('SUB-BASS_PRESERVER'), 'Must include SUB_BASS_PRESERVER');
 
       for (const preset of json.presets) {
         assert.ok(typeof preset.params.rt60_decay === 'number');

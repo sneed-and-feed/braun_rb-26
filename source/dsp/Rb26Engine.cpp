@@ -270,4 +270,351 @@ bool Rb26ReverbEngine::popVisualizerFrame(VisualizerFrame& frame) noexcept {
     return false;
 }
 
+std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
+    std::vector<PresetDefinition> presets;
+    presets.reserve(10);
+
+    // 1. DEFAULT
+    {
+        PresetDefinition p;
+        p.id = "DEFAULT";
+        p.name = "CALIBRATED DEFAULT";
+        p.category = "Studio General";
+        p.description = "Balanced studio reverb with natural 6.5s RT60 decay and gentle shimmer/dimmer harmonic balance.";
+        p.params.preDelayMs = 24.0f;
+        p.params.diffusionDensity = 0.75f;
+        p.params.outputTrimDb = 0.0f;
+        p.params.lowCrossoverHz = 180.0f;
+        p.params.bassRt60Mult = 1.0f;
+        p.params.punchDucking = 0.65f;
+        p.params.subMonoHz = 120.0f;
+        p.params.decayRt60Sec = 6.5f;
+        p.params.roomSize = 1.0f;
+        p.params.highDampingHz = 7500.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.40f;
+        p.params.dimmerSend = 0.35f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.0f;
+        p.params.pitchFeedback = 0.45f;
+        p.params.tailModRateHz = 0.65f;
+        p.params.tailModDepthMs = 2.25f;
+        p.params.tailBloomMs = 85.0f;
+        p.params.stereoWidth = 1.0f;
+        p.params.earlyLateMix = 0.50f;
+        p.params.dryWetMix = 0.40f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 2. AMBIENT_GUITAR_CLOUD (Refined musical cloud, eliminates scary drone/feedback runaway)
+    {
+        PresetDefinition p;
+        p.id = "AMBIENT_GUITAR_CLOUD";
+        p.name = "AMBIENT GUITAR CLOUD";
+        p.category = "Ambient / Guitar";
+        p.description = "Lush 9.5-second ambient guitar cloud with +12 semitones shimmer bloom and wide stereo dispersion.";
+        p.params.preDelayMs = 45.0f;
+        p.params.diffusionDensity = 0.85f;
+        p.params.outputTrimDb = 0.0f;
+        p.params.lowCrossoverHz = 200.0f;
+        p.params.bassRt60Mult = 0.85f;
+        p.params.punchDucking = 0.50f;
+        p.params.subMonoHz = 140.0f;
+        p.params.decayRt60Sec = 9.5f;
+        p.params.roomSize = 1.30f;
+        p.params.highDampingHz = 9500.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.48f;
+        p.params.dimmerSend = 0.0f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 1.0f;
+        p.params.pitchFeedback = 0.42f;
+        p.params.tailModRateHz = 0.40f;
+        p.params.tailModDepthMs = 1.40f;
+        p.params.tailBloomMs = 110.0f;
+        p.params.stereoWidth = 1.40f;
+        p.params.earlyLateMix = 0.70f;
+        p.params.dryWetMix = 0.55f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 3. AS42_SHIMMER_COMPANION
+    {
+        PresetDefinition p;
+        p.id = "AS42_SHIMMER_COMPANION";
+        p.name = "AS-42 TAPE & SHIMMER COMPANION";
+        p.category = "Vintage Shimmer";
+        p.description = "Warm vintage tape-modulated plate with +12 octave shimmer companion tuned for acoustic instruments.";
+        p.params.preDelayMs = 28.0f;
+        p.params.diffusionDensity = 0.85f;
+        p.params.outputTrimDb = 0.0f;
+        p.params.lowCrossoverHz = 180.0f;
+        p.params.bassRt60Mult = 1.0f;
+        p.params.punchDucking = 0.60f;
+        p.params.subMonoHz = 120.0f;
+        p.params.decayRt60Sec = 8.5f;
+        p.params.roomSize = 1.15f;
+        p.params.highDampingHz = 6800.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.45f;
+        p.params.dimmerSend = 0.25f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.40f;
+        p.params.pitchFeedback = 0.50f;
+        p.params.tailModRateHz = 0.65f;
+        p.params.tailModDepthMs = 2.0f;
+        p.params.tailBloomMs = 85.0f;
+        p.params.stereoWidth = 1.20f;
+        p.params.earlyLateMix = 0.55f;
+        p.params.dryWetMix = 0.45f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 4. SOFT_FELT_ACOUSTIC_HALL
+    {
+        PresetDefinition p;
+        p.id = "SOFT_FELT_ACOUSTIC_HALL";
+        p.name = "SOFT FELT ACOUSTIC HALL";
+        p.category = "Acoustic / Piano";
+        p.description = "Warm, intimate wooden hall tuned for felt piano and strings with organic high damping.";
+        p.params.preDelayMs = 20.0f;
+        p.params.diffusionDensity = 0.78f;
+        p.params.outputTrimDb = 0.0f;
+        p.params.lowCrossoverHz = 160.0f;
+        p.params.bassRt60Mult = 0.95f;
+        p.params.punchDucking = 0.55f;
+        p.params.subMonoHz = 110.0f;
+        p.params.decayRt60Sec = 4.8f;
+        p.params.roomSize = 0.90f;
+        p.params.highDampingHz = 5600.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.15f;
+        p.params.dimmerSend = 0.10f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.20f;
+        p.params.pitchFeedback = 0.25f;
+        p.params.tailModRateHz = 0.45f;
+        p.params.tailModDepthMs = 1.25f;
+        p.params.tailBloomMs = 70.0f;
+        p.params.stereoWidth = 1.10f;
+        p.params.earlyLateMix = 0.45f;
+        p.params.dryWetMix = 0.38f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 5. GERMAN_PLATE_140
+    {
+        PresetDefinition p;
+        p.id = "GERMAN_PLATE_140";
+        p.name = "GERMAN PLATE 140";
+        p.category = "Vintage Plate";
+        p.description = "High-density EMT-style steel plate emulation with fast onset diffusion and shimmering top-end dispersion.";
+        p.params.preDelayMs = 10.0f;
+        p.params.diffusionDensity = 0.92f;
+        p.params.outputTrimDb = 0.0f;
+        p.params.lowCrossoverHz = 220.0f;
+        p.params.bassRt60Mult = 0.80f;
+        p.params.punchDucking = 0.70f;
+        p.params.subMonoHz = 130.0f;
+        p.params.decayRt60Sec = 3.8f;
+        p.params.roomSize = 0.85f;
+        p.params.highDampingHz = 8500.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.20f;
+        p.params.dimmerSend = 0.0f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 1.0f;
+        p.params.pitchFeedback = 0.20f;
+        p.params.tailModRateHz = 0.80f;
+        p.params.tailModDepthMs = 1.0f;
+        p.params.tailBloomMs = 45.0f;
+        p.params.stereoWidth = 1.30f;
+        p.params.earlyLateMix = 0.40f;
+        p.params.dryWetMix = 0.35f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 6. CATHEDRAL_DIFFUSION
+    {
+        PresetDefinition p;
+        p.id = "CATHEDRAL_DIFFUSION";
+        p.name = "CATHEDRAL DIFFUSION";
+        p.category = "Hall / Cathedral";
+        p.description = "Massive 18-second acoustic space with pristine high-frequency shimmer bloom and air damping.";
+        p.params.preDelayMs = 45.0f;
+        p.params.diffusionDensity = 0.95f;
+        p.params.outputTrimDb = -2.0f;
+        p.params.lowCrossoverHz = 180.0f;
+        p.params.bassRt60Mult = 0.90f;
+        p.params.punchDucking = 0.45f;
+        p.params.subMonoHz = 120.0f;
+        p.params.decayRt60Sec = 18.0f;
+        p.params.roomSize = 1.75f;
+        p.params.highDampingHz = 10000.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.65f;
+        p.params.dimmerSend = 0.10f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.75f;
+        p.params.pitchFeedback = 0.55f;
+        p.params.tailModRateHz = 0.50f;
+        p.params.tailModDepthMs = 2.25f;
+        p.params.tailBloomMs = 140.0f;
+        p.params.stereoWidth = 1.60f;
+        p.params.earlyLateMix = 0.80f;
+        p.params.dryWetMix = 0.65f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 7. ETHEREAL_SYNTH_PAD
+    {
+        PresetDefinition p;
+        p.id = "ETHEREAL_SYNTH_PAD";
+        p.name = "ETHEREAL SYNTH PAD";
+        p.category = "Synthesizer";
+        p.description = "Lush 10.5-second tail designed for polyphonic pads and brass, featuring balanced shimmer and dimmer.";
+        p.params.preDelayMs = 35.0f;
+        p.params.diffusionDensity = 0.80f;
+        p.params.outputTrimDb = 0.0f;
+        p.params.lowCrossoverHz = 160.0f;
+        p.params.bassRt60Mult = 0.90f;
+        p.params.punchDucking = 0.50f;
+        p.params.subMonoHz = 100.0f;
+        p.params.decayRt60Sec = 10.5f;
+        p.params.roomSize = 1.20f;
+        p.params.highDampingHz = 8500.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.55f;
+        p.params.dimmerSend = 0.40f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.25f;
+        p.params.pitchFeedback = 0.45f;
+        p.params.tailModRateHz = 0.70f;
+        p.params.tailModDepthMs = 2.25f;
+        p.params.tailBloomMs = 90.0f;
+        p.params.stereoWidth = 1.40f;
+        p.params.earlyLateMix = 0.60f;
+        p.params.dryWetMix = 0.50f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 8. BLOOM_SHIMMER_VOID
+    {
+        PresetDefinition p;
+        p.id = "BLOOM_SHIMMER_VOID";
+        p.name = "BLOOM SHIMMER VOID";
+        p.category = "Ambient / Shimmer";
+        p.description = "Deep ambient void where cascading octave shimmers bloom slowly behind melodic phrases.";
+        p.params.preDelayMs = 50.0f;
+        p.params.diffusionDensity = 0.88f;
+        p.params.outputTrimDb = -1.0f;
+        p.params.lowCrossoverHz = 190.0f;
+        p.params.bassRt60Mult = 0.85f;
+        p.params.punchDucking = 0.45f;
+        p.params.subMonoHz = 130.0f;
+        p.params.decayRt60Sec = 14.0f;
+        p.params.roomSize = 1.50f;
+        p.params.highDampingHz = 9000.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.60f;
+        p.params.dimmerSend = 0.15f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.80f;
+        p.params.pitchFeedback = 0.50f;
+        p.params.tailModRateHz = 0.55f;
+        p.params.tailModDepthMs = 2.50f;
+        p.params.tailBloomMs = 160.0f;
+        p.params.stereoWidth = 1.50f;
+        p.params.earlyLateMix = 0.75f;
+        p.params.dryWetMix = 0.60f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 9. INFINITE_ETHEREAL_FREEZE
+    {
+        PresetDefinition p;
+        p.id = "INFINITE_ETHEREAL_FREEZE";
+        p.name = "INFINITE ETHEREAL FREEZE";
+        p.category = "Freeze / Sustained";
+        p.description = "Lossless infinite recirculating ambient texture with input isolation and gentle tail modulation.";
+        p.params.preDelayMs = 20.0f;
+        p.params.diffusionDensity = 0.90f;
+        p.params.outputTrimDb = -1.0f;
+        p.params.lowCrossoverHz = 180.0f;
+        p.params.bassRt60Mult = 1.0f;
+        p.params.punchDucking = 0.50f;
+        p.params.subMonoHz = 120.0f;
+        p.params.decayRt60Sec = 30.0f;
+        p.params.roomSize = 1.20f;
+        p.params.highDampingHz = 8000.0f;
+        p.params.freezeHold = true;
+        p.params.shimmerSend = 0.45f;
+        p.params.dimmerSend = 0.30f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.20f;
+        p.params.pitchFeedback = 0.50f;
+        p.params.tailModRateHz = 0.65f;
+        p.params.tailModDepthMs = 2.25f;
+        p.params.tailBloomMs = 85.0f;
+        p.params.stereoWidth = 1.30f;
+        p.params.earlyLateMix = 0.70f;
+        p.params.dryWetMix = 0.55f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    // 10. SUB_BASS_PRESERVER
+    {
+        PresetDefinition p;
+        p.id = "SUB_BASS_PRESERVER";
+        p.name = "SUB-BASS PRESERVER";
+        p.category = "Studio Bass Mix";
+        p.description = "Decoupled low-end preservation isolating kick/sub bass fundamental under 180Hz while adding space.";
+        p.params.preDelayMs = 15.0f;
+        p.params.diffusionDensity = 0.70f;
+        p.params.outputTrimDb = 0.0f;
+        p.params.lowCrossoverHz = 180.0f;
+        p.params.bassRt60Mult = 0.80f;
+        p.params.punchDucking = 0.85f;
+        p.params.subMonoHz = 150.0f;
+        p.params.decayRt60Sec = 4.5f;
+        p.params.roomSize = 0.80f;
+        p.params.highDampingHz = 6500.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.25f;
+        p.params.dimmerSend = 0.15f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.10f;
+        p.params.pitchFeedback = 0.35f;
+        p.params.tailModRateHz = 0.40f;
+        p.params.tailModDepthMs = 1.50f;
+        p.params.tailBloomMs = 60.0f;
+        p.params.stereoWidth = 1.0f;
+        p.params.earlyLateMix = 0.45f;
+        p.params.dryWetMix = 0.35f;
+        p.params.limiterEnable = true;
+        presets.push_back(p);
+    }
+
+    return presets;
+}
+
 } // namespace rb26

@@ -55,10 +55,21 @@ struct Rb26Parameters {
     bool limiterEnable = true;      // true/false
 };
 
+struct PresetDefinition {
+    const char* id;
+    const char* name;
+    const char* category;
+    const char* description;
+    Rb26Parameters params;
+};
+
 class Rb26ReverbEngine {
 public:
     Rb26ReverbEngine() noexcept;
     ~Rb26ReverbEngine() noexcept = default;
+
+    // Curated factory presets
+    static std::vector<PresetDefinition> getFactoryPresets();
 
     // Hard real-time lifecycle
     void prepare(double sampleRate, int maxBlockSize) noexcept;
