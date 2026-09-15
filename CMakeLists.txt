@@ -43,11 +43,11 @@ include(FetchContent)
 # ==============================================================================
 if(WIN32)
     set(WEBVIEW2_VERSION "1.0.2849.39")
-    set(LOCAL_WEBVIEW2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
+    set(LOCAL_WEBVIEW2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
     set(BINARY_WEBVIEW2_DIR "${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
 
     if(EXISTS "${LOCAL_WEBVIEW2_DIR}/build/native/include/WebView2.h")
-        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/build/packages" CACHE PATH "WebView2 location" FORCE)
+        set(JUCE_WEBVIEW2_PACKAGE_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../build/packages" CACHE PATH "WebView2 location" FORCE)
     else()
         if(NOT EXISTS "${BINARY_WEBVIEW2_DIR}/build/native/include/WebView2.h")
             message(STATUS "Downloading Microsoft.Web.WebView2 NuGet package (${WEBVIEW2_VERSION})...")
@@ -72,7 +72,7 @@ endif()
 # ==============================================================================
 if(NOT TARGET juce::juce_audio_processors)
     # Check if JUCE source is cached locally in parent build/_deps
-    set(LOCAL_JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/juce-src")
+    set(LOCAL_JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/_deps/juce-src")
     if(EXISTS "${LOCAL_JUCE_DIR}/CMakeLists.txt")
         message(STATUS "Using local JUCE 8 from ${LOCAL_JUCE_DIR}")
         FetchContent_Declare(
