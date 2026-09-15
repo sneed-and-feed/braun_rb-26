@@ -366,7 +366,7 @@ bool runLowFrequencyModalTests() {
         rb26::LowBandModalMatrix modal;
         modal.prepare(sampleRate);
         rb26::LowBandModalParams params;
-        params.punchDucking = 1.0f;
+        params.punchDucking = 0.65f;
         modal.setParameters(params);
 
         const size_t kickLen = 24000;

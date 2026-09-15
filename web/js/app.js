@@ -721,6 +721,8 @@ export class BraunRb26App {
           }
 
           const apvtsToKnob = {
+            input_trim_db: { key: 'input_trim', scale: 1 },
+            inputTrimDb: { key: 'input_trim', scale: 1 },
             pre_delay_ms: { key: 'predelay', scale: 1 },
             preDelayMs: { key: 'predelay', scale: 1 },
             diffusion_density: { key: 'diffusion', scale: 100 },
@@ -920,7 +922,7 @@ export class BraunRb26App {
 
     this.knobs.input_trim = createKnob('knob-input-trim', {
       label: 'INPUT TRIM', min: -24, max: 12, step: 0.5, unit: 'dB', value: 0, size: 'small',
-      onChange: (v) => this.engine.setParam('inputTrimDb', v)
+      onChange: (v) => { this.engine.setParam('inputTrimDb', v); this._emitJuceParam('inputTrimDb', v); }
     });
 
     // Deck 2: LOW-END MATRIX
@@ -1131,7 +1133,7 @@ export class BraunRb26App {
         btn.classList.add('is-active');
         const interval = parseInt(btn.getAttribute('data-interval'), 10);
         this.engine.setParam('dimmerInterval', interval);
-        const choiceIdx = interval === -24 ? 1 : 0;
+        const choiceIdx = interval === -2 ? 0 : (interval === -7 ? 1 : 2);
         this._emitJuceParam('dimmerInterval', choiceIdx);
       });
     });
@@ -1381,7 +1383,7 @@ export class BraunRb26App {
 
     if (params.dimmer_interval !== undefined) {
       this.engine.setParam('dimmerInterval', params.dimmer_interval);
-      const dIdx = params.dimmer_interval === -24 ? 1 : 0;
+      const dIdx = params.dimmer_interval === -2 ? 0 : (params.dimmer_interval === -7 ? 1 : 2);
       this._emitJuceParam('dimmerInterval', dIdx);
     }
 
@@ -1449,7 +1451,7 @@ export class BraunRb26App {
 
     if (preset.params.dimmer_interval !== undefined) {
       this.engine.setParam('dimmerInterval', preset.params.dimmer_interval);
-      const dIdx = preset.params.dimmer_interval === -24 ? 1 : 0;
+      const dIdx = preset.params.dimmer_interval === -2 ? 0 : (preset.params.dimmer_interval === -7 ? 1 : 2);
       this._emitJuceParam('dimmerInterval', dIdx);
     }
 
@@ -1961,7 +1963,7 @@ export class BraunRb26App {
           if (oldVoice && typeof oldVoice.release === 'function') oldVoice.release(0.28);
           this._activeVoices.delete(keyId);
         }
-        const voice = this.playChime(midi, 0.70, 3.5, true);
+        const voice = this.playChime(midi, 0.45, 3.5, true);
         if (voice && this._activeVoices) {
           this._activeVoices.set(keyId, { voice, code, key, chimeIdx });
         }
@@ -2198,64 +2200,57 @@ export class BraunRb26App {
         clearTimeout(naturalExpireTimer);
         try {
           const t = ctx.currentTime;
-          const cancelTime = Math.max(now, t);
-          const tElapsed = cancelTime - now;
+          const tau = Math.max(0.005, releaseSec * 0.12);
+          const tElapsed = Math.max(0, t - now);
 
-          // Mathematically calculate expected instantaneous gain at cancelTime
-          // Prevents step jumps and snapbacks if browser resets active timeline
-          let safeGain;
+          let curGain = sustainLevel;
           if (tElapsed <= attackTime) {
-            safeGain = Math.max(0.0002, peakGain * (tElapsed / Math.max(0.001, attackTime)));
+            curGain = peakGain * (tElapsed / Math.max(0.001, attackTime));
           } else if (tElapsed <= (attackTime + 0.35)) {
             const frac = (tElapsed - attackTime) / 0.35;
-            safeGain = Math.max(0.0002, peakGain * Math.pow(sustainLevel / peakGain, frac));
-          } else if (isHold) {
-            safeGain = sustainLevel;
-          } else {
-            const decayFrac = Math.min(1, Math.max(0, (tElapsed - attackTime - 0.35) / Math.max(0.1, durationSec - attackTime - 0.35)));
-            safeGain = Math.max(0.0002, sustainLevel * Math.pow(0.0001 / sustainLevel, decayFrac));
+            curGain = peakGain * Math.pow(sustainLevel / peakGain, frac);
           }
 
-          // Smooth exponential decay via setTargetAtTime with cancelAndHoldAtTime
-          // to eliminate timeline reset step discontinuities when cancelling active ramps
-          let gainHeld = false;
+          let heldOk = false;
           if (typeof voiceGain.gain.cancelAndHoldAtTime === 'function') {
             try {
-              voiceGain.gain.cancelAndHoldAtTime(cancelTime);
-              gainHeld = true;
+              voiceGain.gain.cancelAndHoldAtTime(t);
+              heldOk = true;
             } catch (_) {}
           }
-          if (!gainHeld) {
+          if (!heldOk) {
             try {
-              voiceGain.gain.cancelScheduledValues(cancelTime);
+              voiceGain.gain.cancelScheduledValues(t);
             } catch (_) {}
-            voiceGain.gain.setValueAtTime(safeGain, cancelTime);
           }
           voiceGain.gain.setTargetAtTime(0.0, t, Math.max(0.005, releaseSec * 0.25));
+
+          // Fade stringMixer smoothly to zero
+          if (stringMixer && stringMixer.gain) {
+            try {
+              if (typeof stringMixer.gain.cancelAndHoldAtTime === 'function') {
+                try { stringMixer.gain.cancelAndHoldAtTime(t); } catch (_) {}
+              }
+              stringMixer.gain.cancelScheduledValues(t);
+              stringMixer.gain.setTargetAtTime(0.0, t, tau);
+            } catch (_) {}
+          }
 
           // Harold Budd acoustic felt damping: absorb high-frequency energy smoothly on release
           const dampedCutoff = Math.max(160, f0 * 1.05);
           [filter1, filter2].forEach((f) => {
             if (f && f.frequency) {
               try {
-                let filterHeld = false;
                 if (typeof f.frequency.cancelAndHoldAtTime === 'function') {
-                  try {
-                    f.frequency.cancelAndHoldAtTime(cancelTime);
-                    filterHeld = true;
-                  } catch (_) {}
+                  try { f.frequency.cancelAndHoldAtTime(t); } catch (_) {}
                 }
-                if (!filterHeld) {
-                  f.frequency.cancelScheduledValues(cancelTime);
-                  f.frequency.setValueAtTime(restCutoff, cancelTime);
-                }
-                f.frequency.exponentialRampToValueAtTime(dampedCutoff, cancelTime + releaseSec);
+                f.frequency.cancelScheduledValues(t);
+                f.frequency.setTargetAtTime(dampedCutoff, t, tau);
               } catch (_) {}
             }
           });
 
           // Ensure adequate release tail before stopping oscillators and unhooking nodes
-          // 4 * (releaseSec * 0.25) = releaseSec gives -35dB; 8 time constants = 2 * releaseSec gives -70dB
           const tailSec = Math.max(0.5, releaseSec * 3.0);
           teardownVoice(tailSec);
         } catch (_) {}
@@ -2294,7 +2289,7 @@ export class BraunRb26App {
       const tid = setTimeout(() => {
         if (!this.isPowered || isReleased) return;
         const midi = 69 + 12 * Math.log2(freq / 440);
-        const v = this.playChime(midi, 0.68, 4.2, isHold);
+        const v = this.playChime(midi, 0.40, 4.2, isHold);
         if (!v) return;
         if (isReleased) {
           if (typeof v.release === 'function') v.release(releaseSec);

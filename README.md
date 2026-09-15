@@ -14,7 +14,7 @@
 
 ---
 
-### 🎛️ [💾 Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)
+### [Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)
 *Direct download: **[`BRAUN_RB26-v1.2.0-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)** (~9 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-VST3-Windows-x64.zip)** (~3 MB).*
 *Includes `BRAUN_RB26.vst3` for DAWs (Ableton, FL Studio, Reaper, Cubase, Studio One, Bitwig), `BRAUN_RB26.clap`, and `BRAUN_RB26.exe` standalone desktop app. No compiler or CMake required.*
 *All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.*
@@ -76,23 +76,50 @@ Run `BRAUN_RB26.exe` directly for low-latency ASIO/WASAPI monitoring without nee
 
 ## Signal-Flow Architecture
 
-```
-+---------------------------------------------------------------------------------------------------+
-|  BRAUN   RB-26 · MASTER STUDIO REVERBERATOR                       [ FINISH: LIGHT / DARK ]        |
-+---------------------------------------------------------------------------------------------------+
-| [01 INPUT/PRE-DELAY]  [02 LOW-END MATRIX]  [03 REVERB TANK]  [04 PITCH DIFFUSION]  [05 TAIL MOD]  |
-|   Pre-Delay (ms)        Crossover (Hz)       Room Size (0-2x)  Shimmer (+12st)       Mod Rate     |
-|   Diffusion (%)         Bass Mult (RT60)     Decay (0.3-30s)   Dimmer (-12/-24st)    Mod Depth    |
-|   Input Trim (dB)       Punch Duck (%)       Damping (Hz)      Pitch Blend (-1..+1)  Bloom Delay  |
-|                         Sub Mono (Hz)        Freeze Hold       Pitch Regen (%)     [VECTOR PAD 2D]|
-|                                                                                                    |
-|  [06 MASTER MONITOR]  +-------------------------------+   [07 ONBOARD ACOUSTIC EXCITER]            |
-|    Stereo Width        | CRT PHOSPHOR VECTOR DISPLAY   |     Dirac Impulse / Acoustic Mallet       |
-|    Early/Late Mix      | [WAVE] [EDC] [LISSAJOUS] [FFT]|     Broadband Burst / Felt Piano          |
-|    Dry/Wet Mix         |   P1 PHOSPHOR DECAY ENVELOPE  |     Playable Microtonal Chime Strip       |
-|    Output Trim (dB)    +-------------------------------+     12 Modal Chords & Poisson Clock       |
-|    Soft Limiter Ceil                                                                               |
-+---------------------------------------------------------------------------------------------------+
+```mermaid
+graph TD
+    subgraph S1["Deck 01: Input & Pre-Delay"]
+        IN["Stereo Input (Audio / DAW)"] --> TRIM["Input Trim (-18dB to +18dB)"]
+        TRIM --> PREDELAY["Pre-Delay (0 to 500ms)"]
+    end
+
+    subgraph S2["Deck 02: Low-End Decoupled Matrix"]
+        PREDELAY --> LR4["LR4 Crossover (60Hz to 400Hz)"]
+        LR4 -- "Low Band (< f_c)" --> MODAL["4-Line Modal Householder Matrix"]
+        MODAL --> PUNCH["Transient Punch Ducking (-24dB)"]
+        PUNCH --> SUBMONO["Sub Mono Side Highpass (20Hz to 250Hz)"]
+    end
+
+    subgraph S3["Deck 03 & 04: Reverb Core & Pitch Diffusion"]
+        LR4 -- "High Band (> f_c)" --> EARLY["Early Reflections (12 Prime Taps)"]
+        LR4 -- "High Band (> f_c)" --> FDN["8-Line FDN Tank & Manifold Geometry"]
+        FDN --> PITCH["Bidirectional Pitch Shifter"]
+        PITCH -- "Shimmer (+7/+12/+24st)" --> DECOUPLED_FB["Decoupled Pitch Delay (150ms)"]
+        PITCH -- "Dimmer (-2/-7/-12st)" --> DECOUPLED_FB
+        DECOUPLED_FB --> FDN
+    end
+
+    subgraph S5["Deck 05: Tail Modulation"]
+        LFO["Golden-Ratio 8-Phase LFOs"] --> FDN
+        VPAD["Deck 05 2D Vector Modulation Pad"] --> LFO
+    end
+
+    subgraph S7["Deck 07: Onboard Acoustic Exciter"]
+        EXCITER["Felt Piano / Impulse / Mallet / Chimes"] --> PREDELAY
+    end
+
+    subgraph S6["Deck 06: Master Bus & Monitor"]
+        EARLY --> MIX["Early / Late Trigonometric Crossfade"]
+        FDN --> MIX
+        SUBMONO --> SUM["Master Wet Sum Bus"]
+        MIX --> SUM
+        SUM --> WIDTH["Stereo Width (M/S Matrix)"]
+        WIDTH --> DRYWET["Dry / Wet Trigonometric Crossfade"]
+        DRYWET --> TRIM_OUT["Output Trim (-24dB to +12dB)"]
+        TRIM_OUT --> LIMITER["Soft Saturation Limiter"]
+        LIMITER --> CRT["4-Mode CRT Vector Scope (WAVE / EDC / LISSAJOUS / FFT)"]
+        LIMITER --> OUT["Master Output"]
+    end
 ```
 
 24 automatable parameters across 7 signal-processing decks with interactive 2D vector modulation. All parameters are exposed via JUCE `AudioProcessorValueTreeState` for full DAW automation, preset recall, and MIDI CC mapping.
@@ -123,7 +150,7 @@ Four specialized acoustic geometries that go beyond conventional room simulation
 ### Bidirectional Pitch Diffusion
 
 - **Shimmer** (+7st, +12st, +24st): celestial bloom recirculating in the feedback network
-- **Dimmer** (-12st, -24st): sub-harmonic dark diffusion into deep bass foundations
+- **Dimmer** (-2st, -7st, -12st): sub-harmonic dark diffusion into deep bass foundations
 - Dual-tap delay pitch shifting with **cubic Hermite interpolation** on a 65536-sample circular buffer
 - **Interval-adaptive grain windows**: 50 ms / 100 ms / 200 ms scaled by pitch ratio for integer-cycle alignment, reducing spectral sideband distortion to $\le 0.04\%$ peak frequency error
 
@@ -182,7 +209,7 @@ Enables standalone acoustic testing, performance, and auditioning without extern
 | 2 | AMBIENT GUITAR CLOUD | 16 s | Ethereal wash with +12st Shimmer bloom and stereo widening |
 | 3 | ETHEREAL SYNTH PAD | 12 s | Shimmer + Dimmer dual diffusion with balanced octave harmonics |
 | 4 | CLUB KICK TIGHT | 1.2 s | Aggressive transient punch ducking for 4-on-the-floor |
-| 5 | DARK SUB DRONE | 14 s | Sub-harmonic space driven by -24st Dimmer diffusion |
+| 5 | DARK SUB DRONE | 14 s | Sub-harmonic space driven by -12st Dimmer diffusion |
 | 6 | CATHEDRAL SHIMMER | 22 s | Massive cathedral bloom with high diffusion and sparkling decay |
 | 7 | INFINITE FREEZE DRONE | ∞ | Locked infinite feedback recirculation with input isolation |
 | 8 | SUB-BASS PRESERVER | 4 s | Transparent space with strict elliptical mono collapse |
@@ -340,7 +367,7 @@ The RB-26 shares an identical visual vocabulary with the [BRAUN AS-42 Synthesize
 
 Typography: Inter (UI), SF Mono (readout), DIN 1451 influence.
 
-All UI text is in **technical English** with zero emojis. Nomenclature follows Braun functionalist product design conventions.
+All UI text is in **technical English**. Nomenclature follows Braun functionalist product design conventions.
 
 ---
 

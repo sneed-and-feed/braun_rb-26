@@ -30,8 +30,12 @@ void DualTapDelayPitchShifter::setInterval(int semitones) noexcept {
 
     if (mRatio >= 1.0f) {
         mWindowSec = 0.050f; // 50 ms for Shimmer (+7, +12, +24) -> 0.00% error
+    } else if (mRatio >= 0.85f) {
+        mWindowSec = 0.070f; // 70 ms for Dimmer -2st (Dark Chorus)
+    } else if (mRatio >= 0.60f) {
+        mWindowSec = 0.085f; // 85 ms for Dimmer -7st (Sub-Fifth Drone)
     } else if (mRatio >= 0.45f) {
-        mWindowSec = 0.100f; // 100 ms for Dimmer -12st -> 0.02% error
+        mWindowSec = 0.100f; // 100 ms for Dimmer -12st (Sub-Octave Bloom) -> 0.02% error
     } else {
         mWindowSec = 0.200f; // 200 ms for Dimmer -24st -> 0.04% error
     }
@@ -158,6 +162,12 @@ void PitchShifter::prepare(double sampleRate, int /*maxBlockSize*/) noexcept {
     mSpiralDepthSmoother.reset(mSpiralDepth);
     mSpiralRateSmoother.reset(mSpiralRateHz);
 
+    mShimmerCircBufferL.assign(kCircCapacity, 0.0f);
+    mShimmerCircBufferR.assign(kCircCapacity, 0.0f);
+    mDimmerCircBufferL.assign(kCircCapacity, 0.0f);
+    mDimmerCircBufferR.assign(kCircCapacity, 0.0f);
+    mCircWriteIndex = 0;
+
     reset();
 }
 
@@ -173,6 +183,12 @@ void PitchShifter::reset() noexcept {
     mDimmerFilterR.reset();
 
     mShepardSpiral.reset();
+
+    std::fill(mShimmerCircBufferL.begin(), mShimmerCircBufferL.end(), 0.0f);
+    std::fill(mShimmerCircBufferR.begin(), mShimmerCircBufferR.end(), 0.0f);
+    std::fill(mDimmerCircBufferL.begin(), mDimmerCircBufferL.end(), 0.0f);
+    std::fill(mDimmerCircBufferR.begin(), mDimmerCircBufferR.end(), 0.0f);
+    mCircWriteIndex = 0;
 
     mRecircShimmerL = 0.0f;
     mRecircShimmerR = 0.0f;
@@ -230,8 +246,11 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
 
     // Equal-power crossfade weighting based on blend beta in [-1.0, +1.0]
     const float blendAngle = (kPi * 0.25f) * (1.0f - blend);
-    const float shimmerWeight = sSend * std::cos(blendAngle);
-    const float dimmerWeight  = dSend * std::sin(blendAngle);
+    const float blendShim = std::cos(blendAngle);
+    const float blendDim  = std::sin(blendAngle);
+
+    const float effShimmerSend = (sSend > 1.0e-5f && blendShim > 1.0e-5f) ? (sSend * blendShim) : 0.0f;
+    const float effDimmerSend  = (dSend > 1.0e-5f && blendDim > 1.0e-5f) ? (dSend * blendDim) : 0.0f;
 
     // Bounded internal feedback gain strictly avoiding dual-closed-loop runaway
     const float safeFb = std::clamp(fb * 0.35f, 0.0f, 0.35f);
@@ -239,9 +258,15 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     // 1. Shimmer Loop: Scale input by send weight, inject bounded feedback, filter, shift, saturate
     float shimSatL = 0.0f;
     float shimSatR = 0.0f;
-    if (shimmerWeight > 1.0e-5f || std::abs(mRecircShimmerL) > 1.0e-5f || std::abs(mRecircShimmerR) > 1.0e-5f) {
-        const float shimInL = inL * shimmerWeight + safeFb * mRecircShimmerL;
-        const float shimInR = inR * shimmerWeight + safeFb * mRecircShimmerR;
+    if (effShimmerSend > 1.0e-5f) {
+        // Decoupled circulation delay tap (~149 ms for Shimmer, giving distinct temporal sparkle spacing)
+        const size_t shimDelaySamples = static_cast<size_t>(std::clamp(0.149f * mSampleRate, 1.0f, static_cast<float>(kCircCapacity - 64)));
+        const size_t readShimIdx = (mCircWriteIndex + kCircCapacity - shimDelaySamples) & kCircMask;
+        const float delayedShimFbL = mShimmerCircBufferL[readShimIdx];
+        const float delayedShimFbR = mShimmerCircBufferR[readShimIdx];
+
+        const float shimInL = inL * effShimmerSend + safeFb * delayedShimFbL;
+        const float shimInR = inR * effShimmerSend + safeFb * delayedShimFbR;
 
         const float shimFiltL = mShimmerFilterL.process(shimInL);
         const float shimFiltR = mShimmerFilterR.process(shimInR);
@@ -260,19 +285,35 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
         shimSatL = mShimmerSaturatorL.processSample(shimRawL);
         shimSatR = mShimmerSaturatorR.processSample(shimRawR);
 
+        mShimmerCircBufferL[mCircWriteIndex] = flushDenormal(shimSatL);
+        mShimmerCircBufferR[mCircWriteIndex] = flushDenormal(shimSatR);
         mRecircShimmerL = shimSatL;
         mRecircShimmerR = shimSatR;
     } else {
         mRecircShimmerL = 0.0f;
         mRecircShimmerR = 0.0f;
+        std::fill(mShimmerCircBufferL.begin(), mShimmerCircBufferL.end(), 0.0f);
+        std::fill(mShimmerCircBufferR.begin(), mShimmerCircBufferR.end(), 0.0f);
+        mShimmerFilterL.reset();
+        mShimmerFilterR.reset();
+        mShimmerShifterL.reset();
+        mShimmerShifterR.reset();
+        shimSatL = 0.0f;
+        shimSatR = 0.0f;
     }
 
     // 2. Dimmer Loop: Scale input by send weight, inject bounded feedback, filter, shift, saturate
     float dimSatL = 0.0f;
     float dimSatR = 0.0f;
-    if (dimmerWeight > 1.0e-5f || std::abs(mRecircDimmerL) > 1.0e-5f || std::abs(mRecircDimmerR) > 1.0e-5f) {
-        const float dimInL = inL * dimmerWeight + safeFb * mRecircDimmerL;
-        const float dimInR = inR * dimmerWeight + safeFb * mRecircDimmerR;
+    if (effDimmerSend > 1.0e-5f) {
+        // Decoupled circulation delay tap (~211 ms for Dimmer, giving distinct temporal falling drops)
+        const size_t dimDelaySamples = static_cast<size_t>(std::clamp(0.211f * mSampleRate, 1.0f, static_cast<float>(kCircCapacity - 64)));
+        const size_t readDimIdx = (mCircWriteIndex + kCircCapacity - dimDelaySamples) & kCircMask;
+        const float delayedDimFbL = mDimmerCircBufferL[readDimIdx];
+        const float delayedDimFbR = mDimmerCircBufferR[readDimIdx];
+
+        const float dimInL = inL * effDimmerSend + safeFb * delayedDimFbL;
+        const float dimInR = inR * effDimmerSend + safeFb * delayedDimFbR;
 
         const float dimFiltL = mDimmerFilterL.process(dimInL);
         const float dimFiltR = mDimmerFilterR.process(dimInR);
@@ -292,12 +333,24 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
         dimSatL = mDimmerSaturatorL.processSample(dimRawL);
         dimSatR = mDimmerSaturatorR.processSample(dimRawR);
 
+        mDimmerCircBufferL[mCircWriteIndex] = flushDenormal(dimSatL);
+        mDimmerCircBufferR[mCircWriteIndex] = flushDenormal(dimSatR);
         mRecircDimmerL = dimSatL;
         mRecircDimmerR = dimSatR;
     } else {
         mRecircDimmerL = 0.0f;
         mRecircDimmerR = 0.0f;
+        std::fill(mDimmerCircBufferL.begin(), mDimmerCircBufferL.end(), 0.0f);
+        std::fill(mDimmerCircBufferR.begin(), mDimmerCircBufferR.end(), 0.0f);
+        mDimmerFilterL.reset();
+        mDimmerFilterR.reset();
+        mDimmerShifterL.reset();
+        mDimmerShifterR.reset();
+        dimSatL = 0.0f;
+        dimSatR = 0.0f;
     }
+
+    mCircWriteIndex = (mCircWriteIndex + 1) & kCircMask;
 
     // 3. Composite Output: Sum of already send-weighted Shimmer and Dimmer
     outL = flushDenormal(shimSatL + dimSatL);

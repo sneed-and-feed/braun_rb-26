@@ -19,6 +19,7 @@ namespace rb26 {
 
 struct Rb26Parameters {
     // Input / Pre-Delay
+    float inputTrimDb = 0.0f;       // -18.0 - +18.0 dB
     float preDelayMs = 24.0f;       // 0.0 - 500.0 ms
     float dryWetMix = 0.40f;        // 0.0 - 1.0 (0% - 100%)
     float earlyLateMix = 0.50f;     // 0.0 - 1.0 (0% - 100%)
@@ -40,9 +41,10 @@ struct Rb26Parameters {
     float shimmerSend = 0.40f;      // 0.0 - 1.0
     float dimmerSend = 0.35f;       // 0.0 - 1.0
     int shimmerInterval = 12;       // +7, +12, +24 semitones
-    int dimmerInterval = -12;       // -12, -24 semitones
+    int dimmerInterval = -12;       // -2, -7, -12 semitones
     float pitchBlend = 0.0f;        // -1.0 (Dimmer) to +1.0 (Shimmer)
     float pitchFeedback = 0.45f;    // 0.0 - 0.95
+    float pitchDelayMs = 150.0f;    // 20.0 - 500.0 ms (Decoupled Pitch Shimmer/Dimmer Delay)
     
     // Tail-Level Pitch Modulation
     float tailModRateHz = 0.65f;    // 0.05 - 5.0 Hz
@@ -113,11 +115,24 @@ private:
     PitchShifter mPitchShifter;
 
     // Master Bus Parameter Smoothers
+    OnePoleSmoother mInputTrimSmoother;
     OnePoleSmoother mDryWetSmoother;
     OnePoleSmoother mEarlyLateSmoother;
     OnePoleSmoother mStereoWidthSmoother;
     OnePoleSmoother mOutputTrimSmoother;
     OnePoleSmoother mPitchFeedbackSmoother;
+    OnePoleSmoother mPitchDelaySmoother;
+    OnePoleSmoother mPitchBlendSmoother;
+
+    // Master bus sub-bass mono collapse filter
+    SubBassEllipticalFilter mMasterSubMono;
+
+    // Decoupled Pitch Shimmer/Dimmer Delay Buffer
+    static constexpr size_t kPitchDelayCapacity = 131072;
+    static constexpr size_t kPitchDelayMask = kPitchDelayCapacity - 1;
+    std::vector<float> mPitchDelayBufferL;
+    std::vector<float> mPitchDelayBufferR;
+    size_t mPitchDelayWriteIndex { 0 };
 
     // Pitch feedback state between FDN tank and PitchShifter
     float mLastPitchFbL { 0.0f };

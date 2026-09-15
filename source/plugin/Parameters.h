@@ -12,6 +12,7 @@
 namespace rb26 {
 
 namespace ParamIDs {
+    inline const juce::ParameterID inputTrimDb       { "input_trim_db", 1 };
     inline const juce::ParameterID preDelayMs        { "pre_delay_ms", 1 };
     inline const juce::ParameterID dryWetMix         { "dry_wet_mix", 1 };
     inline const juce::ParameterID earlyLateMix      { "early_late_mix", 1 };
@@ -30,6 +31,7 @@ namespace ParamIDs {
     inline const juce::ParameterID dimmerInterval    { "dimmer_interval", 1 };
     inline const juce::ParameterID pitchBlend        { "pitch_blend", 1 };
     inline const juce::ParameterID pitchFeedback     { "pitch_feedback", 1 };
+    inline const juce::ParameterID pitchDelayMs      { "pitch_delay_ms", 1 };
     inline const juce::ParameterID tailModRateHz     { "tail_mod_rate_hz", 1 };
     inline const juce::ParameterID tailModDepthMs    { "tail_mod_depth_ms", 1 };
     inline const juce::ParameterID tailBloomMs       { "tail_bloom_ms", 1 };
@@ -39,7 +41,7 @@ namespace ParamIDs {
 }
 
 // ============================================================================
-// Choice interval helpers for Shimmer (+7, +12, +24) and Dimmer (-12, -24)
+// Choice interval helpers for Shimmer (+7, +12, +24) and Dimmer (-2, -7, -12)
 // ============================================================================
 inline const juce::StringArray& getShimmerIntervalChoices() {
     static const juce::StringArray choices { "+7 st (Fifth)", "+12 st (Octave)", "+24 st (2 Octaves)" };
@@ -47,7 +49,7 @@ inline const juce::StringArray& getShimmerIntervalChoices() {
 }
 
 inline const juce::StringArray& getDimmerIntervalChoices() {
-    static const juce::StringArray choices { "-12 st (Sub-Octave)", "-24 st (2 Sub-Octaves)" };
+    static const juce::StringArray choices { "-2 st (Dark Chorus)", "-7 st (Sub-Fifth Drone)", "-12 st (Sub-Octave Bloom)" };
     return choices;
 }
 
@@ -68,15 +70,17 @@ inline int shimmerIndexFromInterval(int semitones) noexcept {
 
 inline int dimmerIntervalFromIndex(int index) noexcept {
     switch (index) {
-        case 0: return -12;
-        case 1: return -24;
+        case 0: return -2;
+        case 1: return -7;
+        case 2: return -12;
         default: return -12;
     }
 }
 
 inline int dimmerIndexFromInterval(int semitones) noexcept {
-    if (semitones == -24) return 1;
-    return 0;
+    if (semitones == -2) return 0;
+    if (semitones == -7) return 1;
+    return 2;
 }
 
 // ============================================================================
@@ -94,8 +98,9 @@ struct ParameterMetadata {
     bool isChoice;
 };
 
-inline const std::array<ParameterMetadata, 24>& getParameterMetadataTable() {
-    static const std::array<ParameterMetadata, 24> table {{
+inline const std::array<ParameterMetadata, 26>& getParameterMetadataTable() {
+    static const std::array<ParameterMetadata, 26> table {{
+        { "input_trim_db",      "inputTrimDb",      "Input Trim",            "dB",   -18.0f,  18.0f,    0.0f,   false, false },
         { "pre_delay_ms",       "preDelayMs",       "Pre-Delay",             "ms",   0.0f,    500.0f,   24.0f,  false, false },
         { "dry_wet_mix",        "dryWetMix",        "Dry / Wet Mix",         "%",    0.0f,    1.0f,     0.40f,  false, false },
         { "early_late_mix",     "earlyLateMix",     "Early / Late Mix",      "%",    0.0f,    1.0f,     0.50f,  false, false },
@@ -111,9 +116,10 @@ inline const std::array<ParameterMetadata, 24>& getParameterMetadataTable() {
         { "shimmer_send",       "shimmerSend",      "Shimmer Send",          "%",    0.0f,    1.0f,     0.40f,  false, false },
         { "dimmer_send",        "dimmerSend",       "Dimmer Send",           "%",    0.0f,    1.0f,     0.35f,  false, false },
         { "shimmer_interval",   "shimmerInterval",  "Shimmer Interval",      "st",   0.0f,    2.0f,     1.0f,   false, true  },
-        { "dimmer_interval",    "dimmerInterval",   "Dimmer Interval",       "st",   0.0f,    1.0f,     0.0f,   false, true  },
+        { "dimmer_interval",    "dimmerInterval",   "Dimmer Interval",       "st",   0.0f,    2.0f,     2.0f,   false, true  },
         { "pitch_blend",        "pitchBlend",       "Pitch Blend (Dim/Shim)","",     -1.0f,   1.0f,     0.0f,   false, false },
         { "pitch_feedback",     "pitchFeedback",    "Pitch Feedback",        "%",    0.0f,    0.95f,    0.45f,  false, false },
+        { "pitch_delay_ms",     "pitchDelayMs",     "Pitch Delay",           "ms",   20.0f,   500.0f,   150.0f, false, false },
         { "tail_mod_rate_hz",   "tailModRateHz",    "Tail Mod Rate",         "Hz",   0.05f,   5.0f,     0.65f,  false, false },
         { "tail_mod_depth_ms",  "tailModDepthMs",   "Tail Mod Depth",        "ms",   0.0f,    5.0f,     2.25f,  false, false },
         { "tail_bloom_ms",      "tailBloomMs",      "Tail Bloom Attack",     "ms",   20.0f,   300.0f,   85.0f,  false, false },
@@ -128,6 +134,7 @@ inline const std::array<ParameterMetadata, 24>& getParameterMetadataTable() {
 // Lock-Free Plain-Old-Data (POD) Parameter Snapshot Structure
 // ============================================================================
 struct alignas(16) Rb26ParameterSnapshot {
+    float inputTrimDb      { 0.0f };
     float preDelayMs       { 24.0f };
     float dryWetMix        { 0.40f };
     float earlyLateMix     { 0.50f };
@@ -146,6 +153,7 @@ struct alignas(16) Rb26ParameterSnapshot {
     int   dimmerInterval   { -12 };
     float pitchBlend       { 0.0f };
     float pitchFeedback    { 0.45f };
+    float pitchDelayMs     { 150.0f };
     float tailModRateHz    { 0.65f };
     float tailModDepthMs   { 2.25f };
     float tailBloomMs      { 85.0f };
@@ -155,6 +163,7 @@ struct alignas(16) Rb26ParameterSnapshot {
 
     [[nodiscard]] Rb26Parameters toDspParams() const noexcept {
         Rb26Parameters p;
+        p.inputTrimDb      = inputTrimDb;
         p.preDelayMs       = preDelayMs;
         p.dryWetMix        = dryWetMix;
         p.earlyLateMix     = earlyLateMix;
@@ -173,6 +182,7 @@ struct alignas(16) Rb26ParameterSnapshot {
         p.dimmerInterval   = dimmerInterval;
         p.pitchBlend       = pitchBlend;
         p.pitchFeedback    = pitchFeedback;
+        p.pitchDelayMs     = pitchDelayMs;
         p.tailModRateHz    = tailModRateHz;
         p.tailModDepthMs   = tailModDepthMs;
         p.tailBloomMs      = tailBloomMs;
@@ -187,6 +197,7 @@ struct alignas(16) Rb26ParameterSnapshot {
 // Cached Atomic Parameter Pointers for Real-Time Lock-Free Snapshotting
 // ============================================================================
 struct Rb26AtomicPointers {
+    std::atomic<float>* inputTrimDb      { nullptr };
     std::atomic<float>* preDelayMs       { nullptr };
     std::atomic<float>* dryWetMix        { nullptr };
     std::atomic<float>* earlyLateMix     { nullptr };
@@ -205,6 +216,7 @@ struct Rb26AtomicPointers {
     std::atomic<float>* dimmerInterval   { nullptr };
     std::atomic<float>* pitchBlend       { nullptr };
     std::atomic<float>* pitchFeedback    { nullptr };
+    std::atomic<float>* pitchDelayMs     { nullptr };
     std::atomic<float>* tailModRateHz    { nullptr };
     std::atomic<float>* tailModDepthMs   { nullptr };
     std::atomic<float>* tailBloomMs      { nullptr };
@@ -213,6 +225,7 @@ struct Rb26AtomicPointers {
     std::atomic<float>* limiterEnable    { nullptr };
 
     void initialize(juce::AudioProcessorValueTreeState& apvts) noexcept {
+        inputTrimDb       = apvts.getRawParameterValue(ParamIDs::inputTrimDb.getParamID());
         preDelayMs        = apvts.getRawParameterValue(ParamIDs::preDelayMs.getParamID());
         dryWetMix         = apvts.getRawParameterValue(ParamIDs::dryWetMix.getParamID());
         earlyLateMix      = apvts.getRawParameterValue(ParamIDs::earlyLateMix.getParamID());
@@ -231,6 +244,7 @@ struct Rb26AtomicPointers {
         dimmerInterval    = apvts.getRawParameterValue(ParamIDs::dimmerInterval.getParamID());
         pitchBlend        = apvts.getRawParameterValue(ParamIDs::pitchBlend.getParamID());
         pitchFeedback     = apvts.getRawParameterValue(ParamIDs::pitchFeedback.getParamID());
+        pitchDelayMs      = apvts.getRawParameterValue(ParamIDs::pitchDelayMs.getParamID());
         tailModRateHz     = apvts.getRawParameterValue(ParamIDs::tailModRateHz.getParamID());
         tailModDepthMs    = apvts.getRawParameterValue(ParamIDs::tailModDepthMs.getParamID());
         tailBloomMs       = apvts.getRawParameterValue(ParamIDs::tailBloomMs.getParamID());
@@ -241,6 +255,7 @@ struct Rb26AtomicPointers {
 
     [[nodiscard]] Rb26ParameterSnapshot loadSnapshot() const noexcept {
         Rb26ParameterSnapshot s;
+        if (inputTrimDb)       s.inputTrimDb       = inputTrimDb->load(std::memory_order_relaxed);
         if (preDelayMs)        s.preDelayMs        = preDelayMs->load(std::memory_order_relaxed);
         if (dryWetMix)         s.dryWetMix         = dryWetMix->load(std::memory_order_relaxed);
         if (earlyLateMix)      s.earlyLateMix      = earlyLateMix->load(std::memory_order_relaxed);
@@ -263,10 +278,11 @@ struct Rb26AtomicPointers {
         if (dimmerInterval) {
             const float val = dimmerInterval->load(std::memory_order_relaxed);
             const int idx = static_cast<int>(std::round(val));
-            s.dimmerInterval = (idx >= 0 && idx <= 1) ? dimmerIntervalFromIndex(idx) : static_cast<int>(val);
+            s.dimmerInterval = (idx >= 0 && idx <= 2) ? dimmerIntervalFromIndex(idx) : static_cast<int>(val);
         }
         if (pitchBlend)        s.pitchBlend        = pitchBlend->load(std::memory_order_relaxed);
         if (pitchFeedback)     s.pitchFeedback     = pitchFeedback->load(std::memory_order_relaxed);
+        if (pitchDelayMs)      s.pitchDelayMs      = pitchDelayMs->load(std::memory_order_relaxed);
         if (tailModRateHz)     s.tailModRateHz     = tailModRateHz->load(std::memory_order_relaxed);
         if (tailModDepthMs)    s.tailModDepthMs    = tailModDepthMs->load(std::memory_order_relaxed);
         if (tailBloomMs)       s.tailBloomMs       = tailBloomMs->load(std::memory_order_relaxed);
@@ -282,6 +298,14 @@ struct Rb26AtomicPointers {
 // ============================================================================
 inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout() {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // 0. Input Trim (-18.0 - +18.0 dB, default 0.0 dB)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamIDs::inputTrimDb,
+        "Input Trim",
+        juce::NormalisableRange<float>(-18.0f, 18.0f, 0.1f, 1.0f),
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel("dB")));
 
     // 1. Pre-Delay (0.0 - 500.0 ms, default 24.0 ms, skew 0.5 for fine low ms resolution)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -399,12 +423,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         getShimmerIntervalChoices(),
         1)); // index 1 = +12 st
 
-    // 16. Dimmer Pitch Interval (-12, -24 semitones, default -12)
+    // 16. Dimmer Pitch Interval (-2, -7, -12 semitones, default -12)
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         ParamIDs::dimmerInterval,
         "Dimmer Pitch Interval",
         getDimmerIntervalChoices(),
-        0)); // index 0 = -12 st
+        2)); // index 2 = -12 st
 
     // 17. Pitch Blend (-1.0 to +1.0, default 0.0)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -421,7 +445,15 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         0.45f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
-    // 19. Tail Mod Rate (0.05 - 5.0 Hz, default 0.65 Hz, skew 0.5)
+    // 19. Pitch Delay (20.0 - 500.0 ms, default 150.0 ms, skew 0.5)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        ParamIDs::pitchDelayMs,
+        "Pitch Delay",
+        juce::NormalisableRange<float>(20.0f, 500.0f, 0.1f, 0.5f),
+        150.0f,
+        juce::AudioParameterFloatAttributes().withLabel("ms")));
+
+    // 20. Tail Mod Rate (0.05 - 5.0 Hz, default 0.65 Hz, skew 0.5)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::tailModRateHz,
         "Tail Mod Rate",

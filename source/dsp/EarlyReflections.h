@@ -14,10 +14,9 @@ public:
     EarlyReflections() noexcept = default;
     ~EarlyReflections() noexcept = default;
 
-    // Hard real-time lifecycle
     void prepare(double sampleRate, float maxRoomSize = 2.0f) noexcept;
     void reset() noexcept;
-    void setParameters(float roomSize) noexcept;
+    void setParameters(float roomSize, float diffusionDensity = 0.0f) noexcept;
 
     // Guaranteed 100% time-invariant (0% modulation)
     void processSample(float inL, float inR, float& outL, float& outR) noexcept;
@@ -62,6 +61,14 @@ private:
     std::vector<float> mBufferR;
     size_t mWriteIndex { 0 };
 
+    float mDiffusionDensity { 0.0f };
+    static constexpr size_t kNumAllpass = 4;
+    static constexpr std::array<size_t, kNumAllpass> kBaseAllpassLengths = {{ 149, 211, 163, 223 }};
+    std::array<size_t, kNumAllpass> mAllpassLengths {};
+    std::array<std::vector<float>, kNumAllpass> mAllpassBuffers {};
+    std::array<size_t, kNumAllpass> mAllpassWriteIndices {};
+
+    inline float processAllpass(size_t index, float input, float density) noexcept;
     void updateTaps() noexcept;
 };
 

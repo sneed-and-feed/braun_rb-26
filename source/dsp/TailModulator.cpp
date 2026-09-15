@@ -84,8 +84,8 @@ void TailModulator::processSample(float inputTransientLevel,
         }
 
         const float lfoVal = std::sin(mPhases[k] + kPhaseOffsets[k]);
-        // Unipolar excursion [0, effectiveDepth]
-        outExcursionsSamples[k] = effectiveDepth * 0.5f * (1.0f + lfoVal);
+        // Zero-mean bipolar excursion
+        outExcursionsSamples[k] = (effectiveDepth * 0.5f) * lfoVal;
     }
 }
 

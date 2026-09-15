@@ -159,7 +159,14 @@ private:
     // Continuous Shepard-Risset Pitch Spiral & Partch Lattice Engine
     ShepardPitchSpiral mShepardSpiral;
 
-    // Internal recirculation state for pitch feedback
+    // Internal recirculation state for pitch feedback with decoupled circulation buffers
+    static constexpr size_t kCircCapacity = 32768;
+    static constexpr size_t kCircMask = kCircCapacity - 1;
+    std::vector<float> mShimmerCircBufferL;
+    std::vector<float> mShimmerCircBufferR;
+    std::vector<float> mDimmerCircBufferL;
+    std::vector<float> mDimmerCircBufferR;
+    size_t mCircWriteIndex { 0 };
     float mRecircShimmerL { 0.0f };
     float mRecircShimmerR { 0.0f };
     float mRecircDimmerL { 0.0f };

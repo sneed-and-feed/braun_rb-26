@@ -159,10 +159,10 @@ public:
         const float depth = std::clamp(punchDepth, 0.0f, 1.0f);
 
         float targetGain = 1.0f;
-        if (TR > 1.8f && depth > 0.001f) {
-            const float excess = TR - 1.8f;
-            const float raw = 1.0f / (1.0f + 1.25f * depth * excess);
-            const float floorGain = std::pow(10.0f, -0.6f * depth); // -12 dB at depth=1.0
+        if (TR > 1.18f && depth > 0.001f) {
+            const float excess = TR - 1.18f;
+            const float raw = 1.0f / (1.0f + 0.70f * depth * excess);
+            const float floorGain = std::pow(10.0f, -1.2f * depth); // -24 dB at depth=1.0
             targetGain = std::max(floorGain, raw);
         }
 
@@ -191,8 +191,9 @@ private:
 };
 
 // ============================================================================
-// SubBassEllipticalFilter: 2nd-Order Butterworth Side Highpass Filter
-// Smoothly rolls off Side energy below 120 Hz to prevent subwoofer cancellation.
+// SubBassEllipticalFilter: 4th-Order Linkwitz-Riley Side Highpass Filter
+// Cascaded dual 2nd-order Butterworth stages (24 dB/octave) for assertive mono
+// collapse below subMonoHz, eliminating subwoofer phase smearing completely.
 // ============================================================================
 class SubBassEllipticalFilter {
 public:
@@ -206,8 +207,8 @@ public:
     }
 
     void reset() noexcept {
-        mS1 = 0.0f;
-        mS2 = 0.0f;
+        mS1_1 = 0.0f; mS2_1 = 0.0f;
+        mS1_2 = 0.0f; mS2_2 = 0.0f;
     }
 
     void setCutoff(float cutoffHz) noexcept {
@@ -222,13 +223,17 @@ public:
         const float M = 0.5f * (inL + inR);
         const float S = 0.5f * (inL - inR);
 
-        // Highpass Side channel
-        const float sFilt = mB0 * S + mS1;
-        mS1 = flushDenormal(mB1 * S - mA1 * sFilt + mS2);
-        mS2 = flushDenormal(mB2 * S - mA2 * sFilt);
+        // Cascaded 4th-Order Linkwitz-Riley Highpass on Side channel (2x 2nd-Order Butterworth, 24 dB/oct)
+        const float s1 = mB0 * S + mS1_1;
+        mS1_1 = flushDenormal(mB1 * S - mA1 * s1 + mS2_1);
+        mS2_1 = flushDenormal(mB2 * S - mA2 * s1);
 
-        outL = M + sFilt;
-        outR = M - sFilt;
+        const float s2 = mB0 * s1 + mS1_2;
+        mS1_2 = flushDenormal(mB1 * s1 - mA1 * s2 + mS2_2);
+        mS2_2 = flushDenormal(mB2 * s1 - mA2 * s2);
+
+        outL = M + s2;
+        outR = M - s2;
     }
 
 private:
@@ -252,7 +257,8 @@ private:
     float mCutoffHz   { 120.0f };
     float mB0 { 1.0f }, mB1 { 0.0f }, mB2 { 0.0f };
     float mA1 { 0.0f }, mA2 { 0.0f };
-    float mS1 { 0.0f }, mS2 { 0.0f };
+    float mS1_1 { 0.0f }, mS2_1 { 0.0f };
+    float mS1_2 { 0.0f }, mS2_2 { 0.0f };
 };
 
 // ============================================================================

@@ -73,8 +73,10 @@ public:
     // Read 8 delay lines with Hermite cubic interpolation, apply dispersion allpasses and loop filters
     // inExcursions: 8 modulation excursions in samples from TailModulator
     // outFiltered: 8 filtered and dispersed delay outputs ready for Householder matrix reflection
+    // freezeAmount: 0.0f for normal operation, 1.0f to bypass HF damping during freeze hold
     void readAndFilterLines(const std::array<float, kNumLines>& inExcursions,
-                            std::array<float, kNumLines>& outFiltered) noexcept;
+                            std::array<float, kNumLines>& outFiltered,
+                            float freezeAmount = 0.0f) noexcept;
 
     // Write reflected and saturated feedback samples back to the 8 delay lines
     void writeFeedback(const std::array<float, kNumLines>& inSaturated) noexcept;

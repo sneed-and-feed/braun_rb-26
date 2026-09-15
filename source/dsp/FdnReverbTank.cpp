@@ -25,7 +25,7 @@ void FdnReverbTank::prepare(double sampleRate, float maxRoomSize) noexcept {
 
     mFreezeLoopSmoother.setSampleRate(fs);
     mFreezeLoopSmoother.setTimeConstant(0.060f);
-    mFreezeLoopSmoother.reset(1.0f);
+    mFreezeLoopSmoother.reset(0.0f);
 
     mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz);
     updateDecayGains();
@@ -62,10 +62,10 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
 
     if (mFreezeHold) {
         mFreezeInputSmoother.setTarget(0.0f);
-        mFreezeLoopSmoother.setTarget(0.9995f);
+        mFreezeLoopSmoother.setTarget(1.0f);
     } else {
         mFreezeInputSmoother.setTarget(1.0f);
-        mFreezeLoopSmoother.setTarget(1.0f);
+        mFreezeLoopSmoother.setTarget(0.0f);
     }
 
     mTailModulator.setParameters(tailModRateHz, tailModDepthMs, tailBloomMs);
@@ -92,7 +92,7 @@ inline float FdnReverbTank::processAllpass(size_t index, float input, float dens
     const size_t writeIdx = mAllpassWriteIndices[index];
     const float delayed = mAllpassBuffers[index][writeIdx];
 
-    const float g = 0.55f * density;
+    const float g = 0.70f * density;
     const float output = -g * input + delayed;
     mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
 
@@ -109,9 +109,9 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     const float diffL = processAllpass(1, processAllpass(0, inL, mDiffusionDensity), mDiffusionDensity);
     const float diffR = processAllpass(3, processAllpass(2, inR, mDiffusionDensity), mDiffusionDensity);
 
-    // Sum diffused input and pitch feedback with contractive loop gain headroom
-    const float dryL = diffL * freezeIn + pitchFbL;
-    const float dryR = diffR * freezeIn + pitchFbR;
+    // Sum diffused input and pitch feedback with contractive loop gain headroom; isolate both on freeze
+    const float dryL = (diffL + pitchFbL) * freezeIn;
+    const float dryR = (diffR + pitchFbR) * freezeIn;
     const float mid = 0.70710678f * (dryL + dryR);
     const float side = 0.70710678f * (dryL - dryR);
 
@@ -133,7 +133,7 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
 
     // 3. Read 8 delay lines with fractional Hermite cubic interpolation, HF damping & manifold filters
     std::array<float, kNumLines> y {};
-    mManifoldNetwork.readAndFilterLines(excursions, y);
+    mManifoldNetwork.readAndFilterLines(excursions, y, freezeLoop);
 
     // 4. Orthogonal Householder 8x8 reflection matrix: H_8 = I_8 - 0.25 * 1 * 1^T
     float sum = 0.0f;
@@ -146,7 +146,8 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     std::array<float, kNumLines> saturated {};
     for (size_t k = 0; k < kNumLines; ++k) {
         const float reflected = y[k] - matrixOffset;
-        const float feedback = reflected * mFeedbackGains[k] * freezeLoop;
+        const float effGain = (1.0f - freezeLoop) * mFeedbackGains[k] + freezeLoop * 1.0f;
+        const float feedback = reflected * effGain;
         const float nextIn = feedback + injection[k];
         saturated[k] = applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f);
     }

@@ -558,6 +558,17 @@ void AcousticExciterEngine::process(float* outL, float* outR, int numSamples) no
 
     drainTriggerQueue();
 
+    bool hasScheduled = false;
+    for (const auto& sn : mScheduledNotes) {
+        if (sn.active) { hasScheduled = true; break; }
+    }
+
+    if (getActiveVoiceCount() == 0 && !mLabGen.isBusy() && !mParams.poissonEnable && !hasScheduled) {
+        std::fill(outL, outL + numSamples, 0.0f);
+        std::fill(outR, outR + numSamples, 0.0f);
+        return;
+    }
+
     for (int n = 0; n < numSamples; ++n) {
         // 1. Advance Poisson generative clock if active
         if (mParams.poissonEnable) {
@@ -610,6 +621,15 @@ void AcousticExciterEngine::process(float* const* directBus, float* const* rever
     if (!mParams.enable) return;
 
     drainTriggerQueue();
+
+    bool hasScheduled = false;
+    for (const auto& sn : mScheduledNotes) {
+        if (sn.active) { hasScheduled = true; break; }
+    }
+
+    if (getActiveVoiceCount() == 0 && !mLabGen.isBusy() && !mParams.poissonEnable && !hasScheduled) {
+        return;
+    }
 
     for (int n = 0; n < numSamples; ++n) {
         // 1. Advance Poisson generative clock if active

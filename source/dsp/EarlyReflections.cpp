@@ -9,6 +9,14 @@ void EarlyReflections::prepare(double sampleRate, float /*maxRoomSize*/) noexcep
     mBufferL.assign(kBufferCapacity, 0.0f);
     mBufferR.assign(kBufferCapacity, 0.0f);
     mWriteIndex = 0;
+
+    for (size_t i = 0; i < kNumAllpass; ++i) {
+        const size_t len = static_cast<size_t>(std::round(static_cast<double>(kBaseAllpassLengths[i]) * (mSampleRate / 48000.0)));
+        mAllpassLengths[i] = std::max(size_t{16}, len);
+        mAllpassBuffers[i].assign(mAllpassLengths[i] + 64, 0.0f);
+        mAllpassWriteIndices[i] = 0;
+    }
+
     updateTaps();
 }
 
@@ -16,14 +24,20 @@ void EarlyReflections::reset() noexcept {
     std::fill(mBufferL.begin(), mBufferL.end(), 0.0f);
     std::fill(mBufferR.begin(), mBufferR.end(), 0.0f);
     mWriteIndex = 0;
+
+    for (size_t i = 0; i < kNumAllpass; ++i) {
+        std::fill(mAllpassBuffers[i].begin(), mAllpassBuffers[i].end(), 0.0f);
+        mAllpassWriteIndices[i] = 0;
+    }
 }
 
-void EarlyReflections::setParameters(float roomSize) noexcept {
+void EarlyReflections::setParameters(float roomSize, float diffusionDensity) noexcept {
     const float clamped = std::clamp(roomSize, 0.1f, 2.0f);
     if (std::abs(clamped - mRoomSize) > 0.005f) {
         mRoomSize = clamped;
         updateTaps();
     }
+    mDiffusionDensity = std::clamp(diffusionDensity, 0.0f, 1.0f);
 }
 
 void EarlyReflections::updateTaps() noexcept {
@@ -37,6 +51,20 @@ void EarlyReflections::updateTaps() noexcept {
         mTapGainsL[k] = kTapConfigs[k].gain * std::cos(theta);
         mTapGainsR[k] = kTapConfigs[k].gain * std::sin(theta);
     }
+}
+
+inline float EarlyReflections::processAllpass(size_t index, float input, float density) noexcept {
+    if (density < 1.0e-4f) return input;
+    const size_t len = mAllpassLengths[index];
+    const size_t writeIdx = mAllpassWriteIndices[index];
+    const float delayed = mAllpassBuffers[index][writeIdx];
+
+    const float g = 0.70f * density;
+    const float output = -g * input + delayed;
+    mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
+
+    mAllpassWriteIndices[index] = (writeIdx + 1) % len;
+    return flushDenormal(output);
 }
 
 void EarlyReflections::processSample(float inL, float inR, float& outL, float& outR) noexcept {
@@ -58,8 +86,11 @@ void EarlyReflections::processSample(float inL, float inR, float& outL, float& o
 
     mWriteIndex = (mWriteIndex + 1) & kBufferMask;
 
-    outL = flushDenormal(sumL);
-    outR = flushDenormal(sumR);
+    const float diffL = processAllpass(1, processAllpass(0, sumL, mDiffusionDensity), mDiffusionDensity);
+    const float diffR = processAllpass(3, processAllpass(2, sumR, mDiffusionDensity), mDiffusionDensity);
+
+    outL = flushDenormal(diffL);
+    outR = flushDenormal(diffR);
 }
 
 void EarlyReflections::processBlock(const float* inL, const float* inR,

@@ -296,17 +296,17 @@ export class Rb26WebEngine {
     this.modalHouseholderSum = ctx.createGain();
     this.modalHouseholderSum.gain.setValueAtTime(-0.50, ctx.currentTime);
 
-    const boundedBassMult = Math.min(1.4, Math.max(0.1, this.params.bassRt60Mult));
+    const boundedBassMult = Math.min(4.0, Math.max(0.1, this.params.bassRt60Mult));
     const effRt60 = Math.max(0.1, this.params.decayRt60Sec * boundedBassMult);
 
     for (let i = 0; i < 4; i++) {
       const d = ctx.createDelay(0.4);
       d.delayTime.setValueAtTime(modalTimes[i], ctx.currentTime);
 
-      // DC-blocking highpass filter (35 Hz 2nd-order Butterworth)
+      // DC-blocking highpass filter (56 Hz 2nd-order Butterworth)
       const dcBlock = ctx.createBiquadFilter();
       dcBlock.type = 'highpass';
-      dcBlock.frequency.setValueAtTime(35, ctx.currentTime);
+      dcBlock.frequency.setValueAtTime(56, ctx.currentTime);
       dcBlock.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
       // Lowpass damping filter in modal loop: extinguishes high-frequency transients and prevents metallic ringing
@@ -343,10 +343,10 @@ export class Rb26WebEngine {
       this.modalInputGains.push(inGain);
     }
 
-    // Sub-Mono Elliptical Filter on Modal Output (35 Hz 2nd-order Butterworth)
+    // Sub-Mono Elliptical Filter on Modal Output
     this.modalHighPass = ctx.createBiquadFilter();
     this.modalHighPass.type = 'highpass';
-    this.modalHighPass.frequency.setValueAtTime(35, ctx.currentTime);
+    this.modalHighPass.frequency.setValueAtTime(this.params.subMonoHz, ctx.currentTime);
     this.modalHighPass.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
     this.modalBus.connect(this.modalHighPass);
 
@@ -412,10 +412,10 @@ export class Rb26WebEngine {
       xfadeA.gain.setValueAtTime(1.0, ctx.currentTime);
       xfadeB.gain.setValueAtTime(0.0, ctx.currentTime);
 
-      // DC-blocking highpass filter (35 Hz Butterworth 2nd-order) in every recirculating delay path
+      // DC-blocking highpass filter (56 Hz Butterworth 2nd-order) in every recirculating delay path
       const dcBlock = ctx.createBiquadFilter();
       dcBlock.type = 'highpass';
-      dcBlock.frequency.setValueAtTime(35, ctx.currentTime);
+      dcBlock.frequency.setValueAtTime(56, ctx.currentTime);
       dcBlock.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
       // Lowpass damping filter in FDN loop: eliminates high-frequency runaway
@@ -623,9 +623,16 @@ export class Rb26WebEngine {
     this.masterLimiter.attack.setValueAtTime(0.001, ctx.currentTime);
     this.masterLimiter.release.setValueAtTime(0.080, ctx.currentTime);
 
+    // Master Output DC Blocker (20 Hz 2nd-order Butterworth Highpass)
+    this.masterDcBlocker = ctx.createBiquadFilter();
+    this.masterDcBlocker.type = 'highpass';
+    this.masterDcBlocker.frequency.setValueAtTime(20, ctx.currentTime);
+    this.masterDcBlocker.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
     this.masterOutputBus.connect(this.outputTrimGain);
     this.outputTrimGain.connect(this.masterLimiter);
-    this.masterLimiter.connect(ctx.destination);
+    this.masterLimiter.connect(this.masterDcBlocker);
+    this.masterDcBlocker.connect(ctx.destination);
 
     // Audio Analysis tap for CRT Display (stereo left/right)
     this.analyserL = ctx.createAnalyser();
@@ -639,10 +646,10 @@ export class Rb26WebEngine {
     this.analyserL.smoothingTimeConstant = 0.8;
     this.analyserR.smoothingTimeConstant = 0.8;
 
-    const splitter = ctx.createChannelSplitter(2);
-    this.masterLimiter.connect(splitter);
-    splitter.connect(this.analyserL, 0);
-    splitter.connect(this.analyserR, 1);
+    this.splitter = ctx.createChannelSplitter(2);
+    this.masterDcBlocker.connect(this.splitter);
+    this.splitter.connect(this.analyserL, 0);
+    this.splitter.connect(this.analyserR, 1);
   }
 
   _generateHermiteCurve() {
@@ -686,9 +693,10 @@ export class Rb26WebEngine {
   }
 
   _updatePitchBlendGains() {
-    const b = this.params.pitchBlend; // -1.0 (Dimmer) to +1.0 (Shimmer)
-    const shimGain = b >= 0 ? 1.0 : 1.0 + b;
-    const dimGain = b <= 0 ? 1.0 : 1.0 - b;
+    const b = Math.max(-1.0, Math.min(1.0, this.params.pitchBlend)); // -1.0 (Dimmer) to +1.0 (Shimmer)
+    const blendAngle = (Math.PI * 0.25) * (1.0 - b);
+    const shimGain = Math.cos(blendAngle);
+    const dimGain = Math.sin(blendAngle);
 
     if (this.pitchBlendGainShim && this.pitchBlendGainDim) {
       this.pitchBlendGainShim.gain.setTargetAtTime(shimGain, this.ctx.currentTime, 0.02);
@@ -714,7 +722,7 @@ export class Rb26WebEngine {
       }
       return;
     }
-    const boundedBassMult = Math.min(1.4, Math.max(0.1, this.params.bassRt60Mult));
+    const boundedBassMult = Math.min(4.0, Math.max(0.1, this.params.bassRt60Mult));
     const effRt60 = Math.max(0.1, this.params.decayRt60Sec * boundedBassMult);
     const modalTimes = [0.071, 0.089, 0.107, 0.126];
     const now = this.ctx.currentTime;
@@ -913,6 +921,25 @@ export class Rb26WebEngine {
         try { this.dryGain.gain.setValueAtTime(0.0, now); } catch (_) {}
       }
 
+      if (this.outputTrimGain) {
+        try { if (this.outputTrimGain.gain.cancelScheduledValues) this.outputTrimGain.gain.cancelScheduledValues(0); } catch (_) {}
+        this.outputTrimGain.gain.value = 0.0;
+        try { this.outputTrimGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
+      if (this.masterDcBlocker && this.masterLimiter && this.splitter) {
+        try {
+          this.masterLimiter.disconnect();
+          this.masterDcBlocker.disconnect();
+          const newDcBlocker = this.ctx.createBiquadFilter();
+          newDcBlocker.type = 'highpass';
+          newDcBlocker.frequency.setValueAtTime(20, now);
+          newDcBlocker.Q.setValueAtTime(BUTTERWORTH_Q, now);
+          newDcBlocker.connect(this.ctx.destination);
+          newDcBlocker.connect(this.splitter);
+          this.masterDcBlocker = newDcBlocker;
+        } catch (_) {}
+      }
+
       // Zero feedback gains
       if (this.fdnFeedbackGains) {
         for (const g of this.fdnFeedbackGains) {
@@ -940,12 +967,24 @@ export class Rb26WebEngine {
       // Re-powering: Ensure completely fresh delay lines
       this.flushDelayLines();
 
+      if (this.masterLimiter && this.masterDcBlocker) {
+        try {
+          this.masterLimiter.disconnect();
+          this.masterLimiter.connect(this.masterDcBlocker);
+        } catch (_) {}
+      }
+
       // Restore dry/wet and master levels
       this._updateDryWetGains();
       if (this.masterOutputBus) {
         try { if (this.masterOutputBus.gain.cancelScheduledValues) this.masterOutputBus.gain.cancelScheduledValues(0); } catch (_) {}
         this.masterOutputBus.gain.value = 1.0;
         try { this.masterOutputBus.gain.setValueAtTime(1.0, now); } catch (_) {}
+      }
+      if (this.outputTrimGain) {
+        const trimLinear = Math.pow(10, this.params.outputTrimDb / 20);
+        this.outputTrimGain.gain.value = trimLinear;
+        try { this.outputTrimGain.gain.setValueAtTime(trimLinear, now); } catch (_) {}
       }
       if (this.inputGain) {
         const inputLinear = Math.pow(10, this.params.inputTrimDb / 20) * 0.85;
@@ -1005,7 +1044,7 @@ export class Rb26WebEngine {
         }
         break;
       case 'bassRt60Mult':
-        this.params.bassRt60Mult = Math.min(1.4, Math.max(0.1, value));
+        this.params.bassRt60Mult = Math.min(4.0, Math.max(0.1, value));
         this._updateModalDecayGains();
         break;
       case 'punchDucking':
@@ -1015,7 +1054,7 @@ export class Rb26WebEngine {
         break;
       case 'subMonoHz':
         if (this.modalHighPass) {
-          this.modalHighPass.frequency.setTargetAtTime(Math.max(35, value * 0.30), now, 0.02);
+          this.modalHighPass.frequency.setTargetAtTime(Math.max(20, Math.min(250, value)), now, 0.02);
         }
         break;
       case 'highDampingHz':

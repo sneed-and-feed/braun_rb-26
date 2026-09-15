@@ -212,6 +212,7 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
 R"html(
 <script>
 const paramsMeta = [
+  { id: 'input_trim_db', webId: 'inputTrimDb', label: 'Input Trim', deck: 'Input & Pre-Delay', min: -18, max: 18, def: 0, unit: 'dB' },
   { id: 'pre_delay_ms', webId: 'preDelayMs', label: 'Pre-Delay', deck: 'Input & Pre-Delay', min: 0, max: 500, def: 20, unit: 'ms' },
   { id: 'dry_wet_mix', webId: 'dryWetMix', label: 'Dry/Wet', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.35, unit: '%' },
   { id: 'early_late_mix', webId: 'earlyLateMix', label: 'Early/Late', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.50, unit: '%' },
@@ -230,9 +231,10 @@ const paramsMeta = [
   { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.30, unit: '%' },
   { id: 'dimmer_send', webId: 'dimmerSend', label: 'Dimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.25, unit: '%' },
   { id: 'shimmer_interval', webId: 'shimmerInterval', label: 'Shimmer Int', deck: 'Pitch Diffusion', min: 0, max: 2, def: 1, unit: '', isChoice: true, choices: ['+7 st', '+12 st', '+24 st'] },
-  { id: 'dimmer_interval', webId: 'dimmerInterval', label: 'Dimmer Int', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0, unit: '', isChoice: true, choices: ['-12 st', '-24 st'] },
+  { id: 'dimmer_interval', webId: 'dimmerInterval', label: 'Dimmer Int', deck: 'Pitch Diffusion', min: 0, max: 2, def: 2, unit: '', isChoice: true, choices: ['-2 st', '-7 st', '-12 st'] },
   { id: 'pitch_blend', webId: 'pitchBlend', label: 'Pitch Blend', deck: 'Pitch Diffusion', min: -1, max: 1, def: 0, unit: '' },
   { id: 'pitch_feedback', webId: 'pitchFeedback', label: 'Pitch FB', deck: 'Pitch Diffusion', min: 0, max: 0.95, def: 0.50, unit: '%' },
+  { id: 'pitch_delay_ms', webId: 'pitchDelayMs', label: 'Pitch Delay', deck: 'Pitch Diffusion', min: 20, max: 500, def: 150, unit: 'ms' },
 
   { id: 'tail_mod_rate_hz', webId: 'tailModRateHz', label: 'Mod Rate', deck: 'Tail Bloom & Mod', min: 0.05, max: 5.0, def: 0.85, unit: 'Hz' },
   { id: 'tail_mod_depth_ms', webId: 'tailModDepthMs', label: 'Mod Depth', deck: 'Tail Bloom & Mod', min: 0, max: 5.0, def: 1.2, unit: 'ms' },

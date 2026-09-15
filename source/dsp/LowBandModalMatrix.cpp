@@ -82,7 +82,7 @@ void LowBandModalMatrix::setParameters(const LowBandModalParams& params) noexcep
 void LowBandModalMatrix::updateDecayCoefficients() noexcept {
     if (mParams.freezeHold) {
         for (size_t i = 0; i < kNumModalLines; ++i) {
-            mDecayCoeffs[i] = 0.998f;
+            mDecayCoeffs[i] = 1.0f;
         }
         return;
     }
@@ -143,13 +143,19 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
         mWriteIndices[i] = (mWriteIndices[i] + 1) % mDelayLengths[i];
     }
 
-    // 6. Balanced orthogonal Hadamard output summing (Constructive Mid w2+w3)
-    // Eliminates pairwise comb cancellations and flattens modal distribution (< 4.80 dB notch)
-    const float rawLowL = 0.5f * (-w[0] - w[1] + w[2] + w[3]);
-    const float rawLowR = 0.5f * (w[0] + w[1] + w[2] + w[3]);
+    // 6. Balanced orthogonal Hadamard output summing with Bass RT60 presence scaling
+    // Eliminates pairwise comb cancellations and assertively blooms low frequencies when bassRt60Mult is high
+    const float bassPresence = std::clamp(std::sqrt(mParams.bassRt60Mult), 0.707f, 2.0f);
+    const float rawLowL = 0.5f * (-w[0] - w[1] + w[2] + w[3]) * bassPresence;
+    const float rawLowR = 0.5f * (w[0] + w[1] + w[2] + w[3]) * bassPresence;
+
+    // Apply punch ducking to modal output to eliminate bass smear during transients (bypassed in freeze)
+    const float outDuck = mParams.freezeHold ? 1.0f : std::pow(duckGain, 2.0f);
+    const float duckedOutL = rawLowL * outDuck;
+    const float duckedOutR = rawLowR * outDuck;
 
     // 7. Sub-bass elliptical M/S filter below cutoff
-    mEllipticalFilter.process(rawLowL, rawLowR, lowOutL, lowOutR);
+    mEllipticalFilter.process(duckedOutL, duckedOutR, lowOutL, lowOutR);
 }
 
 void LowBandModalMatrix::processSample(float inL, float inR,
