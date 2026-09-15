@@ -116,9 +116,10 @@ inline float ShepardPitchSpiral::readHermite(const std::vector<float>& buffer, f
 }
 
 void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float& outR) noexcept {
+    ScopedNoDenormals noDenormals;
     if (mMode == SpiralMode::Bypass) [[unlikely]] {
-        outL = inL;
-        outR = inR;
+        outL = flushDenormal(inL);
+        outR = flushDenormal(inR);
         return;
     }
 

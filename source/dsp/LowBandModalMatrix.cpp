@@ -103,6 +103,8 @@ void LowBandModalMatrix::processCrossoverOnly(float inL, float inR,
 
 void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
                                         float& lowOutL, float& lowOutR) noexcept {
+    ScopedNoDenormals noDenormals;
+
     // 1. Transient punch detector
     const float duckGain = mPunchDetector.process(lowInL, lowInR, mParams.punchDucking);
     const float duckedL = lowInL * duckGain;
@@ -116,7 +118,7 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
 
     // 3. Lossless Householder reflection matrix (H_4 = I_4 - 0.5 * 1*1^T)
     const float sum = w[0] + w[1] + w[2] + w[3];
-    const float halfSum = sum * 0.5f;
+    const float halfSum = flushDenormal(sum * 0.5f);
 
     std::array<float, kNumModalLines> v {};
     for (size_t i = 0; i < kNumModalLines; ++i) {
@@ -156,11 +158,15 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
 
     // 7. Sub-bass elliptical M/S filter below cutoff
     mEllipticalFilter.process(duckedOutL, duckedOutR, lowOutL, lowOutR);
+    lowOutL = flushDenormal(lowOutL);
+    lowOutR = flushDenormal(lowOutR);
 }
 
 void LowBandModalMatrix::processSample(float inL, float inR,
                                        float& highOutL, float& highOutR,
                                        float& lowReverbOutL, float& lowReverbOutR) noexcept {
+    ScopedNoDenormals noDenormals;
+
     // 1. LR4 Crossover separates Low and High bands
     float lowInL = 0.0f, lowInR = 0.0f;
     mCrossover.process(inL, inR, lowInL, lowInR, highOutL, highOutR);

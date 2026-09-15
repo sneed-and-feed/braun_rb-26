@@ -102,6 +102,8 @@ inline float FdnReverbTank::processAllpass(size_t index, float input, float dens
 
 void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pitchFbR,
                                  float& outLateL, float& outLateR) noexcept {
+    ScopedNoDenormals noDenormals;
+
     const float freezeIn = mFreezeInputSmoother.next();
     const float freezeLoop = mFreezeLoopSmoother.next();
 
@@ -140,7 +142,7 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     for (size_t k = 0; k < kNumLines; ++k) {
         sum += y[k];
     }
-    const float matrixOffset = sum * 0.25f;
+    const float matrixOffset = flushDenormal(sum * 0.25f);
 
     // 5. Matrix recirculation + saturation bounding
     std::array<float, kNumLines> saturated {};
@@ -149,7 +151,7 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
         const float effGain = (1.0f - freezeLoop) * mFeedbackGains[k] + freezeLoop * 1.0f;
         const float feedback = reflected * effGain;
         const float nextIn = feedback + injection[k];
-        saturated[k] = applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f);
+        saturated[k] = flushDenormal(applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f));
     }
     mManifoldNetwork.writeFeedback(saturated);
 
@@ -163,7 +165,9 @@ void FdnReverbTank::processBlock(const float* inL, const float* inR,
                                 int numSamples) noexcept {
     ScopedNoDenormals noDenormals;
     for (int i = 0; i < numSamples; ++i) {
-        processSample(inL[i], inR[i], pitchFbL[i], pitchFbR[i], outLateL[i], outLateR[i]);
+        const float pL = pitchFbL ? pitchFbL[i] : 0.0f;
+        const float pR = pitchFbR ? pitchFbR[i] : 0.0f;
+        processSample(inL[i], inR[i], pL, pR, outLateL[i], outLateR[i]);
     }
 }
 

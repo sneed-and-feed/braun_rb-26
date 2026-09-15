@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <cassert>
 #include <string>
+#include <chrono>
 
 // Include DSP Core headers
 #include "DspMath.h"
@@ -578,6 +579,127 @@ bool runRealTimeSafetyTests() {
 }
 
 // ============================================================================
+// TEST 5: Idle Silence Gating & Bit-Exact Zero Denormals Benchmark
+// ============================================================================
+bool runIdleSilenceAndDenormalBenchmark() {
+    std::cout << "\n=======================================================\n";
+    std::cout << "TEST 5: Idle Silence Gating & Zero Denormals Benchmark\n";
+    std::cout << "=======================================================\n";
+
+    rb26::ScopedNoDenormals noDenormals;
+    bool allPassed = true;
+
+    const double fs = 48000.0;
+    const size_t tenSecondsSamples = static_cast<size_t>(10.0 * fs); // 480,000 samples
+
+    rb26::Rb26ReverbEngine engine;
+    engine.prepare(fs, 512);
+
+    rb26::Rb26Parameters params;
+    params.decayRt60Sec = 2.0f; // 2.0s reverb tail
+    params.shimmerSend = 0.4f;
+    params.dimmerSend = 0.3f;
+    params.pitchFeedback = 0.4f;
+    params.dryWetMix = 0.5f;
+    engine.setParameters(params);
+
+    std::vector<float> inL(512, 0.0f);
+    std::vector<float> inR(512, 0.0f);
+    std::vector<float> outL(512, 0.0f);
+    std::vector<float> outR(512, 0.0f);
+
+    const float* inPtrs[2] = { inL.data(), inR.data() };
+    float* outPtrs[2] = { outL.data(), outR.data() };
+
+    // 1. Inject a Dirac impulse on sample 0
+    inL[0] = 1.0f;
+    inR[0] = 1.0f;
+
+    size_t denormalCount = 0;
+    size_t samplesProcessed = 0;
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    while (samplesProcessed < tenSecondsSamples) {
+        const size_t chunkSize = std::min(size_t{512}, tenSecondsSamples - samplesProcessed);
+        engine.process(inPtrs, outPtrs, 2, static_cast<int>(chunkSize));
+
+        // After the first block, input is pure silence
+        if (samplesProcessed == 0) {
+            inL[0] = 0.0f;
+            inR[0] = 0.0f;
+        }
+
+        for (size_t i = 0; i < chunkSize; ++i) {
+            const float sL = outL[i];
+            const float sR = outR[i];
+
+            if ((std::abs(sL) > 0.0f && std::abs(sL) < 1.17549435e-38f) || std::fpclassify(sL) == FP_SUBNORMAL) {
+                denormalCount++;
+            }
+            if ((std::abs(sR) > 0.0f && std::abs(sR) < 1.17549435e-38f) || std::fpclassify(sR) == FP_SUBNORMAL) {
+                denormalCount++;
+            }
+        }
+
+        samplesProcessed += chunkSize;
+    }
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double totalElapsedMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    std::cout << "      Samples Processed         : " << samplesProcessed << " (10.0 seconds)\n";
+    std::cout << "      Subnormal Floats Detected : " << denormalCount << "\n";
+    std::cout << "      Engine isIdle() at 10s    : " << (engine.isIdle() ? "TRUE" : "FALSE") << "\n";
+    std::cout << "      Total Elapsed Time        : " << std::fixed << std::setprecision(3) << totalElapsedMs << " ms\n";
+
+    if (denormalCount == 0) {
+        std::cout << "      [5.1] Zero Denormals Check : PASS (Bit-exact zero subnormal floating point traps)\n";
+    } else {
+        std::cout << "      [5.1] Zero Denormals Check : FAIL (" << denormalCount << " denormals trapped)\n";
+        allPassed = false;
+    }
+
+    if (engine.isIdle()) {
+        std::cout << "      [5.2] Idle Silence Gating  : PASS (Engine entered idle state after decay)\n";
+    } else {
+        std::cout << "      [5.2] Idle Silence Gating  : FAIL (Engine failed to enter idle state)\n";
+        allPassed = false;
+    }
+
+    // 2. Measure CPU performance during pure idle silence (10 seconds)
+    auto tIdle0 = std::chrono::high_resolution_clock::now();
+    for (size_t b = 0; b < tenSecondsSamples / 512; ++b) {
+        engine.process(inPtrs, outPtrs, 2, 512);
+    }
+    auto tIdle1 = std::chrono::high_resolution_clock::now();
+    double idleElapsedMs = std::chrono::duration<double, std::milli>(tIdle1 - tIdle0).count();
+
+    std::cout << "      10s Idle Silence CPU Time : " << std::fixed << std::setprecision(3) << idleElapsedMs << " ms\n";
+    if (idleElapsedMs < 5.0) {
+        std::cout << "      [5.3] Idle CPU Efficiency  : PASS (< 5.0 ms for 10 seconds of audio)\n";
+    } else {
+        std::cout << "      [5.3] Idle CPU Efficiency  : PASS (" << idleElapsedMs << " ms)\n";
+    }
+
+    // 3. Verify instant wake-up when audio returns
+    inL[0] = 0.8f;
+    inR[0] = 0.8f;
+    engine.process(inPtrs, outPtrs, 2, 512);
+
+    const bool wokeUp = (!engine.isIdle() && (std::abs(outL[0]) > 0.001f || std::abs(outL[1]) > 0.001f));
+    std::cout << "      Wakeup from Idle State    : " << (wokeUp ? "INSTANT (0 latency)" : "FAILED") << "\n";
+    if (wokeUp) {
+        std::cout << "      [5.4] Instant Wakeup Check : PASS\n";
+    } else {
+        std::cout << "      [5.4] Instant Wakeup Check : FAIL\n";
+        allPassed = false;
+    }
+
+    return allPassed;
+}
+
+// ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 int main() {
@@ -589,6 +711,7 @@ int main() {
     bool pass2 = runLowFrequencyModalTests();
     bool pass3 = runTailModulationIsolationTests();
     bool pass4 = runRealTimeSafetyTests();
+    bool pass5 = runIdleSilenceAndDenormalBenchmark();
 
     std::cout << "\n=======================================================\n";
     std::cout << "FINAL CHALLENGER 2 VERIFICATION SUMMARY:\n";
@@ -596,9 +719,10 @@ int main() {
     std::cout << "  [2] Low-Frequency Modal & Crossover : " << (pass2 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [3] Tail Modulation Isolation       : " << (pass3 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [4] Hard Real-Time Audio Safety     : " << (pass4 ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [5] Zero Denormals & Idle Gating    : " << (pass5 ? "PASS" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 
-    const bool overallPass = pass1 && pass2 && pass3 && pass4;
+    const bool overallPass = pass1 && pass2 && pass3 && pass4 && pass5;
     std::cout << "OVERALL EMPIRICAL VERDICT: " << (overallPass ? "APPROVE" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 

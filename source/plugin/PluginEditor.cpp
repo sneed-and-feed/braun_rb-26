@@ -686,6 +686,24 @@ void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
     if (!hasNewFrame)
         return;
 
+    const bool isSilent = (latestTelemetryFrame.inputRmsL < 1.0e-5f &&
+                           latestTelemetryFrame.inputRmsR < 1.0e-5f &&
+                           latestTelemetryFrame.outputRmsL < 1.0e-5f &&
+                           latestTelemetryFrame.outputRmsR < 1.0e-5f);
+
+    if (isSilent)
+    {
+        if (++silentTelemetryCounter > 6)
+        {
+            if (silentTelemetryCounter % 30 != 0) // Throttle to 2Hz during sustained silence
+                return;
+        }
+    }
+    else
+    {
+        silentTelemetryCounter = 0;
+    }
+
     auto* obj = new juce::DynamicObject();
     obj->setProperty("inputRmsL", latestTelemetryFrame.inputRmsL);
     obj->setProperty("inputRmsR", latestTelemetryFrame.inputRmsR);

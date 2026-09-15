@@ -68,6 +68,7 @@ inline float EarlyReflections::processAllpass(size_t index, float input, float d
 }
 
 void EarlyReflections::processSample(float inL, float inR, float& outL, float& outR) noexcept {
+    ScopedNoDenormals noDenormals;
     // 20% lateral cross-coupling for room reflection spatial realism
     const float inBufL = inL + 0.20f * inR;
     const float inBufR = inR + 0.20f * inL;

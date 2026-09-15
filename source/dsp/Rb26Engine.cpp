@@ -73,6 +73,10 @@ void Rb26ReverbEngine::prepare(double sampleRate, int maxBlockSize) noexcept {
 }
 
 void Rb26ReverbEngine::reset() noexcept {
+    mIsIdle = false;
+    mSilentSamplesCount = 0;
+    mTailEnergyFollower = 0.0f;
+
     std::fill(mPreDelayBufferL.begin(), mPreDelayBufferL.end(), 0.0f);
     std::fill(mPreDelayBufferR.begin(), mPreDelayBufferR.end(), 0.0f);
     mPreDelayWriteIndex = 0;
@@ -107,6 +111,11 @@ void Rb26ReverbEngine::reset() noexcept {
 }
 
 void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
+    if (params.freezeHold && mIsIdle) {
+        mIsIdle = false;
+        mSilentSamplesCount = 0;
+    }
+
     mParams = params;
 
     LowBandModalParams lbParams;
@@ -167,6 +176,60 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
     float* outL = outputChannels[0];
     float* outR = (numChannels > 1 && outputChannels[1]) ? outputChannels[1] : nullptr;
+
+    // Fast check: does incoming block contain any signal?
+    bool blockHasSignal = false;
+    for (int n = 0; n < numSamples; ++n) {
+        const float peakL = std::abs(inL[n]);
+        const float peakR = std::abs(inR[n]);
+        const float auxPeakL = auxL ? std::abs(auxL[n]) : 0.0f;
+        const float auxPeakR = auxR ? std::abs(auxR[n]) : 0.0f;
+        if (peakL > 1.0e-7f || peakR > 1.0e-7f || auxPeakL > 1.0e-7f || auxPeakR > 1.0e-7f) {
+            blockHasSignal = true;
+            break;
+        }
+    }
+
+    // Freeze mode cannot be idle
+    if (mParams.freezeHold) {
+        mIsIdle = false;
+        mSilentSamplesCount = 0;
+    }
+
+    // Fast path: Idle Silence Gating
+    if (mIsIdle) {
+        if (!blockHasSignal && !mParams.freezeHold) {
+            std::fill(outL, outL + numSamples, 0.0f);
+            if (outR) {
+                std::fill(outR, outR + numSamples, 0.0f);
+            }
+
+            // Snap smoothers to targets so parameter updates while idle remain synchronized
+            mInputTrimSmoother.snapTo(mInputTrimSmoother.getTarget());
+            mPreDelaySmoother.snapTo(mPreDelaySmoother.getTarget());
+            mDryWetSmoother.snapTo(mDryWetSmoother.getTarget());
+            mEarlyLateSmoother.snapTo(mEarlyLateSmoother.getTarget());
+            mStereoWidthSmoother.snapTo(mStereoWidthSmoother.getTarget());
+            mOutputTrimSmoother.snapTo(mOutputTrimSmoother.getTarget());
+            mPitchFeedbackSmoother.snapTo(mPitchFeedbackSmoother.getTarget());
+            mPitchDelaySmoother.snapTo(mPitchDelaySmoother.getTarget());
+            mPitchBlendSmoother.snapTo(mPitchBlendSmoother.getTarget());
+
+            // Decimate telemetry
+            mTelemetryDecimator += numSamples;
+            if (mTelemetryDecimator >= 512) {
+                mTelemetryDecimator = 0;
+                VisualizerFrame zeroFrame {};
+                zeroFrame.correlation = 1.0f;
+                pushVisualizerFrame(zeroFrame);
+            }
+            return;
+        }
+
+        // Signal detected: instantly wake up from idle state
+        mIsIdle = false;
+        mSilentSamplesCount = 0;
+    }
 
     const float fs = static_cast<float>(mSampleRate);
 
@@ -280,9 +343,11 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         }
 
         // Output assignment
-        outL[n] = flushDenormal(sampleOutL);
+        sampleOutL = flushDenormal(sampleOutL);
+        sampleOutR = flushDenormal(sampleOutR);
+        outL[n] = sampleOutL;
         if (outR) {
-            outR[n] = flushDenormal(sampleOutR);
+            outR[n] = sampleOutR;
         }
 
         // Telemetry accumulation
@@ -294,6 +359,15 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
         const float outPeak = std::max(std::abs(sampleOutL), std::abs(sampleOutR));
         mDecayPeakFollower = std::max(outPeak, mDecayPeakFollower * 0.999f);
+        mTailEnergyFollower = flushDenormal(0.999f * mTailEnergyFollower + 0.001f * outPeak);
+
+        // Check if signal has completely died down below audible threshold
+        const float inPeak = std::max(std::abs(xL), std::abs(xR)) + (auxL ? std::abs(auxL[n]) : 0.0f) + (auxR ? std::abs(auxR[n]) : 0.0f);
+        if (inPeak < 1.0e-7f && outPeak < 1.0e-7f && mTailEnergyFollower < 1.0e-7f && !mParams.freezeHold) {
+            mSilentSamplesCount++;
+        } else {
+            mSilentSamplesCount = 0;
+        }
 
         // Periodically emit visualizer frame (~every 512 samples, approx 93 Hz at 48kHz)
         if (++mTelemetryDecimator >= 512) {
@@ -321,6 +395,25 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             mOutputRmsSumR = 0.0f;
             mCorrelationSum = 0.0f;
         }
+    }
+
+    // If silence sustained for > 2048 samples (approx 42ms after reaching sub -140dB), transition to idle
+    if (mSilentSamplesCount >= 2048 && !mParams.freezeHold) {
+        mIsIdle = true;
+        // Flush all internal delay buffers, filters, and recursive states to clean zero
+        mLowBandMatrix.reset();
+        mEarlyReflections.reset();
+        mFdnTank.reset();
+        mPitchShifter.reset();
+        mMasterSubMono.reset();
+        std::fill(mPreDelayBufferL.begin(), mPreDelayBufferL.end(), 0.0f);
+        std::fill(mPreDelayBufferR.begin(), mPreDelayBufferR.end(), 0.0f);
+        std::fill(mPitchDelayBufferL.begin(), mPitchDelayBufferL.end(), 0.0f);
+        std::fill(mPitchDelayBufferR.begin(), mPitchDelayBufferR.end(), 0.0f);
+        mLastPitchFbL = 0.0f;
+        mLastPitchFbR = 0.0f;
+        mDecayPeakFollower = 0.0f;
+        mTailEnergyFollower = 0.0f;
     }
 }
 

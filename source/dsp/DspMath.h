@@ -10,6 +10,8 @@
 // Hardware denormal control includes
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <immintrin.h>
+#include <xmmintrin.h>
+#include <pmmintrin.h>
 #elif defined(__aarch64__) || defined(_M_ARM64)
 #if defined(_MSC_VER)
 #include <arm64intr.h>
@@ -108,7 +110,7 @@ inline constexpr float kPhi    = 1.61803398874989484820f; // Golden ratio
     const float c1 = 0.5f * (y1 - ym1);
     const float c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2;
     const float c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
-    return ((c3 * mu + c2) * mu + c1) * mu + c0;
+    return flushDenormal(((c3 * mu + c2) * mu + c1) * mu + c0);
 }
 
 // ============================================================================
@@ -124,7 +126,7 @@ inline constexpr float kPhi    = 1.61803398874989484820f; // Golden ratio
     const float absX = std::abs(x);
 
     if (absX <= k) [[likely]] {
-        return x;
+        return flushDenormal(x);
     }
 
     const float sign = (x > 0.0f) ? 1.0f : -1.0f;
@@ -137,7 +139,7 @@ inline constexpr float kPhi    = 1.61803398874989484820f; // Golden ratio
     const float u = (absX - k) / delta;
     // Horner evaluation of u + u^2 - u^3 = u * (1 + u * (1 - u))
     const float poly = u * (1.0f + u * (1.0f - u));
-    return sign * (k + delta * poly);
+    return flushDenormal(sign * (k + delta * poly));
 }
 
 // Master bus soft limiter (knee = 0.85, ceiling = 1.0)
@@ -178,6 +180,7 @@ public:
         if (std::abs(mTarget - mCurrent) < 1.0e-6f) {
             mCurrent = mTarget;
         }
+        mCurrent = flushDenormal(mCurrent);
         return mCurrent;
     }
 
@@ -234,9 +237,9 @@ public:
 
     [[nodiscard]] inline float process(float x) noexcept {
         const float y = mAlpha * (mState + x - mPrevX);
-        mPrevX = x;
+        mPrevX = flushDenormal(x);
         mState = flushDenormal(y);
-        return y;
+        return flushDenormal(y);
     }
 
 private:
@@ -319,7 +322,7 @@ public:
         const float y = mB0 * x + mS1;
         mS1 = flushDenormal(mB1 * x - mA1 * y + mS2);
         mS2 = flushDenormal(mB2 * x - mA2 * y);
-        return y;
+        return flushDenormal(y);
     }
 
 private:

@@ -63,7 +63,7 @@ public:
             const float y = b0 * x + s1;
             s1 = flushDenormal(b1 * x - a1 * y + s2);
             s2 = flushDenormal(b2 * x - a2 * y);
-            return y;
+            return flushDenormal(y);
         }
     };
 
@@ -232,8 +232,8 @@ public:
         mS1_2 = flushDenormal(mB1 * s1 - mA1 * s2 + mS2_2);
         mS2_2 = flushDenormal(mB2 * s1 - mA2 * s2);
 
-        outL = M + s2;
-        outR = M - s2;
+        outL = flushDenormal(M + s2);
+        outR = flushDenormal(M - s2);
     }
 
 private:

@@ -51,6 +51,9 @@ public:
         }
 
         const float absX = std::abs(x);
+        if (absX < 1.0e-15f) [[unlikely]] {
+            return 0.0f;
+        }
 
         // Region 1: Linear unity-gain zone
         if (absX <= mKnee) [[likely]] {
@@ -68,7 +71,7 @@ public:
         const float u = (absX - mKnee) * mInvDelta;
         // Horner's evaluation of u + u^2 - u^3 = u * (1.0 + u * (1.0 - u))
         const float poly = u * (1.0f + u * (1.0f - u));
-        return sign * (mKnee + mDelta * poly);
+        return flushDenormal(sign * (mKnee + mDelta * poly));
     }
 
     /**

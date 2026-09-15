@@ -12,8 +12,6 @@ export class BraunKnob {
    * @param {Object} options
    */
   constructor(container, options = {}) {
-    if (!container) return;
-
     this.container = container;
     this.id = options.id || `knob-${Math.random().toString(36).substr(2, 9)}`;
     this.label = options.label || 'CONTROL';
@@ -28,14 +26,21 @@ export class BraunKnob {
     this.size = options.size || 'medium'; // 'small', 'medium', 'large'
     this.color = options.color || 'var(--knob-fill)';
     this.onChange = options.onChange || null;
+    this.onDragEnd = options.onDragEnd || null;
+
+    this.isDragging = false;
+    this._lastFormatted = '';
+    this._lastAria = null;
 
     this.startAngle = -140; // degrees
     this.endAngle = 140;   // degrees
     this.angleRange = this.endAngle - this.startAngle; // 280 deg
 
-    this.container.innerHTML = '';
-    this._render();
-    this._attachEvents();
+    if (this.container && typeof document !== 'undefined') {
+      this.container.innerHTML = '';
+      this._render();
+      this._attachEvents();
+    }
     this.setValue(this.value, false);
   }
 
@@ -89,16 +94,16 @@ export class BraunKnob {
   }
 
   _attachEvents() {
-    let isDragging = false;
     let startY = 0;
     let startVal = 0;
+    let lastShift = false;
     let dragMode = null; // 'pointer' | 'touch' | 'mouse'
     let activeTouchId = null;
     let activePointerId = null;
 
     const onPointerDown = (e) => {
       if (e.target === this.directInput) return;
-      if (isDragging) return;
+      if (this.isDragging) return;
 
       // Touch Disambiguation: Labels and value readouts allow native vertical momentum scrolling
       const isLabelOrValue = Boolean(
@@ -158,39 +163,63 @@ export class BraunKnob {
         startY = e.clientY || 0;
       }
 
-      isDragging = true;
+      this.isDragging = true;
       startVal = this.value;
+      lastShift = Boolean(e.shiftKey);
       this.element.classList.add('is-active');
 
       const applyDeltaY = (currentY, shiftKey) => {
+        const currentShift = Boolean(shiftKey);
+        if (currentShift !== lastShift) {
+          // Re-anchor start values when Shift modifier is pressed/released to eliminate sudden jumps
+          startVal = this.value;
+          startY = currentY;
+          lastShift = currentShift;
+        }
+
         const deltaY = startY - currentY;
-        const sensitivity = shiftKey ? 0.1 : 1.0;
+        const sensitivity = currentShift ? 0.1 : 1.0;
         const pixelRange = 160;
 
         const normalizedChange = (deltaY / pixelRange) * sensitivity;
-        let normVal = this.toNormalized(startVal) + normalizedChange;
-        normVal = Math.max(0, Math.min(1, normVal));
+        const rawNorm = this.toNormalized(startVal) + normalizedChange;
+        const normVal = Math.max(0, Math.min(1, rawNorm));
+
+        // Re-anchor at bounds to eliminate deadzone lag when reversing drag direction
+        if (rawNorm > 1.0 || rawNorm < 0.0) {
+          startY = currentY;
+          startVal = this.fromNormalized(normVal);
+        }
 
         const newVal = this.fromNormalized(normVal);
         this.setValue(newVal, true);
       };
 
       const onPointerMove = (ev) => {
-        if (!isDragging || dragMode !== 'pointer') return;
+        if (!this.isDragging || dragMode !== 'pointer') return;
         if (activePointerId !== null && ev.pointerId !== undefined && ev.pointerId !== activePointerId) {
           return; // Ignore other pointers
+        }
+        if (ev.cancelable && typeof ev.preventDefault === 'function') {
+          ev.preventDefault();
         }
         applyDeltaY(ev.clientY, ev.shiftKey);
       };
 
       const onMouseMove = (ev) => {
-        if (!isDragging || dragMode !== 'mouse') return;
+        if (!this.isDragging || dragMode !== 'mouse') return;
+        if (ev.cancelable && typeof ev.preventDefault === 'function') {
+          ev.preventDefault();
+        }
         applyDeltaY(ev.clientY, ev.shiftKey);
       };
 
       const onTouchMove = (ev) => {
-        if (!isDragging || dragMode !== 'touch') return;
+        if (!this.isDragging || dragMode !== 'touch') return;
         if (activeTouchId === null || !ev.touches) return;
+        if (ev.cancelable && typeof ev.preventDefault === 'function') {
+          ev.preventDefault();
+        }
         for (let i = 0; i < ev.touches.length; i++) {
           if (ev.touches[i].identifier === activeTouchId) {
             applyDeltaY(ev.touches[i].clientY, ev.shiftKey);
@@ -200,11 +229,13 @@ export class BraunKnob {
       };
 
       const cleanup = () => {
-        if (!isDragging) return;
-        isDragging = false;
+        if (!this.isDragging) return;
+        this.isDragging = false;
         try {
           if (this.element.releasePointerCapture && activePointerId != null) {
-            this.element.releasePointerCapture(activePointerId);
+            if (!this.element.hasPointerCapture || this.element.hasPointerCapture(activePointerId)) {
+              this.element.releasePointerCapture(activePointerId);
+            }
           }
         } catch (err) {}
 
@@ -221,6 +252,10 @@ export class BraunKnob {
         window.removeEventListener('touchmove', onTouchMove);
         window.removeEventListener('touchend', cleanup);
         window.removeEventListener('touchcancel', cleanup);
+
+        if (typeof this.onDragEnd === 'function') {
+          this.onDragEnd(this.value);
+        }
       };
 
       if (dragMode === 'pointer') {
@@ -364,6 +399,11 @@ export class BraunKnob {
   }
 
   setValue(val, triggerChange = true) {
+    // Prevent stale host echo from overriding user's active drag
+    if (!triggerChange && this.isDragging) {
+      return;
+    }
+
     // Clamp to min/max
     let clamped = Math.max(this.min, Math.min(this.max, val));
 
@@ -378,25 +418,29 @@ export class BraunKnob {
     const norm = this.toNormalized(this.value);
     const angle = this.startAngle + norm * this.angleRange;
 
-    // Update physical pointer rotation
+    // Update physical pointer rotation (hardware-accelerated CSS transform)
     if (this.cap) {
-      this.cap.style.transform = `rotate(${angle}deg)`;
+      this.cap.style.transform = `rotate(${angle}deg) translateZ(0)`;
     }
 
-    // Update SVG progress arc
+    // Update SVG progress arc directly without layout reflow
     if (this.fillCircle && this.arcLength) {
       const offset = this.arcLength * (1 - norm);
-      this.fillCircle.style.strokeDashoffset = offset;
-      this.fillCircle.setAttribute('stroke-dashoffset', offset);
+      this.fillCircle.style.strokeDashoffset = `${offset}`;
     }
 
-    // Update digital readout
+    // Update digital readout with DOM text caching
     if (this.valueText) {
-      this.valueText.textContent = this.formatValue(this.value);
+      const formatted = this.formatValue(this.value);
+      if (this._lastFormatted !== formatted) {
+        this._lastFormatted = formatted;
+        this.valueText.textContent = formatted;
+      }
     }
 
-    if (this.element) {
-      this.element.setAttribute('aria-valuenow', this.value);
+    if (this.element && this._lastAria !== clamped) {
+      this._lastAria = clamped;
+      this.element.setAttribute('aria-valuenow', clamped);
     }
 
     if (triggerChange && typeof this.onChange === 'function') {

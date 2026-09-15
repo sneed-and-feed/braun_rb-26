@@ -105,6 +105,7 @@ export class BraunVectorPad {
   _resize() {
     if (!this.canvas || !this.surfaceBox) return;
     const rect = this.surfaceBox.getBoundingClientRect ? this.surfaceBox.getBoundingClientRect() : { width: 340, height: 120 };
+    this._cachedRect = rect;
     const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1;
     const w = Math.max(10, Math.round(rect.width || this.surfaceBox.clientWidth || 340));
     const h = Math.max(10, Math.round(rect.height || this.surfaceBox.clientHeight || 120));
@@ -147,41 +148,21 @@ export class BraunVectorPad {
       });
     }
 
-    if (!this.surfaceBox) return;
-
-    let pendingNormX = null;
-    let pendingNormY = null;
-    let moveRafId = null;
-
-    const safeRaf = (cb) => {
-      if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(cb);
-      return setTimeout(cb, 16);
-    };
-    const safeCaf = (id) => {
-      if (typeof cancelAnimationFrame === 'function') return cancelAnimationFrame(id);
-      return clearTimeout(id);
-    };
-
     const handlePointerMove = (e) => {
       if (!this.isEngaged) return;
-      e.preventDefault();
-      const rect = this.surfaceBox.getBoundingClientRect();
+      if (e.cancelable && typeof e.preventDefault === 'function') {
+        e.preventDefault();
+      }
+      const rect = this._cachedRect || this.surfaceBox.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
 
       const clX = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
       const clY = e.clientY ?? (e.touches && e.touches[0].clientY) ?? 0;
 
-      pendingNormX = Math.max(0, Math.min(1, (clX - rect.left) / rect.width));
-      pendingNormY = Math.max(0, Math.min(1, 1.0 - (clY - rect.top) / rect.height));
+      const normX = Math.max(0, Math.min(1, (clX - rect.left) / rect.width));
+      const normY = Math.max(0, Math.min(1, 1.0 - (clY - rect.top) / rect.height));
 
-      if (!moveRafId) {
-        moveRafId = safeRaf(() => {
-          moveRafId = null;
-          if (pendingNormX !== null && pendingNormY !== null) {
-            this.setCoordinates(pendingNormX, pendingNormY, true);
-          }
-        });
-      }
+      this.setCoordinates(normX, normY, true);
     };
 
     const handlePointerUp = (e) => {
@@ -189,19 +170,11 @@ export class BraunVectorPad {
       this.isEngaged = false;
       this._updateStatusUi();
 
-      if (moveRafId) {
-        safeCaf(moveRafId);
-        moveRafId = null;
-      }
-      if (pendingNormX !== null && pendingNormY !== null) {
-        this.setCoordinates(pendingNormX, pendingNormY, true);
-        pendingNormX = null;
-        pendingNormY = null;
-      }
-
       if (this.surfaceBox.releasePointerCapture && e.pointerId !== undefined) {
         try {
-          this.surfaceBox.releasePointerCapture(e.pointerId);
+          if (!this.surfaceBox.hasPointerCapture || this.surfaceBox.hasPointerCapture(e.pointerId)) {
+            this.surfaceBox.releasePointerCapture(e.pointerId);
+          }
         } catch (err) {}
       }
 
@@ -214,6 +187,7 @@ export class BraunVectorPad {
 
     this.surfaceBox.addEventListener('pointerdown', async (e) => {
       e.preventDefault();
+      this._cachedRect = this.surfaceBox.getBoundingClientRect();
       if (this.surfaceBox.setPointerCapture && e.pointerId !== undefined) {
         try {
           this.surfaceBox.setPointerCapture(e.pointerId);
@@ -232,7 +206,7 @@ export class BraunVectorPad {
         await this.onEngage();
       }
 
-      const rect = this.surfaceBox.getBoundingClientRect();
+      const rect = this._cachedRect;
       const clX = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
       const clY = e.clientY ?? (e.touches && e.touches[0].clientY) ?? 0;
       const normX = Math.max(0, Math.min(1, (clX - rect.left) / rect.width));

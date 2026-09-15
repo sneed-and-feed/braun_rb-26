@@ -222,10 +222,10 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         // Guarantee zero hard clipping: apply master soft limiter to final output bus
         for (int i = 0; i < chunkSize; ++i)
         {
-            outChannels[0][samplesProcessed + i] = rb26::softLimit(outChannels[0][samplesProcessed + i]);
+            outChannels[0][samplesProcessed + i] = rb26::flushDenormal(rb26::softLimit(outChannels[0][samplesProcessed + i]));
             if (numChannels > 1)
             {
-                outChannels[1][samplesProcessed + i] = rb26::softLimit(outChannels[1][samplesProcessed + i]);
+                outChannels[1][samplesProcessed + i] = rb26::flushDenormal(rb26::softLimit(outChannels[1][samplesProcessed + i]));
             }
         }
 

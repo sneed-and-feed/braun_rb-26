@@ -238,6 +238,7 @@ void PitchShifter::setSpiralParameters(int spiralMode,
 }
 
 void PitchShifter::processSample(float inL, float inR, float& outL, float& outR) noexcept {
+    ScopedNoDenormals noDenormals;
     const float sSend = mShimmerSendSmoother.next();
     const float dSend = mDimmerSendSmoother.next();
     const float blend = mPitchBlendSmoother.next();

@@ -85,6 +85,9 @@ public:
                  int numSamples,
                  const float* const* auxReverbChannels = nullptr) noexcept;
 
+    // Status queries
+    [[nodiscard]] bool isIdle() const noexcept { return mIsIdle; }
+
     // Telemetry for CRT display (lock-free SPSC)
     struct VisualizerFrame {
         float inputRmsL { 0.0f }, inputRmsR { 0.0f };
@@ -99,6 +102,11 @@ private:
     double mSampleRate { 48000.0 };
     int mMaxBlockSize { 512 };
     Rb26Parameters mParams;
+
+    // Idle Silence Gating State
+    bool mIsIdle { false };
+    size_t mSilentSamplesCount { 0 };
+    float mTailEnergyFollower { 0.0f };
 
     // Pre-Delay Circular Buffer (500 ms at 192 kHz = 96,000 samples -> 131,072)
     static constexpr size_t kPreDelayBufferCapacity = 131072;

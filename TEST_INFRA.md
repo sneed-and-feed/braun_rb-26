@@ -42,26 +42,26 @@ The BRAUN RB-26 feature set (F1 through F20) defined in `PROJECT.md` is mapped a
 
 | # | Feature | Subsystem / Category | Milestone | Tier 1 (Min 5) | Tier 2 (Min 5) | Tier 3 (Pairwise) | Tier 4 (Studio Scenarios) |
 |---|---------|----------------------|:---------:|:--------------:|:--------------:|:-----------------:|:-------------------------:|
-| **F1** | Poincaré Hyperbolic Cavity | Space Manifold / FDN | M1 | 5 | 5 | ✓ | S01, S05, S11 |
-| **F2** | Whispering Gallery / Caustic Waveguide | Space Manifold / FDN | M1 | 5 | 5 | ✓ | S02, S06, S11 |
-| **F3** | Anharmonic Plate & Soundboard Formant | Space Manifold / FDN | M1 | 5 | 5 | ✓ | S03, S07, S11 |
-| **F4** | Stockhausen Klangdom | Space Manifold / FDN | M1 | 5 | 5 | ✓ | S04, S08, S11 |
-| **F5** | Endless Barber-Pole Dimmer | Pitch Spiral Engine | M1 | 5 | 5 | ✓ | S02, S05, S09 |
-| **F6** | Endless Barber-Pole Shimmer | Pitch Spiral Engine | M1 | 5 | 5 | ✓ | S01, S06, S09 |
-| **F7** | Microtonal Harmonic & Sub-Harmonic Lattices | Pitch Spiral Engine | M1 | 5 | 5 | ✓ | S04, S07, S12 |
-| **F8** | Decoupled Low-End & Transient Punch Protection | Low-End Matrix / LR4 | M1 | 5 | 5 | ✓ | S03, S07, S10 |
-| **F9** | Dynamic Tail-Level Bloom Gating | Modulation / Early Refl | M1 | 5 | 5 | ✓ | S01, S04, S08 |
-| **F10** | Playable Microtonal Chime & Chord Strip | Acoustic Exciter Engine | M2 | 5 | 5 | ✓ | S08, S12, S13 |
-| **F11** | Precision Laboratory Impulse Generator | Acoustic Exciter Engine | M2 | 5 | 5 | ✓ | S03, S05, S10 |
-| **F12** | Generative Poisson Acoustic Stimulus | Acoustic Exciter Engine | M2 | 5 | 5 | ✓ | S04, S09, S14 |
-| **F13** | Bus Routing & Exciter Level Staging | Signal Routing / Staging | M2 | 5 | 5 | ✓ | S08, S10, S13 |
-| **F14** | Austerity & DIN 1451 Nomenclature | Presentation / Branding | M3 | 5 | 5 | ✓ | S13, S14 |
-| **F15** | Patch Management & Presets | Preset / Persistence | M3 | 5 | 5 | ✓ | S09, S11, S13 |
-| **F16** | Master Utilities (WAV Rec, A/B, Theme) | Master Bus / Utilities | M3 | 5 | 5 | ✓ | S10, S13, S14 |
-| **F17** | Web App Lifecycle Guard | Web Architecture | M3 | 5 | 5 | ✓ | S13, S14 |
-| **F18** | Native 5-Platform JUCE 8 Codebase | Architecture / Scaffolding | M4 | 5 | 5 | ✓ | S10, S11, S14 |
-| **F19** | Hard Real-Time Audio Guarantees | Thread Safety / RT DSP | M4 | 5 | 5 | ✓ | S05, S10, S14 |
-| **F20** | Comprehensive E2E Testing Track | Verification / QA | M5/E2E | 5 | 5 | ✓ | All Scenarios |
+| **F1** | Poincaré Hyperbolic Cavity | Space Manifold / FDN | M1 | 5 | 5 | [X] | S01, S05, S11 |
+| **F2** | Whispering Gallery / Caustic Waveguide | Space Manifold / FDN | M1 | 5 | 5 | [X] | S02, S06, S11 |
+| **F3** | Anharmonic Plate & Soundboard Formant | Space Manifold / FDN | M1 | 5 | 5 | [X] | S03, S07, S11 |
+| **F4** | Stockhausen Klangdom | Space Manifold / FDN | M1 | 5 | 5 | [X] | S04, S08, S11 |
+| **F5** | Endless Barber-Pole Dimmer | Pitch Spiral Engine | M1 | 5 | 5 | [X] | S02, S05, S09 |
+| **F6** | Endless Barber-Pole Shimmer | Pitch Spiral Engine | M1 | 5 | 5 | [X] | S01, S06, S09 |
+| **F7** | Microtonal Harmonic & Sub-Harmonic Lattices | Pitch Spiral Engine | M1 | 5 | 5 | [X] | S04, S07, S12 |
+| **F8** | Decoupled Low-End & Transient Punch Protection | Low-End Matrix / LR4 | M1 | 5 | 5 | [X] | S03, S07, S10 |
+| **F9** | Dynamic Tail-Level Bloom Gating | Modulation / Early Refl | M1 | 5 | 5 | [X] | S01, S04, S08 |
+| **F10** | Playable Microtonal Chime & Chord Strip | Acoustic Exciter Engine | M2 | 5 | 5 | [X] | S08, S12, S13 |
+| **F11** | Precision Laboratory Impulse Generator | Acoustic Exciter Engine | M2 | 5 | 5 | [X] | S03, S05, S10 |
+| **F12** | Generative Poisson Acoustic Stimulus | Acoustic Exciter Engine | M2 | 5 | 5 | [X] | S04, S09, S14 |
+| **F13** | Bus Routing & Exciter Level Staging | Signal Routing / Staging | M2 | 5 | 5 | [X] | S08, S10, S13 |
+| **F14** | Austerity & DIN 1451 Nomenclature | Presentation / Branding | M3 | 5 | 5 | [X] | S13, S14 |
+| **F15** | Patch Management & Presets | Preset / Persistence | M3 | 5 | 5 | [X] | S09, S11, S13 |
+| **F16** | Master Utilities (WAV Rec, A/B, Theme) | Master Bus / Utilities | M3 | 5 | 5 | [X] | S10, S13, S14 |
+| **F17** | Web App Lifecycle Guard | Web Architecture | M3 | 5 | 5 | [X] | S13, S14 |
+| **F18** | Native 5-Platform JUCE 8 Codebase | Architecture / Scaffolding | M4 | 5 | 5 | [X] | S10, S11, S14 |
+| **F19** | Hard Real-Time Audio Guarantees | Thread Safety / RT DSP | M4 | 5 | 5 | [X] | S05, S10, S14 |
+| **F20** | Comprehensive E2E Testing Track | Verification / QA | M5/E2E | 5 | 5 | [X] | All Scenarios |
 
 ---
 

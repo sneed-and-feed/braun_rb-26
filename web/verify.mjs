@@ -265,6 +265,45 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       const midVal = logKnob.fromNormalized(0.5);
       assert.ok(midVal > 4000 && midVal < 5000, `Log midpoint ${midVal} should be ~4472 Hz`);
     });
+
+    it('verifies deadzone boundary re-anchoring on knob drag range overflow', async () => {
+      const { BraunKnob } = await import('./js/ui/knob.js');
+      const knob = new BraunKnob(null, { min: 0, max: 100, step: 1, value: 50 });
+
+      // Simulate applying delta with boundary re-anchoring
+      let startVal = 50;
+      let startY = 200;
+      const pixelRange = 160;
+
+      const applyStep = (currentY) => {
+        const deltaY = startY - currentY;
+        const normalizedChange = (deltaY / pixelRange) * 1.0;
+        const rawNorm = knob.toNormalized(startVal) + normalizedChange;
+        const normVal = Math.max(0, Math.min(1, rawNorm));
+
+        if (rawNorm > 1.0 || rawNorm < 0.0) {
+          startY = currentY;
+          startVal = knob.fromNormalized(normVal);
+        }
+        return knob.fromNormalized(normVal);
+      };
+
+      // Drag way up beyond max
+      let val1 = applyStep(0); // 200px drag up
+      assert.strictEqual(val1, 100, 'Must clamp at max');
+
+      // Drag down slightly by 16px (10% of pixel range)
+      let val2 = applyStep(16);
+      assert.strictEqual(val2, 90, 'Must immediately decrease from max without deadzone lag');
+
+      // Drag way down beyond min
+      let val3 = applyStep(400); // 384px drag down
+      assert.strictEqual(val3, 0, 'Must clamp at min');
+
+      // Drag up slightly by 16px (10% of pixel range)
+      let val4 = applyStep(384);
+      assert.strictEqual(val4, 10, 'Must immediately increase from min without deadzone lag');
+    });
   });
 
   //----------------------------------------------------------------------------

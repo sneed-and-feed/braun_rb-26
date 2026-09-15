@@ -529,6 +529,10 @@ export class BraunRb26App {
     this.isPowered = this.isJuce;
     this.currentPresetKey = 'DEFAULT';
 
+    // JUCE IPC Coalescing Dispatcher
+    this._pendingJuceParams = new Map();
+    this._juceRafId = null;
+
     // Master Utilities
     this.abBuffer = new ReverbComparisonBuffer(this);
     this.wavRecorder = null;
@@ -657,7 +661,7 @@ export class BraunRb26App {
       }
     }
 
-    this._emitJuceParam('power', this.isPowered ? 1.0 : 0.0);
+    this._emitJuceParam('power', this.isPowered ? 1.0 : 0.0, true);
   }
 
   async init() {
@@ -674,12 +678,38 @@ export class BraunRb26App {
     this._initLifecycleAudioUnlock();
   }
 
-  _emitJuceParam(id, value) {
-    if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
-      try {
-        window.__JUCE__.backend.emitEvent('paramChange', { id, value });
-      } catch (e) {}
+  _emitJuceParam(id, value, immediate = false) {
+    if (!this.isJuce || typeof window === 'undefined') return;
+    this._pendingJuceParams.set(id, value);
+    if (immediate) {
+      this._flushJuceParams();
+      return;
     }
+    if (!this._juceRafId) {
+      this._juceRafId = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame(() => this._flushJuceParams())
+        : setTimeout(() => this._flushJuceParams(), 16);
+    }
+  }
+
+  _flushJuceParams() {
+    if (this._juceRafId) {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._juceRafId);
+      else clearTimeout(this._juceRafId);
+      this._juceRafId = null;
+    }
+    if (!this._pendingJuceParams || this._pendingJuceParams.size === 0) return;
+    const backend = window.__JUCE__?.backend;
+    if (!backend || typeof backend.emitEvent !== 'function') {
+      this._pendingJuceParams.clear();
+      return;
+    }
+    this._pendingJuceParams.forEach((value, id) => {
+      try {
+        backend.emitEvent('paramChange', { id, value });
+      } catch (e) {}
+    });
+    this._pendingJuceParams.clear();
   }
 
   _emitJuceExciter(data) {
@@ -769,15 +799,21 @@ export class BraunRb26App {
           if (entry) {
             const knob = this.knobs[entry.key];
             if (knob && typeof knob.setValue === 'function') {
+              if (knob.isDragging) return; // Prevent stale host echo from overriding user's active drag
               knob.setValue(data.value * entry.scale, false);
             }
           }
         });
 
+        this._scopeBuffer = new Float32Array(512);
         backend.addEventListener('scopeFrame', (data) => {
           if (data && data.samples && this.display) {
-            const s = new Float32Array(data.samples);
-            this.display.pushAudio(s, s);
+            const arr = data.samples;
+            const len = Math.min(this._scopeBuffer.length, arr.length);
+            for (let i = 0; i < len; i++) {
+              this._scopeBuffer[i] = arr[i];
+            }
+            this.display.pushAudio(this._scopeBuffer.subarray(0, len), this._scopeBuffer.subarray(0, len));
           }
         });
 
@@ -906,7 +942,13 @@ export class BraunRb26App {
     const createKnob = (id, options) => {
       const el = document.getElementById(id);
       if (!el) return null;
-      return new BraunKnob(el, options);
+      return new BraunKnob(el, {
+        ...options,
+        onDragEnd: (val) => {
+          this._flushJuceParams();
+          if (typeof options.onDragEnd === 'function') options.onDragEnd(val);
+        }
+      });
     };
 
     // Deck 1: INPUT / PRE-DELAY

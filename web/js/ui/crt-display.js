@@ -295,6 +295,10 @@ export class BraunCrtDisplay {
         hasSignal = true;
       }
     }
+    for (let i = len; i < this.bufferSize; i++) {
+      this.timeDataL[i] = 0;
+      this.timeDataR[i] = 0;
+    }
 
     if (hasSignal) {
       this.silentFrames = 0;

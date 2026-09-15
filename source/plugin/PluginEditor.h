@@ -50,8 +50,9 @@ private:
     int hwndCheckCounter { 0 };
     void ensureHwndStyles();
 
-    // Telemetry & Scope streaming at 60 Hz
+    // Telemetry & Scope streaming at 60 Hz with idle throttling
     int silentFrameCounter { 0 };
+    int silentTelemetryCounter { 0 };
     rb26::Rb26ReverbEngine::VisualizerFrame latestTelemetryFrame {};
     void sendTelemetryToWeb();
     void sendScopeDataToWeb();
@@ -62,7 +63,6 @@ private:
     // Secondary / Fallback Presentation Layer: Dieter Rams Vector Graphics
     void drawBraunChassis(juce::Graphics& g, juce::Rectangle<int> bounds);
     void drawCrtDisplay(juce::Graphics& g, juce::Rectangle<int> bounds);
-    void drawKnob(juce::Graphics& g, juce::Rectangle<int> bounds, const juce::String& label, const juce::String& valueText, float normValue);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BRAUN_RB26AudioProcessorEditor)
 };
