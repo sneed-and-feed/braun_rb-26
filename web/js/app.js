@@ -29,6 +29,43 @@ export const SCALES = {
   AVALON_SPIRITED: { name: 'AVALON SPIRITED', intervals: [0, 2, 4, 5, 7, 9, 11] }
 };
 
+export const CHIME_KEY_MAP = {
+  'KeyA': 0, 'KeyS': 1, 'KeyD': 2, 'KeyF': 3,
+  'KeyG': 4, 'KeyH': 5, 'KeyJ': 6, 'KeyK': 7,
+  'KeyL': 8, 'Semicolon': 9, 'Quote': 10
+};
+
+export const CHIME_CHAR_MAP = {
+  'a': 0, 's': 1, 'd': 2, 'f': 3, 'g': 4, 'h': 5, 'j': 6, 'k': 7,
+  'l': 8, ';': 9, "'": 10
+};
+
+export const CHORD_KEY_MAP = {
+  'Digit1': 0, 'Digit2': 1, 'Digit3': 2, 'Digit4': 3, 'Digit5': 4, 'Digit6': 5,
+  'Digit7': 6, 'Digit8': 7, 'Digit9': 8, 'Digit0': 9,
+  'Minus': 10, 'Equal': 11,
+  'Numpad1': 0, 'Numpad2': 1, 'Numpad3': 2, 'Numpad4': 3, 'Numpad5': 4, 'Numpad6': 5,
+  'Numpad7': 6, 'Numpad8': 7, 'Numpad9': 8, 'Numpad0': 9,
+  'NumpadSubtract': 10, 'NumpadAdd': 11
+};
+
+export function getChimeKeyIndex(e) {
+  if (!e) return null;
+  if (e.code && CHIME_KEY_MAP[e.code] !== undefined) return CHIME_KEY_MAP[e.code];
+  const lower = e.key ? e.key.toLowerCase() : '';
+  return CHIME_CHAR_MAP[lower] !== undefined ? CHIME_CHAR_MAP[lower] : null;
+}
+
+export function getChordKeyIndex(e) {
+  if (!e) return null;
+  if (e.code && CHORD_KEY_MAP[e.code] !== undefined) return CHORD_KEY_MAP[e.code];
+  if (e.key >= '1' && e.key <= '9') return parseInt(e.key, 10) - 1;
+  if (e.key === '0') return 9;
+  if (e.key === '-' || e.key === '_') return 10;
+  if (e.key === '=' || e.key === '+') return 11;
+  return null;
+}
+
 export const CHORD_SPEEDS = {
   slow: 120,
   med: 50,
@@ -1614,10 +1651,13 @@ export class BraunRb26App {
     // Track active held keys to prevent machine-gun repeat bursts and support clean sustain
     this._heldKeys = new Set();
 
-    const isPlayableMusicalKey = (key) => {
-      const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
-      const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
-      return chimeHotkeys.includes(key) || chordHotkeys.includes(key) || key === ' ';
+    const isPlayableMusicalKey = (e) => {
+      if (!e) return false;
+      const key = typeof e === 'string' ? e.toLowerCase() : (e.key ? e.key.toLowerCase() : '');
+      const code = (typeof e === 'object' && e.code) ? e.code : '';
+      return getChimeKeyIndex({ code, key }) !== null ||
+             getChordKeyIndex({ code, key }) !== null ||
+             key === ' ' || code === 'Space';
     };
 
     // Keyboard Shortcuts (A-' for chimes, 1-= for chords)
@@ -1627,8 +1667,7 @@ export class BraunRb26App {
       const target = e.target;
       if (target && target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'search' || !target.type)) return;
 
-      const key = e.key ? e.key.toLowerCase() : '';
-      if (!isPlayableMusicalKey(key)) return;
+      if (!isPlayableMusicalKey(e)) return;
 
       // Immediately blur any select, button, or active element so typing triggers notes cleanly
       const activeEl = document.activeElement;
@@ -1642,12 +1681,15 @@ export class BraunRb26App {
       e.preventDefault();
       e.stopPropagation();
 
+      const keyId = e.code || (e.key ? e.key.toLowerCase() : '');
       // Ignore browser typematic auto-repeat events so sustained notes hold cleanly rather than stuttering at OS repeat speed
-      if (e.repeat || (this._heldKeys && this._heldKeys.has(key))) {
+      if (e.repeat || (this._heldKeys && (this._heldKeys.has(keyId) || (e.code && this._heldKeys.has(e.code)) || (e.key && this._heldKeys.has(e.key.toLowerCase()))))) {
         return;
       }
 
-      this._heldKeys.add(key);
+      this._heldKeys.add(keyId);
+      if (e.code) this._heldKeys.add(e.code);
+      if (e.key) this._heldKeys.add(e.key.toLowerCase());
       this._handleKeyboardShortcuts(e);
     }, { capture: true });
 
@@ -1655,14 +1697,16 @@ export class BraunRb26App {
       const target = e.target;
       if (target && target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'search' || !target.type)) return;
 
-      const key = e.key ? e.key.toLowerCase() : '';
-      if (isPlayableMusicalKey(key)) {
+      if (isPlayableMusicalKey(e)) {
         e.preventDefault();
         e.stopPropagation();
       }
 
+      const keyId = e.code || (e.key ? e.key.toLowerCase() : '');
       if (this._heldKeys) {
-        this._heldKeys.delete(key);
+        this._heldKeys.delete(keyId);
+        if (e.code) this._heldKeys.delete(e.code);
+        if (e.key) this._heldKeys.delete(e.key.toLowerCase());
       }
       this._handleKeyboardKeyUp(e);
     }, { capture: true });
@@ -1748,9 +1792,9 @@ export class BraunRb26App {
         ? getChimeMidiForDegree(keyIdx, this.rootPitchClass, scale.intervals)
         : (keyEl.hasAttribute('data-note-offset') ? (60 + parseFloat(keyEl.getAttribute('data-note-offset'))) : 60);
       const midi = parseFloat(keyEl.getAttribute('data-midi')) || fallbackMidi;
-      const voice = this.playChime(midi, velocity);
+      const voice = this.playChime(midi, velocity, 3.5, false);
       if (voice && hotkey && this._activeVoices) {
-        this._activeVoices.set(hotkey, voice);
+        this._activeVoices.set(hotkey, { voice, key: hotkey });
       }
 
       keyEl.classList.add('is-active');
@@ -1791,39 +1835,63 @@ export class BraunRb26App {
   }
 
   _handleKeyboardKeyUp(e) {
+    const code = e.code;
     const key = e.key ? e.key.toLowerCase() : '';
 
-    if (key === ' ') {
+    if (key === ' ' || code === 'Space') {
       const impulseBtns = document.querySelectorAll('#btn-audition-impulse, #btn-pulse-dirac');
       impulseBtns.forEach((btn) => btn.classList.remove('is-active'));
       return;
     }
 
-    // Release any active acoustic voice smoothly using piano felt damping (0.28s)
-    if (this._activeVoices && this._activeVoices.has(key)) {
-      const voice = this._activeVoices.get(key);
-      if (voice && typeof voice.release === 'function') {
-        voice.release(0.28);
+    // Release any active acoustic voice smoothly using piano felt damping (0.35s)
+    let foundId = null;
+    let foundEntry = null;
+    if (this._activeVoices) {
+      for (const [id, entry] of this._activeVoices.entries()) {
+        const matchId = (id === code || id === key || (typeof id === 'string' && id.toLowerCase() === key));
+        const matchCode = (code && entry && entry.code === code);
+        const matchKey = (key && entry && (entry.key === key || (typeof entry.key === 'string' && entry.key.toLowerCase() === key)));
+        if (matchId || matchCode || matchKey) {
+          foundId = id;
+          foundEntry = entry;
+          break;
+        }
       }
-      this._activeVoices.delete(key);
     }
 
-    const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
-    const chimeIdx = chimeHotkeys.indexOf(key);
-    if (chimeIdx !== -1) {
+    if (foundEntry && foundId !== null) {
+      this._activeVoices.delete(foundId);
+      const voice = foundEntry.voice || (typeof foundEntry.release === 'function' ? foundEntry : null);
+      if (voice && typeof voice.release === 'function') {
+        voice.release(0.35);
+      }
+      if (foundEntry.chimeIdx !== undefined && foundEntry.chimeIdx !== null) {
+        const chimeKeys = document.querySelectorAll('.braun-chime-key');
+        const keyEl = chimeKeys[foundEntry.chimeIdx];
+        if (keyEl) keyEl.classList.remove('is-active');
+      }
+      if (foundEntry.chordIdx !== undefined && foundEntry.chordIdx !== null) {
+        const chordBtns = document.querySelectorAll('.braun-chord-btn');
+        const chordBtn = chordBtns[foundEntry.chordIdx];
+        if (chordBtn && !chordBtn._pointerActive) chordBtn.classList.remove('is-active');
+      }
+    }
+
+    const chimeIdx = getChimeKeyIndex(e);
+    if (chimeIdx !== null) {
       const chimeKeys = document.querySelectorAll('.braun-chime-key');
-      const keyEl = Array.from(chimeKeys).find((el) => el.getAttribute('data-hotkey') === key);
+      const keyEl = chimeKeys[chimeIdx];
       if (keyEl) {
         keyEl.classList.remove('is-active');
       }
       return;
     }
 
-    const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
-    const chordIdx = chordHotkeys.indexOf(key);
-    if (chordIdx !== -1) {
+    const chordIdx = getChordKeyIndex(e);
+    if (chordIdx !== null) {
       const chordBtns = document.querySelectorAll('.braun-chord-btn');
-      const chordBtn = Array.from(chordBtns).find((btn) => btn.getAttribute('data-chord-index') === String(chordIdx));
+      const chordBtn = chordBtns[chordIdx];
       if (chordBtn && !chordBtn._pointerActive) {
         chordBtn.classList.remove('is-active');
       }
@@ -1832,59 +1900,59 @@ export class BraunRb26App {
 
   _handleKeyboardShortcuts(e) {
     if (!this.isPowered) return;
+    const code = e.code;
     const key = e.key ? e.key.toLowerCase() : '';
 
     // Spacebar: Dirac Impulse Pulse
-    if (key === ' ') {
+    if (key === ' ' || code === 'Space') {
       this.triggerDirac();
       return;
     }
 
-    // Chime hotkeys: a, s, d, f, g, h, j, k, l, ;, '
-    const chimeHotkeys = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\''];
-    const chimeIdx = chimeHotkeys.indexOf(key);
-    if (chimeIdx !== -1) {
+    // Chime hotkeys: A-' via getChimeKeyIndex
+    const chimeIdx = getChimeKeyIndex(e);
+    if (chimeIdx !== null) {
       const chimeKeys = document.querySelectorAll('.braun-chime-key');
-      const keyEl = Array.from(chimeKeys).find((el) => el.getAttribute('data-hotkey') === key);
+      const keyEl = chimeKeys[chimeIdx];
       if (keyEl) {
         const scale = SCALES[this.currentScaleKey] || SCALES.BUDD_PENTATONIC;
         const midi = parseFloat(keyEl.getAttribute('data-midi')) || getChimeMidiForDegree(chimeIdx, this.rootPitchClass, scale.intervals);
-        const prevVoice = this._activeVoices ? this._activeVoices.get(key) : null;
-        if (prevVoice && typeof prevVoice.release === 'function') {
-          prevVoice.release(0.28);
+        const keyId = code || key || `chime-${chimeIdx}`;
+        if (this._activeVoices && this._activeVoices.has(keyId)) {
+          const old = this._activeVoices.get(keyId);
+          const oldVoice = old?.voice || (typeof old?.release === 'function' ? old : null);
+          if (oldVoice && typeof oldVoice.release === 'function') oldVoice.release(0.28);
+          this._activeVoices.delete(keyId);
         }
-        const voice = this.playChime(midi, 0.70);
+        const voice = this.playChime(midi, 0.70, 3.5, true);
         if (voice && this._activeVoices) {
-          this._activeVoices.set(key, voice);
+          this._activeVoices.set(keyId, { voice, code, key, chimeIdx });
         }
         keyEl.classList.add('is-active');
-        setTimeout(() => {
-          if (!this._heldKeys || !this._heldKeys.has(key)) {
-            keyEl.classList.remove('is-active');
-          }
-        }, 220);
       }
       return;
     }
 
-    // Chord hotkeys: 1 through 9, 0, -, =
-    const chordHotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
-    const chordIdx = chordHotkeys.indexOf(key);
-    if (chordIdx !== -1) {
+    // Chord hotkeys: 1 through 9, 0, -, = via getChordKeyIndex
+    const chordIdx = getChordKeyIndex(e);
+    if (chordIdx !== null) {
       const chordBtns = document.querySelectorAll('.braun-chord-btn');
-      const chordBtn = Array.from(chordBtns).find((btn) => btn.getAttribute('data-chord-index') === String(chordIdx));
+      const chordBtn = chordBtns[chordIdx];
+      const keyId = code || key || `chord-${chordIdx}`;
+      if (this._activeVoices && this._activeVoices.has(keyId)) {
+        const old = this._activeVoices.get(keyId);
+        const oldVoice = old?.voice || (typeof old?.release === 'function' ? old : null);
+        if (oldVoice && typeof oldVoice.release === 'function') oldVoice.release(0.28);
+        this._activeVoices.delete(keyId);
+      }
       if (chordBtn && this._activeChordButtons && this._activeChordButtons.has(chordBtn)) {
         const oldBtnVoice = this._activeChordButtons.get(chordBtn);
         if (oldBtnVoice && typeof oldBtnVoice.release === 'function') oldBtnVoice.release(0.28);
         this._activeChordButtons.delete(chordBtn);
       }
-      const prevVoice = this._activeVoices ? this._activeVoices.get(key) : null;
-      if (prevVoice && typeof prevVoice.release === 'function') {
-        prevVoice.release(0.28);
-      }
-      const voice = this.playChord(chordIdx);
+      const voice = this.playChord(chordIdx, true);
       if (voice && this._activeVoices) {
-        this._activeVoices.set(key, voice);
+        this._activeVoices.set(keyId, { voice, code, key, chordIdx });
       }
       if (chordBtn) {
         chordBtn.classList.add('is-active');
@@ -1912,7 +1980,7 @@ export class BraunRb26App {
    * steep una corda lowpass damping (dual cascaded 24dB/oct biquads decaying in ~0.18s),
    * dual micro-detuned acoustic string pair, and smooth dynamic decay envelope.
    */
-  playChime(midiNote, velocity = 0.70, durationSec = 3.5) {
+  playChime(midiNote, velocity = 0.70, durationSec = 3.5, isHold = false) {
     if (!this.isPowered) return;
 
     if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
@@ -1944,12 +2012,21 @@ export class BraunRb26App {
     const maxCutoff = Math.min(7500, Math.max(f0 * 1.8, 420 + 2600 * velocity));
     const restCutoff = Math.min(2200, Math.max(160, f0 * 1.15));
 
+    const peakGain = velocity * 0.22;
+    const attackTime = 0.008;
+    const sustainLevel = Math.max(0.002, peakGain * 0.45);
+    const sustainTarget = now + attackTime + 0.35;
+
     // Master Voice Gain with 8ms anti-click attack and smooth exponential decay
     const voiceGain = ctx.createGain();
     voiceGain.gain.setValueAtTime(0.0, now);
     voiceGain.gain.linearRampToValueAtTime(velocity * 0.22, now + 0.008);
-    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
-    voiceGain.gain.linearRampToValueAtTime(0.0, now + durationSec + 0.05);
+    if (isHold) {
+      voiceGain.gain.exponentialRampToValueAtTime(sustainLevel, sustainTarget);
+    } else {
+      voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+      voiceGain.gain.linearRampToValueAtTime(0.0, now + durationSec + 0.05);
+    }
 
     // Spruce Soundboard Resonant Peaking Formant Filter (~480–610 Hz, Q=1.2, +2dB)
     const bodyFilter = ctx.createBiquadFilter();
@@ -2084,14 +2161,66 @@ export class BraunRb26App {
         clearTimeout(naturalExpireTimer);
         try {
           const t = ctx.currentTime;
+          const cancelTime = Math.max(now, t);
+          const tElapsed = cancelTime - now;
+
+          // Mathematically calculate expected instantaneous gain at cancelTime
+          // Prevents step jumps and snapbacks if browser resets active timeline
+          let safeGain;
+          if (tElapsed <= attackTime) {
+            safeGain = Math.max(0.0002, peakGain * (tElapsed / Math.max(0.001, attackTime)));
+          } else if (tElapsed <= (attackTime + 0.35)) {
+            const frac = (tElapsed - attackTime) / 0.35;
+            safeGain = Math.max(0.0002, peakGain * Math.pow(sustainLevel / peakGain, frac));
+          } else if (isHold) {
+            safeGain = sustainLevel;
+          } else {
+            const decayFrac = Math.min(1, Math.max(0, (tElapsed - attackTime - 0.35) / Math.max(0.1, durationSec - attackTime - 0.35)));
+            safeGain = Math.max(0.0002, sustainLevel * Math.pow(0.0001 / sustainLevel, decayFrac));
+          }
+
           // Smooth exponential decay via setTargetAtTime with cancelAndHoldAtTime
           // to eliminate timeline reset step discontinuities when cancelling active ramps
           if (typeof voiceGain.gain.cancelAndHoldAtTime === 'function') {
-            voiceGain.gain.cancelAndHoldAtTime(t);
-          } else {
-            voiceGain.gain.cancelScheduledValues(t);
+            try {
+              voiceGain.gain.cancelAndHoldAtTime(cancelTime);
+            } catch (_) {}
           }
+          try {
+            voiceGain.gain.cancelScheduledValues(cancelTime);
+          } catch (_) {}
+
+          // Explicitly anchor timeline at safeGain to prevent timeline snapback
+          voiceGain.gain.setValueAtTime(safeGain, cancelTime);
           voiceGain.gain.setTargetAtTime(0.0, t, Math.max(0.005, releaseSec * 0.25));
+
+          // Fade stringMixer linearly to digital zero
+          if (stringMixer && stringMixer.gain) {
+            try {
+              if (typeof stringMixer.gain.cancelAndHoldAtTime === 'function') {
+                try { stringMixer.gain.cancelAndHoldAtTime(cancelTime); } catch (_) {}
+              }
+              stringMixer.gain.cancelScheduledValues(cancelTime);
+              stringMixer.gain.setValueAtTime(1.0, cancelTime);
+              stringMixer.gain.linearRampToValueAtTime(0.0, cancelTime + releaseSec);
+            } catch (_) {}
+          }
+
+          // Harold Budd acoustic felt damping: absorb high-frequency energy immediately on release
+          const dampedCutoff = Math.max(160, f0 * 1.05);
+          [filter1, filter2].forEach((f) => {
+            if (f && f.frequency) {
+              try {
+                if (typeof f.frequency.cancelAndHoldAtTime === 'function') {
+                  try { f.frequency.cancelAndHoldAtTime(cancelTime); } catch (_) {}
+                }
+                f.frequency.cancelScheduledValues(cancelTime);
+                const curCut = Math.max(20, Math.min(20000, f.frequency.value || restCutoff));
+                f.frequency.setValueAtTime(curCut, cancelTime);
+                f.frequency.exponentialRampToValueAtTime(dampedCutoff, cancelTime + releaseSec);
+              } catch (_) {}
+            }
+          });
 
           // Ensure adequate release tail before stopping oscillators and unhooking nodes
           // 4 * (releaseSec * 0.25) = releaseSec gives -35dB; 8 time constants = 2 * releaseSec gives -70dB
@@ -2105,7 +2234,7 @@ export class BraunRb26App {
   /**
    * Strummed Polyphonic Chord Playback (Matching Harold Budd felt piano styling)
    */
-  playChord(chordIndex) {
+  playChord(chordIndex, isHold = false) {
     if (!this.isPowered) return;
     const chord = CHORD_VOICINGS[chordIndex % CHORD_VOICINGS.length];
     if (!chord) return;
@@ -2133,7 +2262,7 @@ export class BraunRb26App {
       const tid = setTimeout(() => {
         if (!this.isPowered || isReleased) return;
         const midi = 69 + 12 * Math.log2(freq / 440);
-        const v = this.playChime(midi, 0.68, 4.2);
+        const v = this.playChime(midi, 0.68, 4.2, isHold);
         if (!v) return;
         if (isReleased) {
           if (typeof v.release === 'function') v.release(releaseSec);
