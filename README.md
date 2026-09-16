@@ -1,8 +1,8 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
-[![Version: 1.2.0](https://img.shields.io/badge/Version-1.2.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.2.0)
-[![VST3 Plugin](https://img.shields.io/badge/VST3-Windows%20x64-blue?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)
-[![CLAP Plugin](https://img.shields.io/badge/CLAP-Windows%20x64-green?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)
+[![Version: 1.3.0](https://img.shields.io/badge/Version-1.3.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.0)
+[![VST3 Plugin](https://img.shields.io/badge/VST3-Windows%20x64-blue?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.0/BRAUN_RB26-v1.3.0-Windows-x64.zip)
+[![CLAP Plugin](https://img.shields.io/badge/CLAP-Windows%20x64-green?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.0/BRAUN_RB26-v1.3.0-Windows-x64.zip)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-4A4A4A?style=for-the-badge)](https://isocpp.org/)
 [![JUCE 8](https://img.shields.io/badge/JUCE-8.0.6-EE592B?style=for-the-badge)](https://juce.com/)
@@ -14,10 +14,19 @@
 
 ---
 
-### [Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)
-*Direct download: **[`BRAUN_RB26-v1.2.0-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)** (~9 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-VST3-Windows-x64.zip)** (~3 MB).*
+### [Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.0/BRAUN_RB26-v1.3.0-Windows-x64.zip)
+*Direct download: **[`BRAUN_RB26-v1.3.0-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.0/BRAUN_RB26-v1.3.0-Windows-x64.zip)** (~9 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.0/BRAUN_RB26-v1.3.0-VST3-Windows-x64.zip)** (~3 MB).*
 *Includes `BRAUN_RB26.vst3` for DAWs (Ableton, FL Studio, Reaper, Cubase, Studio One, Bitwig), `BRAUN_RB26.clap`, and `BRAUN_RB26.exe` standalone desktop app. No compiler or CMake required.*
 *All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.*
+
+> [!TIP]
+> **What's New in v1.3.0 (Audio Quality, Concurrency & Performance Update)**:
+> - **Infinite Freeze Hold**: Damping bypass in `ManifoldDelayNetwork` allows frozen reverb recirculations to sustain infinitely without decay.
+> - **Hermite Fractional Interpolation**: 4-point Hermite interpolation across pre-delay and pitch delay lines eliminates zipper clicks during modulation sweeps.
+> - **163x PitchShifter Speedup**: Block-level inactive bypass for pitch shifting drops 192 kHz idle load from 1.63% to 0.01%.
+> - **Thread-Safe Architecture**: Deferred atomic resets and pure atomic parameter updates eliminate audio/UI thread race conditions.
+> - **DAW Preset Synchronization**: Full 10 factory presets exposed to host DAWs via native program management.
+> - **True Limiter Bypass & Subsonic DC Blocker**: Calibrated 35 Hz highpass DC blocker and de-duplicated single-stage master limiting.
 
 ---
 
@@ -47,7 +56,7 @@ Opens `http://localhost:3826/` with the full 19" 2U rackmount interface, 21 rota
 
 ### VST3 Plugin (DAW Installation)
 
-1. Download **[`BRAUN_RB26-v1.2.0-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-Windows-x64.zip)** or **[`BRAUN_RB26-v1.2.0-VST3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.2.0/BRAUN_RB26-v1.2.0-VST3-Windows-x64.zip)**.
+1. Download **[`BRAUN_RB26-v1.3.0-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.0/BRAUN_RB26-v1.3.0-Windows-x64.zip)** or **[`BRAUN_RB26-v1.3.0-VST3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.0/BRAUN_RB26-v1.3.0-VST3-Windows-x64.zip)**.
 2. Extract the archive and copy the `BRAUN_RB26.vst3` folder into your system VST3 directory:
 
 ```powershell
@@ -320,10 +329,10 @@ braun_rb-26/
 │   └── workflows/
 │       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
 ├── package.json                # Project manifest (scripts: test, test:browser, start)
-├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.2.0)
+├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.3.0)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
-├── releases/                   # Distribution archives (BRAUN_RB26-v1.2.0-Windows-x64.zip)
+├── releases/                   # Distribution archives (BRAUN_RB26-v1.3.0-Windows-x64.zip)
 ├── source/
 │   ├── dsp/                    # Pure C++20 real-time DSP engine
 │   │   ├── Rb26Engine.h/cpp    # Master processor, parameter struct, telemetry
