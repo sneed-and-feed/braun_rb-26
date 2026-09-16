@@ -1006,13 +1006,21 @@ export class BraunRb26App {
 
     // Deck 4: PITCH DIFFUSION
     this.knobs.shimmer_send = createKnob('knob-shimmer-send', {
-      label: 'SHIMMER GAIN', min: 0, max: 100, step: 1, unit: '%', value: 40, size: 'medium',
-      onChange: (v) => { this.engine.setParam('shimmerSend', v / 100); this._emitJuceParam('shimmerSend', v / 100); }
+      label: 'SHIMMER GAIN', min: 5, max: 100, step: 1, unit: '%', value: 40, size: 'medium',
+      onChange: (v) => {
+        const val = Math.max(5, v);
+        this.engine.setParam('shimmerSend', val / 100);
+        this._emitJuceParam('shimmerSend', val / 100);
+      }
     });
 
     this.knobs.dimmer_send = createKnob('knob-dimmer-send', {
-      label: 'DIMMER GAIN', min: 0, max: 100, step: 1, unit: '%', value: 35, size: 'medium',
-      onChange: (v) => { this.engine.setParam('dimmerSend', v / 100); this._emitJuceParam('dimmerSend', v / 100); }
+      label: 'DIMMER GAIN', min: 5, max: 100, step: 1, unit: '%', value: 35, size: 'medium',
+      onChange: (v) => {
+        const val = Math.max(5, v);
+        this.engine.setParam('dimmerSend', val / 100);
+        this._emitJuceParam('dimmerSend', val / 100);
+      }
     });
 
     this.knobs.shimmer_dimmer_blend = createKnob('knob-shim-dim-blend', {

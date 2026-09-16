@@ -113,8 +113,8 @@ inline const std::array<ParameterMetadata, 26>& getParameterMetadataTable() {
         { "high_damping_hz",    "highDampingHz",    "High Damping Freq",     "Hz",   1000.0f, 20000.0f, 7500.0f,false, false },
         { "diffusion_density",  "diffusionDensity", "Diffusion Density",     "%",    0.0f,    1.0f,     0.75f,  false, false },
         { "freeze_hold",        "freezeHold",       "Freeze Hold",           "",     0.0f,    1.0f,     0.0f,   true,  false },
-        { "shimmer_send",       "shimmerSend",      "Shimmer Send",          "%",    0.0f,    1.0f,     0.40f,  false, false },
-        { "dimmer_send",        "dimmerSend",       "Dimmer Send",           "%",    0.0f,    1.0f,     0.35f,  false, false },
+        { "shimmer_send",       "shimmerSend",      "Shimmer Send",          "%",    0.05f,   1.0f,     0.40f,  false, false },
+        { "dimmer_send",        "dimmerSend",       "Dimmer Send",           "%",    0.05f,   1.0f,     0.35f,  false, false },
         { "shimmer_interval",   "shimmerInterval",  "Shimmer Interval",      "st",   0.0f,    2.0f,     1.0f,   false, true  },
         { "dimmer_interval",    "dimmerInterval",   "Dimmer Interval",       "st",   0.0f,    2.0f,     2.0f,   false, true  },
         { "pitch_blend",        "pitchBlend",       "Pitch Blend (Dim/Shim)","",     -1.0f,   1.0f,     0.0f,   false, false },
@@ -176,8 +176,8 @@ struct alignas(16) Rb26ParameterSnapshot {
         p.highDampingHz    = highDampingHz;
         p.diffusionDensity = diffusionDensity;
         p.freezeHold       = freezeHold;
-        p.shimmerSend      = shimmerSend;
-        p.dimmerSend       = dimmerSend;
+        p.shimmerSend      = std::clamp(shimmerSend, 0.05f, 1.0f);
+        p.dimmerSend       = std::clamp(dimmerSend, 0.05f, 1.0f);
         p.shimmerInterval  = shimmerInterval;
         p.dimmerInterval   = dimmerInterval;
         p.pitchBlend       = pitchBlend;
@@ -400,19 +400,19 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Freeze Hold",
         false));
 
-    // 13. Shimmer Send (0.0 - 1.0, default 0.40)
+    // 13. Shimmer Send (0.05 - 1.0, default 0.40)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::shimmerSend,
         "Shimmer Send",
-        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
+        juce::NormalisableRange<float>(0.05f, 1.0f, 0.001f, 1.0f),
         0.40f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 
-    // 14. Dimmer Send (0.0 - 1.0, default 0.35)
+    // 14. Dimmer Send (0.05 - 1.0, default 0.35)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::dimmerSend,
         "Dimmer Send",
-        juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 1.0f),
+        juce::NormalisableRange<float>(0.05f, 1.0f, 0.001f, 1.0f),
         0.35f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
 

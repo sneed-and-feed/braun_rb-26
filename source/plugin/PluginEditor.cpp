@@ -228,8 +228,8 @@ const paramsMeta = [
   { id: 'diffusion_density', webId: 'diffusionDensity', label: 'Diffusion', deck: 'FDN Tank', min: 0, max: 1, def: 0.75, unit: '%' },
   { id: 'freeze_hold', webId: 'freezeHold', label: 'Freeze', deck: 'FDN Tank', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
-  { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.30, unit: '%' },
-  { id: 'dimmer_send', webId: 'dimmerSend', label: 'Dimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.25, unit: '%' },
+  { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0.05, max: 1, def: 0.30, unit: '%' },
+  { id: 'dimmer_send', webId: 'dimmerSend', label: 'Dimmer Send', deck: 'Pitch Diffusion', min: 0.05, max: 1, def: 0.25, unit: '%' },
   { id: 'shimmer_interval', webId: 'shimmerInterval', label: 'Shimmer Int', deck: 'Pitch Diffusion', min: 0, max: 2, def: 1, unit: '', isChoice: true, choices: ['+7 st', '+12 st', '+24 st'] },
   { id: 'dimmer_interval', webId: 'dimmerInterval', label: 'Dimmer Int', deck: 'Pitch Diffusion', min: 0, max: 2, def: 2, unit: '', isChoice: true, choices: ['-2 st', '-7 st', '-12 st'] },
   { id: 'pitch_blend', webId: 'pitchBlend', label: 'Pitch Blend', deck: 'Pitch Diffusion', min: -1, max: 1, def: 0, unit: '' },

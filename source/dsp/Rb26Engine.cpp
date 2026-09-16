@@ -522,7 +522,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.highDampingHz = 9500.0f;
         p.params.freezeHold = false;
         p.params.shimmerSend = 0.48f;
-        p.params.dimmerSend = 0.0f;
+        p.params.dimmerSend = 0.05f;
         p.params.shimmerInterval = 12;
         p.params.dimmerInterval = -12;
         p.params.pitchBlend = 1.0f;
@@ -624,7 +624,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.highDampingHz = 8500.0f;
         p.params.freezeHold = false;
         p.params.shimmerSend = 0.20f;
-        p.params.dimmerSend = 0.0f;
+        p.params.dimmerSend = 0.05f;
         p.params.shimmerInterval = 12;
         p.params.dimmerInterval = -12;
         p.params.pitchBlend = 1.0f;
