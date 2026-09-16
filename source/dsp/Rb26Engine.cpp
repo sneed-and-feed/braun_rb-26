@@ -315,17 +315,22 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             highReverbL = earlyGain * earlyL + lateGain * (lateL + pitchAddL);
             highReverbR = earlyGain * earlyR + lateGain * (lateR + pitchAddR);
         } else {
-            // Bypass pitch branch: zero pitch injection into FdnTank, pass late reverb straight through
+            // Bypass pitch branch: zero pitch injection into FdnTank, pass late reverb straight through to next matrix stage
             (void)mPitchDelaySmoother.next();
             (void)mPitchBlendSmoother.next();
             (void)mPitchFeedbackSmoother.next();
 
             mFdnTank.processSample(highInL, highInR, 0.0f, 0.0f, lateL, lateR);
 
+            // Naturally clear pitch delay buffer at write head with zero dynamic memset overhead
+            mPitchDelayBufferL[mPitchDelayWriteIndex] = 0.0f;
+            mPitchDelayBufferR[mPitchDelayWriteIndex] = 0.0f;
+            mPitchDelayWriteIndex = (mPitchDelayWriteIndex + 1) & kPitchDelayMask;
+
             mLastPitchFbL = 0.0f;
             mLastPitchFbR = 0.0f;
 
-            // 5. Early / Late Mix directly with lateL and lateR
+            // 5. Early / Late Mix directly with lateL and lateR (bypassing pitch addition)
             highReverbL = earlyGain * earlyL + lateGain * lateL;
             highReverbR = earlyGain * earlyR + lateGain * lateR;
         }

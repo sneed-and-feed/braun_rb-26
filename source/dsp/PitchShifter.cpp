@@ -56,6 +56,12 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
     // Write sample to delay buffer
     mDelayBuffer[static_cast<size_t>(mWriteIndex)] = flushDenormal(input);
 
+    // If pitch shift is 0 (mSemitones == 0 or mRatio == 1.0), bypass pitch-shifting processing block completely and pass dry audio straight through
+    if (mSemitones == 0 || mPhaseInc <= 1.0e-7f || std::abs(mRatio - 1.0f) <= 1.0e-5f) {
+        mWriteIndex = (mWriteIndex + 1) & kBufferMask;
+        return flushDenormal(input);
+    }
+
     const float phase1 = mPhase;
     const float phase2 = (phase1 >= 0.5f) ? (phase1 - 0.5f) : (phase1 + 0.5f);
 
@@ -81,8 +87,8 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
     const float out2 = readHermite(readPos2);
 
     // Constant-power sine crossfade windows: w1^2 + w2^2 == 1.0
-    const float w1 = std::sin(kPi * phase1);
-    const float w2 = std::sin(kPi * phase2);
+    const float w1 = FastSinTable::sin(kPi * phase1);
+    const float w2 = FastSinTable::sin(kPi * phase2);
 
     // Advance normalized phase accumulator
     mPhase += mPhaseInc;
@@ -263,8 +269,8 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
 
     // Equal-power crossfade weighting based on blend beta in [-1.0, +1.0]
     const float blendAngle = (kPi * 0.25f) * (1.0f - blend);
-    const float blendShim = std::cos(blendAngle);
-    const float blendDim  = std::sin(blendAngle);
+    const float blendShim = FastSinTable::cos(blendAngle);
+    const float blendDim  = FastSinTable::sin(blendAngle);
 
     const float effShimmerSend = (sSend > 1.0e-5f && blendShim > 1.0e-5f) ? (sSend * blendShim) : 0.0f;
     const float effDimmerSend  = (dSend > 1.0e-5f && blendDim > 1.0e-5f) ? (dSend * blendDim) : 0.0f;

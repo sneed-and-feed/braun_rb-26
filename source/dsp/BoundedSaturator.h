@@ -46,7 +46,7 @@ public:
      * Process a single audio sample (inlined for real-time performance).
      */
     [[nodiscard]] inline float processSample(float x) const noexcept {
-        if (std::isnan(x) || std::isinf(x)) [[unlikely]] {
+        if (!std::isfinite(x)) [[unlikely]] {
             return 0.0f;
         }
 
