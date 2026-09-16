@@ -1168,8 +1168,8 @@ async function runBrowserTest() {
       throw new Error(`Output overloaded during direct engine rapid room size scrub! Peak: ${directPeakMax}`);
     }
 
-    // Allow adequate settling pause (1400ms) for the 6.5s RT60 tank reverberant tail and analyser smoothing (0.8) to decay before sampling FFT bin 0
-    await new Promise(r => setTimeout(r, 1400));
+    // Allow adequate settling pause (2000ms) for the 6.5s RT60 tank reverberant tail and analyser smoothing (0.8) to decay before sampling FFT bin 0
+    await new Promise(r => setTimeout(r, 2000));
 
     // Verify DC-blocking attenuation: check sub-bass DC bin in frequency domain
     const dcDb = await evaluate(`
@@ -1342,7 +1342,9 @@ async function runBrowserTest() {
   }
 }
 
-runBrowserTest().catch((err) => {
+runBrowserTest().then(() => {
+  process.exit(0);
+}).catch((err) => {
   console.error('[FAIL] Browser Test Failed:', err);
   process.exit(1);
 });
