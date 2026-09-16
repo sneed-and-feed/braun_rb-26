@@ -252,6 +252,23 @@ endif()
 # ==============================================================================
 # 7. Headless Continuous Verification Test Runner
 # ==============================================================================
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/rb26_headless_dsp_tests.cpp")
+    add_executable(rb26_headless_dsp_tests
+        source/tests/rb26_headless_dsp_tests.cpp
+    )
+    target_link_libraries(rb26_headless_dsp_tests PRIVATE
+        rb26_dsp_core
+    )
+    target_include_directories(rb26_headless_dsp_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/source
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/tests
+    )
+    set_target_properties(rb26_headless_dsp_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+    enable_testing()
+    add_test(NAME Rb26HeadlessDspTests COMMAND rb26_headless_dsp_tests)
+endif()
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/Challenger2Tests.cpp")
     add_executable(rb26_dsp_tests
         source/tests/Challenger2Tests.cpp
