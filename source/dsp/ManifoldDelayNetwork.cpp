@@ -385,8 +385,9 @@ void ManifoldDelayNetwork::extractStereo(const std::array<float, kNumLines>& lin
 
         for (size_t k = 0; k < kNumLines; ++k) {
             const float theta = (kTwoPi * static_cast<float>(k) / 8.0f) + mCausticRotationAngle;
-            const float panL = kNorm * std::cos(theta * 0.5f);
-            const float panR = kNorm * std::sin(theta * 0.5f);
+            const float halfTheta = theta * 0.5f;
+            const float panL = kNorm * FastSinTable::cos(halfTheta);
+            const float panR = kNorm * FastSinTable::sin(halfTheta);
             accL += panL * lines[k];
             accR += panR * lines[k];
         }

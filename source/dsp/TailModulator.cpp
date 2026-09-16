@@ -53,8 +53,6 @@ void TailModulator::updateBloomAlpha() noexcept {
 
 void TailModulator::processSample(float inputTransientLevel,
                                   std::array<float, kNumLines>& outExcursionsSamples) noexcept {
-    ScopedNoDenormals noDenormals;
-
     // 1. Transient detection on input: dual envelope follower
     const float absIn = std::abs(inputTransientLevel);
     mFastEnv = flushDenormal((1.0f - mFastAlpha) * absIn + mFastAlpha * mFastEnv);

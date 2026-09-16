@@ -146,6 +146,8 @@ public:
         mFastEnv = 0.0f;
         mSlowEnv = 0.0f;
         mCurrentDuckGain = 1.0f;
+        mCachedDepth = -1.0f;
+        mCachedFloorGain = 1.0f;
     }
 
     // Process sample: returns ducking gain in [0.2512, 1.0]
@@ -160,10 +162,13 @@ public:
 
         float targetGain = 1.0f;
         if (TR > 1.8f && depth > 0.001f) {
+            if (depth != mCachedDepth) {
+                mCachedDepth = depth;
+                mCachedFloorGain = std::pow(10.0f, -0.62f * std::pow(depth, 0.35f));
+            }
             const float excess = TR - 1.8f;
             const float raw = 1.0f / (1.0f + 0.70f * depth * excess);
-            const float floorGain = std::pow(10.0f, -0.62f * std::pow(depth, 0.35f));
-            targetGain = std::max(floorGain, raw);
+            targetGain = std::max(mCachedFloorGain, raw);
         }
 
         // Asymmetric smoother
@@ -188,6 +193,8 @@ private:
     float mFastEnv    { 0.0f };
     float mSlowEnv    { 0.0f };
     float mCurrentDuckGain { 1.0f };
+    float mCachedDepth { -1.0f };
+    float mCachedFloorGain { 1.0f };
 };
 
 // ============================================================================

@@ -261,7 +261,6 @@ void PitchShifter::setSpiralParameters(int spiralMode,
 }
 
 void PitchShifter::processSample(float inL, float inR, float& outL, float& outR) noexcept {
-    ScopedNoDenormals noDenormals;
     if (mShimmerCircBufferL.empty()) [[unlikely]] {
         outL = inL;
         outR = inR;
@@ -274,7 +273,7 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     const float spiralDepth = mSpiralDepthSmoother.next();
 
     // Fast path: when both shimmer and dimmer sends are bypassed or below threshold
-    if (sSend <= 1.0e-5f && dSend <= 1.0e-5f) {
+    if (sSend <= 0.001f && dSend <= 0.001f) {
         mRecircShimmerL = 0.0f;
         mRecircShimmerR = 0.0f;
         mRecircDimmerL = 0.0f;
@@ -405,6 +404,19 @@ void PitchShifter::process(const float* inL,
         std::copy(inR, inR + numSamples, outR);
         return;
     }
+
+    // Inactive block-level bypass: when both shimmer and dimmer sends are inactive (<= 0.001f),
+    // perform a zero-fill pass on wet buffers and bypass per-sample smoother and circular processing.
+    if (!isActive()) {
+        std::fill(outL, outL + numSamples, 0.0f);
+        std::fill(outR, outR + numSamples, 0.0f);
+        mRecircShimmerL = 0.0f;
+        mRecircShimmerR = 0.0f;
+        mRecircDimmerL = 0.0f;
+        mRecircDimmerR = 0.0f;
+        return;
+    }
+
     for (int n = 0; n < numSamples; ++n) {
         processSample(inL[n], inR[n], outL[n], outR[n]);
     }

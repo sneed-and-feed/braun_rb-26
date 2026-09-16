@@ -140,10 +140,10 @@ public:
 
     // Checks whether shimmer or dimmer is actively contributing
     [[nodiscard]] inline bool isActive() const noexcept {
-        return (mShimmerSendSmoother.getTarget() > 1.0e-4f ||
-                mDimmerSendSmoother.getTarget() > 1.0e-4f ||
-                mShimmerSendSmoother.getCurrent() > 1.0e-5f ||
-                mDimmerSendSmoother.getCurrent() > 1.0e-5f);
+        return (mShimmerSendSmoother.getTarget() > 0.001f ||
+                mDimmerSendSmoother.getTarget() > 0.001f ||
+                mShimmerSendSmoother.getCurrent() > 0.001f ||
+                mDimmerSendSmoother.getCurrent() > 0.001f);
     }
 
 private:

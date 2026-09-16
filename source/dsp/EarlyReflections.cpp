@@ -77,7 +77,6 @@ inline float EarlyReflections::processAllpass(size_t index, float input, float d
 }
 
 void EarlyReflections::processSample(float inL, float inR, float& outL, float& outR) noexcept {
-    ScopedNoDenormals noDenormals;
     if (mBufferL.empty()) [[unlikely]] {
         outL = inL;
         outR = inR;

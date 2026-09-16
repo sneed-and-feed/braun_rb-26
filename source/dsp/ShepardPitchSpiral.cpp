@@ -120,7 +120,6 @@ inline float ShepardPitchSpiral::readHermite(const std::vector<float>& buffer, f
 }
 
 void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float& outR) noexcept {
-    ScopedNoDenormals noDenormals;
     if (mDelayBufferL.empty()) [[unlikely]] {
         outL = flushDenormal(inL);
         outR = flushDenormal(inR);
@@ -167,7 +166,7 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             if (sigma_m >= 4.0f) sigma_m -= 4.0f;
 
             // Frequency ratio r_m(t) = 2^(sigma_m - 2)
-            rm = std::pow(2.0f, sigma_m - 2.0f);
+            rm = exp2f(sigma_m - 2.0f);
 
             // Raised-cosine spectral window A_m(t) = 0.5 * (1 - cos(pi/2 * sigma_m))
             Am = 0.5f * (1.0f - FastSinTable::cos(kHalfPi * sigma_m));

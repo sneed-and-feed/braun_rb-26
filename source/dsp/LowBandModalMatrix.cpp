@@ -103,8 +103,6 @@ void LowBandModalMatrix::processCrossoverOnly(float inL, float inR,
 
 void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
                                         float& lowOutL, float& lowOutR) noexcept {
-    ScopedNoDenormals noDenormals;
-
     // 1. Transient punch detector
     const float duckGain = mPunchDetector.process(lowInL, lowInR, mParams.punchDucking);
     const float duckedL = lowInL * duckGain;
@@ -153,7 +151,7 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
     const float rawLowR = 0.5f * (w[0] + w[1] + w[2] + w[3]) * bassPresence;
 
     // Apply punch ducking to modal output to eliminate bass smear during transients (bypassed in freeze)
-    const float outDuck = mParams.freezeHold ? 1.0f : std::pow(duckGain, 2.0f);
+    const float outDuck = mParams.freezeHold ? 1.0f : (duckGain * duckGain);
     const float duckedOutL = rawLowL * outDuck;
     const float duckedOutR = rawLowR * outDuck;
 
@@ -166,8 +164,6 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
 void LowBandModalMatrix::processSample(float inL, float inR,
                                        float& highOutL, float& highOutR,
                                        float& lowReverbOutL, float& lowReverbOutR) noexcept {
-    ScopedNoDenormals noDenormals;
-
     // 1. LR4 Crossover separates Low and High bands
     float lowInL = 0.0f, lowInR = 0.0f;
     mCrossover.process(inL, inR, lowInL, lowInR, highOutL, highOutR);

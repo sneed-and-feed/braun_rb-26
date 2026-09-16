@@ -91,7 +91,7 @@ void ChimeVoice::processSample(float& outL, float& outR) noexcept {
     float voiceR = 0.0f;
 
     for (size_t i = 0; i < kNumChimeModes; ++i) {
-        const float modeSig = std::sin(mPhase[i]) * (mAmp[i] * mEnv[i]);
+        const float modeSig = FastSinTable::sin(mPhase[i]) * (mAmp[i] * mEnv[i]);
         voiceL += modeSig * panL[i];
         voiceR += modeSig * panR[i];
 
@@ -214,7 +214,7 @@ void LaboratoryImpulseGenerator::processSample(float& outL, float& outR) noexcep
 
     // 3. Acoustic soundboard hammer thud (78 Hz body resonance + 2.5 ms contact click)
     if (mHammerRemaining > 0) {
-        const float bodySine = std::sin(mHammerPhase) * mHammerEnv;
+        const float bodySine = FastSinTable::sin(mHammerPhase) * mHammerEnv;
         mHammerPhase += mHammerFreqInc;
         if (mHammerPhase >= kTwoPi) mHammerPhase -= kTwoPi;
         mHammerEnv *= mHammerDecay;

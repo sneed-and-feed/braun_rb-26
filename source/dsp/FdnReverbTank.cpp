@@ -118,7 +118,6 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
         outLateR = 0.0f;
         return;
     }
-    ScopedNoDenormals noDenormals;
 
     const float freezeIn = mFreezeInputSmoother.next();
     const float freezeLoop = mFreezeLoopSmoother.next();
