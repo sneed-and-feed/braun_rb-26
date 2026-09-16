@@ -142,7 +142,8 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
         const float saturated = applySmoothBoundaryKnee(nextIn, 0.72f);
 
         mDelayBuffers[i][mWriteIndices[i]] = flushDenormal(saturated);
-        mWriteIndices[i] = (mWriteIndices[i] + 1) % mDelayLengths[i];
+        const size_t nextIdx = mWriteIndices[i] + 1;
+        mWriteIndices[i] = (nextIdx >= mDelayLengths[i]) ? 0 : nextIdx;
     }
 
     // 6. Balanced orthogonal Hadamard output summing with Bass RT60 presence scaling

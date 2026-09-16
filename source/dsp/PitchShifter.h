@@ -137,6 +137,14 @@ public:
     // Single-sample processing
     void processSample(float inL, float inR, float& outL, float& outR) noexcept;
 
+    // Checks whether shimmer or dimmer is actively contributing
+    [[nodiscard]] inline bool isActive() const noexcept {
+        return (mShimmerSendSmoother.getTarget() > 1.0e-4f ||
+                mDimmerSendSmoother.getTarget() > 1.0e-4f ||
+                mShimmerSendSmoother.getCurrent() > 1.0e-5f ||
+                mDimmerSendSmoother.getCurrent() > 1.0e-5f);
+    }
+
 private:
     float mSampleRate { 48000.0f };
 

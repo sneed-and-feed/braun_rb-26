@@ -74,6 +74,11 @@ void TailModulator::processSample(float inputTransientLevel,
     const float maxDepthSamples = (currentDepthMs * 0.001f) * fs;
     const float effectiveDepth = maxDepthSamples * mBloomEnvelope;
 
+    if (effectiveDepth < 1.0e-5f) {
+        outExcursionsSamples.fill(0.0f);
+        return;
+    }
+
     // 3. Update golden-ratio 8-phase LFO network
     for (size_t k = 0; k < kNumLines; ++k) {
         const float freqRatio = kGoldenRatios[k % 4];
@@ -85,7 +90,7 @@ void TailModulator::processSample(float inputTransientLevel,
             mPhases[k] -= kTwoPi;
         }
 
-        const float lfoVal = std::sin(mPhases[k] + kPhaseOffsets[k]);
+        const float lfoVal = FastSinTable::sin(mPhases[k] + kPhaseOffsets[k]);
         // Zero-mean bipolar excursion
         outExcursionsSamples[k] = flushDenormal((effectiveDepth * 0.5f) * lfoVal);
     }

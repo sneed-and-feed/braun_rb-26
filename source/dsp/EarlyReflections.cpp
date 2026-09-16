@@ -63,7 +63,8 @@ inline float EarlyReflections::processAllpass(size_t index, float input, float d
     const float output = -g * input + delayed;
     mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
 
-    mAllpassWriteIndices[index] = (writeIdx + 1) % len;
+    const size_t nextIdx = writeIdx + 1;
+    mAllpassWriteIndices[index] = (nextIdx >= len) ? 0 : nextIdx;
     return flushDenormal(output);
 }
 

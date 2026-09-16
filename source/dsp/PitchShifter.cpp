@@ -39,12 +39,12 @@ void DualTapDelayPitchShifter::setInterval(int semitones) noexcept {
     } else {
         mWindowSec = 0.200f; // 200 ms for Dimmer -24st -> 0.04% error
     }
-    mWindowSamples = mWindowSec * mSampleRate;
+    mWindowSamples = std::max(64.0f, mWindowSec * mSampleRate);
 
     const float slope = 1.0f - mRatio;
     const float absSlope = std::abs(slope);
 
-    if (absSlope > 1.0e-5f) {
+    if (absSlope > 1.0e-5f && mWindowSamples > 0.0f) {
         // Delta phi = |1 - r| / (W * fs)
         mPhaseInc = absSlope / mWindowSamples;
     } else {
@@ -87,7 +87,7 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
     // Advance normalized phase accumulator
     mPhase += mPhaseInc;
     if (mPhase >= 1.0f) {
-        mPhase -= 1.0f;
+        mPhase -= std::floor(mPhase);
     }
 
     // Advance write head with bitmask wrapping
@@ -100,17 +100,13 @@ inline float DualTapDelayPitchShifter::readHermite(float readPos) const noexcept
     if (!std::isfinite(readPos)) [[unlikely]] {
         return 0.0f;
     }
-    const float bufSz = static_cast<float>(kMaxCapacity);
-    while (readPos < 0.0f) readPos += bufSz;
-    while (readPos >= bufSz) readPos -= bufSz;
-
-    const int i0 = static_cast<int>(readPos);
+    const int i0 = static_cast<int>(std::floor(readPos));
     const float frac = readPos - static_cast<float>(i0);
 
-    const int im1 = (i0 - 1 + kMaxCapacity) & kBufferMask;
+    const int im1 = (i0 - 1) & kBufferMask;
     const int i0_m = i0 & kBufferMask;
-    const int i1 = (i0 + 1) & kBufferMask;
-    const int i2 = (i0 + 2) & kBufferMask;
+    const int i1  = (i0 + 1) & kBufferMask;
+    const int i2  = (i0 + 2) & kBufferMask;
 
     const float ym1 = mDelayBuffer[static_cast<size_t>(im1)];
     const float y0  = mDelayBuffer[static_cast<size_t>(i0_m)];

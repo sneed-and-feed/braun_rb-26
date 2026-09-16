@@ -71,7 +71,7 @@ private:
 // Branchless Software Denormal / NaN Flushing
 // ============================================================================
 [[nodiscard]] inline float flushDenormal(float val) noexcept {
-    if (std::isnan(val) || std::isinf(val)) [[unlikely]] {
+    if (!std::isfinite(val)) [[unlikely]] {
         return 0.0f;
     }
     return (std::abs(val) < 1.0e-15f) ? 0.0f : val;
@@ -85,6 +85,41 @@ inline constexpr float kTwoPi  = 6.28318530717958647692f;
 inline constexpr float kHalfPi = 1.57079632679489661923f;
 inline constexpr float kSqrt2  = 1.41421356237309504880f;
 inline constexpr float kPhi    = 1.61803398874989484820f; // Golden ratio
+
+// ============================================================================
+// Fast Precomputed Sine Lookup Table (1024 points, linear interpolation)
+// Peak error < 5e-6 (-105 dB), 0 dynamic allocations, 0 transcendental calls
+// ============================================================================
+class FastSinTable {
+public:
+    static constexpr size_t kTableSize = 1024;
+    static constexpr size_t kMask = kTableSize - 1;
+
+    static inline float sin(float angle) noexcept {
+        static const auto table = []() {
+            std::array<float, kTableSize> t;
+            for (size_t i = 0; i < kTableSize; ++i) {
+                t[i] = std::sin(static_cast<float>(i) * (kTwoPi / static_cast<float>(kTableSize)));
+            }
+            return t;
+        }();
+
+        float a = angle;
+        if (a < 0.0f) {
+            a += kTwoPi * (std::floor(-a / kTwoPi) + 1.0f);
+        }
+        const float norm = a * (static_cast<float>(kTableSize) / kTwoPi);
+        const size_t idx = static_cast<size_t>(norm);
+        const float frac = norm - static_cast<float>(idx);
+        const size_t i0 = idx & kMask;
+        const size_t i1 = (i0 + 1) & kMask;
+        return table[i0] + frac * (table[i1] - table[i0]);
+    }
+
+    static inline float cos(float angle) noexcept {
+        return sin(angle + kHalfPi);
+    }
+};
 
 // ============================================================================
 // Utility Conversion Functions

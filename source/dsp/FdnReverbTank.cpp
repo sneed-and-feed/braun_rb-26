@@ -81,9 +81,10 @@ void FdnReverbTank::setManifold(ManifoldType manifoldType) noexcept {
 
 void FdnReverbTank::updateDecayGains() noexcept {
     const auto& lengths = mManifoldNetwork.getNominalLengths();
+    const float safeRt60 = std::max(0.05f, mDecayRt60);
     for (size_t k = 0; k < kNumLines; ++k) {
         const float tSec = static_cast<float>(lengths[k]) / static_cast<float>(mSampleRate);
-        mFeedbackGains[k] = std::exp(-6.907755278982137f * tSec / mDecayRt60);
+        mFeedbackGains[k] = std::exp(-6.907755278982137f * tSec / safeRt60);
     }
 }
 
@@ -96,7 +97,8 @@ inline float FdnReverbTank::processAllpass(size_t index, float input, float dens
     const float output = -g * input + delayed;
     mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
 
-    mAllpassWriteIndices[index] = (writeIdx + 1) % len;
+    const size_t nextIdx = writeIdx + 1;
+    mAllpassWriteIndices[index] = (nextIdx >= len) ? 0 : nextIdx;
     return flushDenormal(output);
 }
 

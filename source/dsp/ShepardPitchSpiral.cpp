@@ -98,14 +98,10 @@ inline float ShepardPitchSpiral::readHermite(const std::vector<float>& buffer, f
     if (!std::isfinite(readPos)) [[unlikely]] {
         return 0.0f;
     }
-    const float bufSz = static_cast<float>(kMaxCapacity);
-    while (readPos < 0.0f) readPos += bufSz;
-    while (readPos >= bufSz) readPos -= bufSz;
-
-    const int i0 = static_cast<int>(readPos);
+    const int i0 = static_cast<int>(std::floor(readPos));
     const float frac = readPos - static_cast<float>(i0);
 
-    const int im1 = (i0 - 1 + kMaxCapacity) & kBufferMask;
+    const int im1 = (i0 - 1) & kBufferMask;
     const int i0_m = i0 & kBufferMask;
     const int i1  = (i0 + 1) & kBufferMask;
     const int i2  = (i0 + 2) & kBufferMask;
@@ -195,8 +191,7 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
         {
             auto& vL = mVoicesL[m];
             vL.grainPhase += grainPhaseInc;
-            if (vL.grainPhase >= 1.0f) vL.grainPhase -= 1.0f;
-            if (vL.grainPhase < 0.0f)  vL.grainPhase += 1.0f;
+            vL.grainPhase -= std::floor(vL.grainPhase);
 
             const float phiA = vL.grainPhase;
             const float phiB = (phiA >= 0.5f) ? (phiA - 0.5f) : (phiA + 0.5f);
@@ -210,8 +205,8 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float sA = readHermite(mDelayBufferL, readPosA);
             const float sB = readHermite(mDelayBufferL, readPosB);
 
-            const float wA = std::sin(kPi * phiA);
-            const float wB = std::sin(kPi * phiB);
+            const float wA = FastSinTable::sin(kPi * phiA);
+            const float wB = FastSinTable::sin(kPi * phiB);
 
             const float voiceOutL = wA * sA + wB * sB;
             sumL += Am * voiceOutL;
@@ -221,8 +216,7 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
         {
             auto& vR = mVoicesR[m];
             vR.grainPhase += grainPhaseInc;
-            if (vR.grainPhase >= 1.0f) vR.grainPhase -= 1.0f;
-            if (vR.grainPhase < 0.0f)  vR.grainPhase += 1.0f;
+            vR.grainPhase -= std::floor(vR.grainPhase);
 
             const float phiA = vR.grainPhase;
             const float phiB = (phiA >= 0.5f) ? (phiA - 0.5f) : (phiA + 0.5f);
@@ -236,8 +230,8 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float sA = readHermite(mDelayBufferR, readPosA);
             const float sB = readHermite(mDelayBufferR, readPosB);
 
-            const float wA = std::sin(kPi * phiA);
-            const float wB = std::sin(kPi * phiB);
+            const float wA = FastSinTable::sin(kPi * phiA);
+            const float wB = FastSinTable::sin(kPi * phiB);
 
             const float voiceOutR = wA * sA + wB * sB;
             sumR += Am * voiceOutR;

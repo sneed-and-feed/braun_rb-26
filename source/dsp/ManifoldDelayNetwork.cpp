@@ -110,7 +110,7 @@ void ManifoldDelayNetwork::reset() noexcept {
 }
 
 void ManifoldDelayNetwork::setParameters(ManifoldType type, float roomSize, float highDampingHz) noexcept {
-    const float clampedRoom = std::clamp(roomSize, 0.1f, 2.0f);
+    const float clampedRoom = std::clamp(roomSize, 0.05f, 2.0f);
     const bool manifoldChanged = (type != mCurrentManifold);
     const bool roomChanged = std::abs(clampedRoom - mRoomSize) > 0.005f;
     const bool dampChanged = std::abs(highDampingHz - mHighDampingHz) > 5.0f;
@@ -145,7 +145,8 @@ void ManifoldDelayNetwork::computePoincareLengths(std::array<size_t, kNumLines>&
     // Horocycle delays: L_k = round(L_0 * cosh(xi * k / 7))
     // Nominal L_0 = 1000 at 48 kHz, roomSize = 1.0; xi = 1.760742
     const double rateScale = mSampleRate / 48000.0;
-    const double l0 = 1000.0 * rateScale * static_cast<double>(mRoomSize);
+    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double l0 = 1000.0 * rateScale * safeRoom;
     const double xi = 1.760742;
 
     for (size_t k = 0; k < kNumLines; ++k) {
@@ -159,7 +160,8 @@ void ManifoldDelayNetwork::computePoincareLengths(std::array<size_t, kNumLines>&
 void ManifoldDelayNetwork::computeWhisperingLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
     // Airy radial delay modes: L_k = round(L_ring * (1 - a_{k+1} / (2*pi*(k+3)))) + primeOffset
     const double rateScale = mSampleRate / 48000.0;
-    const double lRing = 2800.0 * rateScale * static_cast<double>(mRoomSize);
+    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double lRing = 2800.0 * rateScale * safeRoom;
 
     for (size_t k = 0; k < kNumLines; ++k) {
         const double denom = kTwoPi * static_cast<double>(k + 3);
@@ -173,7 +175,8 @@ void ManifoldDelayNetwork::computeWhisperingLengths(std::array<size_t, kNumLines
 void ManifoldDelayNetwork::computePlateLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
     // Biharmonic plate dispersion modes: L_k = round(L_base / sqrt(m^2 + 0.08 * n^2)) + primeOffset
     const double rateScale = mSampleRate / 48000.0;
-    const double lBase = 3400.0 * rateScale * static_cast<double>(mRoomSize);
+    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double lBase = 3400.0 * rateScale * safeRoom;
 
     for (size_t k = 0; k < kNumLines; ++k) {
         const double m = static_cast<double>(kPlateModes[k].m);
@@ -188,7 +191,8 @@ void ManifoldDelayNetwork::computePlateLengths(std::array<size_t, kNumLines>& le
 void ManifoldDelayNetwork::computeKlangdomLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
     // Spherical dome antipodal focus: L_k = round(L_dome * (1 + delta_k))
     const double rateScale = mSampleRate / 48000.0;
-    const double lDome = 2400.0 * rateScale * static_cast<double>(mRoomSize);
+    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double lDome = 2400.0 * rateScale * safeRoom;
 
     for (size_t k = 0; k < kNumLines; ++k) {
         const double raw = lDome * (1.0 + static_cast<double>(kKlangdomDeltas[k]));
