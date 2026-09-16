@@ -92,8 +92,14 @@ void FdnReverbTank::updateDecayGains() noexcept {
 }
 
 inline float FdnReverbTank::processAllpass(size_t index, float input, float density) noexcept {
+    if (index >= kNumAllpass || mAllpassBuffers[index].empty()) [[unlikely]] {
+        return 0.0f;
+    }
     const size_t len = mAllpassLengths[index];
     const size_t writeIdx = mAllpassWriteIndices[index];
+    if (writeIdx >= mAllpassBuffers[index].size()) [[unlikely]] {
+        return 0.0f;
+    }
     const float delayed = mAllpassBuffers[index][writeIdx];
 
     const float g = 0.70f * density;
@@ -107,6 +113,11 @@ inline float FdnReverbTank::processAllpass(size_t index, float input, float dens
 
 void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pitchFbR,
                                  float& outLateL, float& outLateR) noexcept {
+    if (mAllpassBuffers[0].empty()) [[unlikely]] {
+        outLateL = 0.0f;
+        outLateR = 0.0f;
+        return;
+    }
     ScopedNoDenormals noDenormals;
 
     const float freezeIn = mFreezeInputSmoother.next();

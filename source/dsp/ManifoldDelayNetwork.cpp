@@ -105,6 +105,10 @@ void ManifoldDelayNetwork::reset() noexcept {
         mSpruceA0[k].reset();
         mSpruceT1[k].reset();
         mSpruceWood[k].reset();
+
+        mLengthSmoothers[k].reset(static_cast<float>(mNominalLengths[k]));
+        mSpatialWeightsL[k].reset(mSpatialWeightsL[k].getTarget());
+        mSpatialWeightsR[k].reset(mSpatialWeightsR[k].getTarget());
     }
     mCausticRotationAngle = 0.0f;
 }

@@ -15,7 +15,7 @@ public:
     static constexpr size_t kNumLines = 8;
     static constexpr size_t kNumAllpass = 4;
 
-    FdnReverbTank() noexcept = default;
+    FdnReverbTank() noexcept { prepare(48000.0); }
     ~FdnReverbTank() noexcept = default;
 
     void prepare(double sampleRate, float maxRoomSize = 2.0f) noexcept;
