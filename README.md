@@ -324,8 +324,7 @@ npm run deploy
 braun_rb-26/
 ├── .github/
 │   └── workflows/
-│       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
-│       └── deploy.yml          # CD: Automated GitHub Pages deployment
+│       └── test.yml            # CI: Automated unit & DSP test runner (Node 22)
 ├── package.json                # Project manifest (scripts: test, test:browser, start, deploy)
 ├── deploy-pages.bat            # One-click deployment sync to sneed-and-feed.github.io
 ├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.2.0)
