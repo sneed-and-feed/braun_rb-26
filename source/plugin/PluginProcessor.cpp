@@ -41,20 +41,75 @@ double BRAUN_RB26AudioProcessor::getTailLengthSeconds() const
 
 int BRAUN_RB26AudioProcessor::getNumPrograms()
 {
-    return 1;
+    return 10;
 }
 
 int BRAUN_RB26AudioProcessor::getCurrentProgram()
 {
-    return 0;
+    return mCurrentProgram;
 }
 
-void BRAUN_RB26AudioProcessor::setCurrentProgram(int)
+void BRAUN_RB26AudioProcessor::setCurrentProgram(int index)
 {
+    if (index < 0 || index >= getNumPrograms())
+        return;
+
+    mCurrentProgram = index;
+
+    static const auto presets = rb26::Rb26ReverbEngine::getFactoryPresets();
+    if (static_cast<size_t>(index) >= presets.size())
+        return;
+
+    const auto& p = presets[static_cast<size_t>(index)].params;
+
+    auto setParamFloat = [this](const juce::ParameterID& pid, float val) {
+        if (auto* param = apvts.getParameter(pid.getParamID()))
+            param->setValueNotifyingHost(std::clamp(param->convertTo0to1(val), 0.0f, 1.0f));
+    };
+    auto setParamChoice = [this](const juce::ParameterID& pid, float choiceIndex) {
+        if (auto* param = apvts.getParameter(pid.getParamID()))
+            param->setValueNotifyingHost(std::clamp(param->convertTo0to1(choiceIndex), 0.0f, 1.0f));
+    };
+    auto setParamBool = [this](const juce::ParameterID& pid, bool val) {
+        if (auto* param = apvts.getParameter(pid.getParamID()))
+            param->setValueNotifyingHost(val ? 1.0f : 0.0f);
+    };
+
+    setParamFloat(rb26::ParamIDs::inputTrimDb, p.inputTrimDb);
+    setParamFloat(rb26::ParamIDs::preDelayMs, p.preDelayMs);
+    setParamFloat(rb26::ParamIDs::dryWetMix, p.dryWetMix);
+    setParamFloat(rb26::ParamIDs::earlyLateMix, p.earlyLateMix);
+    setParamFloat(rb26::ParamIDs::lowCrossoverHz, p.lowCrossoverHz);
+    setParamFloat(rb26::ParamIDs::bassRt60Mult, p.bassRt60Mult);
+    setParamFloat(rb26::ParamIDs::punchDucking, p.punchDucking);
+    setParamFloat(rb26::ParamIDs::subMonoHz, p.subMonoHz);
+    setParamFloat(rb26::ParamIDs::roomSize, p.roomSize);
+    setParamFloat(rb26::ParamIDs::decayRt60Sec, p.decayRt60Sec);
+    setParamFloat(rb26::ParamIDs::highDampingHz, p.highDampingHz);
+    setParamFloat(rb26::ParamIDs::diffusionDensity, p.diffusionDensity);
+    setParamBool(rb26::ParamIDs::freezeHold, p.freezeHold);
+    setParamFloat(rb26::ParamIDs::shimmerSend, p.shimmerSend);
+    setParamFloat(rb26::ParamIDs::dimmerSend, p.dimmerSend);
+    setParamChoice(rb26::ParamIDs::shimmerInterval, static_cast<float>(rb26::shimmerIndexFromInterval(p.shimmerInterval)));
+    setParamChoice(rb26::ParamIDs::dimmerInterval, static_cast<float>(rb26::dimmerIndexFromInterval(p.dimmerInterval)));
+    setParamFloat(rb26::ParamIDs::pitchBlend, p.pitchBlend);
+    setParamFloat(rb26::ParamIDs::pitchFeedback, p.pitchFeedback);
+    setParamFloat(rb26::ParamIDs::pitchDelayMs, p.pitchDelayMs);
+    setParamFloat(rb26::ParamIDs::tailModRateHz, p.tailModRateHz);
+    setParamFloat(rb26::ParamIDs::tailModDepthMs, p.tailModDepthMs);
+    setParamFloat(rb26::ParamIDs::tailBloomMs, p.tailBloomMs);
+    setParamFloat(rb26::ParamIDs::stereoWidth, p.stereoWidth);
+    setParamFloat(rb26::ParamIDs::outputTrimDb, p.outputTrimDb);
+    setParamBool(rb26::ParamIDs::limiterEnable, p.limiterEnable);
 }
 
-const juce::String BRAUN_RB26AudioProcessor::getProgramName(int)
+const juce::String BRAUN_RB26AudioProcessor::getProgramName(int index)
 {
+    static const auto presets = rb26::Rb26ReverbEngine::getFactoryPresets();
+    if (index >= 0 && static_cast<size_t>(index) < presets.size())
+    {
+        return juce::String(presets[static_cast<size_t>(index)].name);
+    }
     return "Default";
 }
 
@@ -66,6 +121,12 @@ void BRAUN_RB26AudioProcessor::prepareToPlay(double sampleRate, int samplesPerBl
 {
     reverbEngine.prepare(sampleRate, samplesPerBlock);
     exciterEngine.prepare(sampleRate);
+
+    // Snapshot active APVTS parameters and initialize DSP state & smoothers immediately (BUG-JUCE-4)
+    const auto snapshot = atomicPointers.loadSnapshot();
+    reverbEngine.setParameters(snapshot.toDspParams());
+    reverbEngine.reset();
+    mPendingEngineReset.store(false, std::memory_order_release);
 
     scopeWritePos.store(0, std::memory_order_relaxed);
     for (int i = 0; i < kScopeBufferSize; ++i)
@@ -83,7 +144,7 @@ void BRAUN_RB26AudioProcessor::releaseResources()
 
 void BRAUN_RB26AudioProcessor::reset()
 {
-    reverbEngine.reset();
+    mPendingEngineReset.store(true, std::memory_order_release);
     exciterEngine.reset();
 }
 
@@ -159,11 +220,20 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
         else
         {
+            if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
+            {
+                reverbEngine.reset();
+            }
             buffer.clear();
             pushScopeSamples(outChannels[0], outChannels[1], numSamples);
             midiMessages.clear();
             return;
         }
+    }
+
+    if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
+    {
+        reverbEngine.reset();
     }
 
     // Wait-free POD snapshot load with std::memory_order_relaxed (0 locks, 0 memory allocs)
@@ -173,7 +243,7 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     // Prepare non-allocating stack pointers for channel routing
     const float* inChannels[2];
     inChannels[0] = buffer.getReadPointer(0);
-    inChannels[1] = (numChannels > 1) ? buffer.getReadPointer(1) : inChannels[0];
+    inChannels[1] = (getTotalNumInputChannels() > 1) ? buffer.getReadPointer(1) : inChannels[0];
 
     // Real-time block chunking for acoustic exciter + reverb integration (0 heap allocs)
     constexpr int kMaxChunk = 512;
@@ -219,13 +289,13 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         // Process core reverb engine
         reverbEngine.process(chunkIn, chunkOut, std::min(numChannels, 2), chunkSize, auxPtr);
 
-        // Guarantee zero hard clipping: apply master soft limiter to final output bus
+        // Ensure denormals are flushed without duplicate soft limiting (handled by reverbEngine when limiter_enable is active)
         for (int i = 0; i < chunkSize; ++i)
         {
-            outChannels[0][samplesProcessed + i] = rb26::flushDenormal(rb26::softLimit(outChannels[0][samplesProcessed + i]));
+            outChannels[0][samplesProcessed + i] = rb26::flushDenormal(outChannels[0][samplesProcessed + i]);
             if (numChannels > 1)
             {
-                outChannels[1][samplesProcessed + i] = rb26::flushDenormal(rb26::softLimit(outChannels[1][samplesProcessed + i]));
+                outChannels[1][samplesProcessed + i] = rb26::flushDenormal(outChannels[1][samplesProcessed + i]);
             }
         }
 
@@ -289,6 +359,7 @@ juce::AudioProcessorEditor* BRAUN_RB26AudioProcessor::createEditor()
 void BRAUN_RB26AudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
+    state.setProperty("currentProgram", mCurrentProgram, nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -299,6 +370,8 @@ void BRAUN_RB26AudioProcessor::setStateInformation(const void* data, int sizeInB
     if (xmlState != nullptr && xmlState->hasTagName(apvts.state.getType()))
     {
         auto vt = juce::ValueTree::fromXml(*xmlState);
+        if (vt.hasProperty("currentProgram"))
+            mCurrentProgram = static_cast<int>(vt.getProperty("currentProgram"));
         apvts.replaceState(vt);
     }
 }

@@ -325,6 +325,9 @@ void AcousticExciterEngine::prepare(double sampleRate) noexcept {
 
     mLabGen.prepare(mSampleRate);
     mPoissonClock.prepare(mSampleRate);
+    mPoissonEnable.store(mParams.poissonEnable, std::memory_order_relaxed);
+    mPoissonEpm.store(mParams.poissonEpm, std::memory_order_relaxed);
+    mPoissonHumanize.store(mParams.poissonHumanize, std::memory_order_relaxed);
 
     for (auto& sn : mScheduledNotes) {
         sn.active = false;
@@ -343,6 +346,9 @@ void AcousticExciterEngine::reset() noexcept {
 
     mLabGen.reset();
     mPoissonClock.reset();
+    mPoissonEnable.store(mParams.poissonEnable, std::memory_order_relaxed);
+    mPoissonEpm.store(mParams.poissonEpm, std::memory_order_relaxed);
+    mPoissonHumanize.store(mParams.poissonHumanize, std::memory_order_relaxed);
 
     for (auto& sn : mScheduledNotes) {
         sn.active = false;
@@ -357,6 +363,9 @@ void AcousticExciterEngine::reset() noexcept {
 void AcousticExciterEngine::setParameters(const AcousticExciterParameters& params) noexcept {
     mParams = params;
     setLevelDb(params.levelDb);
+    mPoissonEnable.store(params.poissonEnable, std::memory_order_relaxed);
+    mPoissonEpm.store(params.poissonEpm, std::memory_order_relaxed);
+    mPoissonHumanize.store(params.poissonHumanize, std::memory_order_relaxed);
 }
 
 void AcousticExciterEngine::setLevelDb(float db) noexcept {
@@ -563,7 +572,11 @@ void AcousticExciterEngine::process(float* outL, float* outR, int numSamples) no
         if (sn.active) { hasScheduled = true; break; }
     }
 
-    if (getActiveVoiceCount() == 0 && !mLabGen.isBusy() && !mParams.poissonEnable && !hasScheduled) {
+    const bool pEnable = mPoissonEnable.load(std::memory_order_relaxed);
+    const float pEpm = mPoissonEpm.load(std::memory_order_relaxed);
+    const float pHumanize = mPoissonHumanize.load(std::memory_order_relaxed);
+
+    if (getActiveVoiceCount() == 0 && !mLabGen.isBusy() && !pEnable && !hasScheduled) {
         std::fill(outL, outL + numSamples, 0.0f);
         std::fill(outR, outR + numSamples, 0.0f);
         return;
@@ -571,10 +584,10 @@ void AcousticExciterEngine::process(float* outL, float* outR, int numSamples) no
 
     for (int n = 0; n < numSamples; ++n) {
         // 1. Advance Poisson generative clock if active
-        if (mParams.poissonEnable) {
+        if (pEnable) {
             float pMidi = 60.0f;
             float pVel = 0.60f;
-            if (mPoissonClock.tick(mParams.poissonEpm, mParams.poissonHumanize,
+            if (mPoissonClock.tick(pEpm, pHumanize,
                                    pMidi, pVel, mParams.rootPitchClass, mParams.scaleIndex)) {
                 triggerVoice(pMidi, pVel, 3.5f);
             }
@@ -627,16 +640,20 @@ void AcousticExciterEngine::process(float* const* directBus, float* const* rever
         if (sn.active) { hasScheduled = true; break; }
     }
 
-    if (getActiveVoiceCount() == 0 && !mLabGen.isBusy() && !mParams.poissonEnable && !hasScheduled) {
+    const bool pEnable = mPoissonEnable.load(std::memory_order_relaxed);
+    const float pEpm = mPoissonEpm.load(std::memory_order_relaxed);
+    const float pHumanize = mPoissonHumanize.load(std::memory_order_relaxed);
+
+    if (getActiveVoiceCount() == 0 && !mLabGen.isBusy() && !pEnable && !hasScheduled) {
         return;
     }
 
     for (int n = 0; n < numSamples; ++n) {
         // 1. Advance Poisson generative clock if active
-        if (mParams.poissonEnable) {
+        if (pEnable) {
             float pMidi = 60.0f;
             float pVel = 0.60f;
-            if (mPoissonClock.tick(mParams.poissonEpm, mParams.poissonHumanize,
+            if (mPoissonClock.tick(pEpm, pHumanize,
                                    pMidi, pVel, mParams.rootPitchClass, mParams.scaleIndex)) {
                 triggerVoice(pMidi, pVel, 3.5f);
             }
@@ -701,6 +718,9 @@ void AcousticExciterEngine::process(float* const* directBus, float* const* rever
     mParams.poissonEnable = poissonEnable;
     mParams.poissonEpm = poissonEpm;
     mParams.poissonHumanize = poissonHumanize;
+    mPoissonEnable.store(poissonEnable, std::memory_order_relaxed);
+    mPoissonEpm.store(poissonEpm, std::memory_order_relaxed);
+    mPoissonHumanize.store(poissonHumanize, std::memory_order_relaxed);
     mParams.rootPitchClass = rootPitchClass;
 
     if (!mParams.enable) return;

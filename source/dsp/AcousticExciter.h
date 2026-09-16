@@ -398,9 +398,20 @@ public:
     void setScale(int scaleIndex) noexcept { mParams.scaleIndex = std::clamp(scaleIndex, 0, static_cast<int>(kNumModalScales - 1)); }
     void setRootPitchClass(int root) noexcept { mParams.rootPitchClass = ((root % 12) + 12) % 12; }
     void setChordSpeed(StrumSpeed speed) noexcept { mParams.chordSpeed = speed; }
-    void setPoissonEnable(bool enable) noexcept { mParams.poissonEnable = enable; }
-    void setPoissonEpm(float epm) noexcept { mParams.poissonEpm = std::clamp(epm, 4.0f, 60.0f); }
-    void setPoissonHumanize(float humanize) noexcept { mParams.poissonHumanize = std::clamp(humanize, 0.0f, 1.0f); }
+    void setPoissonEnable(bool enable) noexcept {
+        mParams.poissonEnable = enable;
+        mPoissonEnable.store(enable, std::memory_order_relaxed);
+    }
+    void setPoissonEpm(float epm) noexcept {
+        const float clamped = std::clamp(epm, 4.0f, 60.0f);
+        mParams.poissonEpm = clamped;
+        mPoissonEpm.store(clamped, std::memory_order_relaxed);
+    }
+    void setPoissonHumanize(float humanize) noexcept {
+        const float clamped = std::clamp(humanize, 0.0f, 1.0f);
+        mParams.poissonHumanize = clamped;
+        mPoissonHumanize.store(clamped, std::memory_order_relaxed);
+    }
 
     // Lock-Free SPSC FIFO interface (thread-safe, callable from UI thread or message thread)
     bool postTriggerEvent(const ExciterTriggerEvent& evt) noexcept;
@@ -434,11 +445,16 @@ public:
 
     // Status queries
     [[nodiscard]] int getActiveVoiceCount() const noexcept;
-    [[nodiscard]] bool isPoissonActive() const noexcept { return mParams.poissonEnable; }
+    [[nodiscard]] bool isPoissonActive() const noexcept { return mPoissonEnable.load(std::memory_order_relaxed); }
 
 private:
     double mSampleRate { 48000.0 };
     AcousticExciterParameters mParams;
+
+    // Thread-safe Poisson parameter atomics (accessed across UI/Audio threads)
+    std::atomic<bool> mPoissonEnable { false };
+    std::atomic<float> mPoissonEpm { 12.0f };
+    std::atomic<float> mPoissonHumanize { 0.50f };
 
     // 16-Voice Chime Pool
     std::array<ChimeVoice, kMaxVoices> mVoices;

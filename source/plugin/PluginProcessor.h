@@ -49,11 +49,11 @@ public:
 
     // Power lifecycle control
     void setPower(bool powered) noexcept {
-        isPoweredOn.store(powered, std::memory_order_relaxed);
-        if (!powered) {
+        const bool wasPowered = isPoweredOn.exchange(powered, std::memory_order_relaxed);
+        if (wasPowered && !powered) {
             exciterEngine.releaseAllVoices();
-            reverbEngine.reset();
         }
+        mPendingEngineReset.store(true, std::memory_order_release);
     }
     bool isPower() const noexcept { return isPoweredOn.load(std::memory_order_relaxed); }
 
@@ -73,6 +73,8 @@ private:
     rb26::AcousticExciterEngine exciterEngine;
     rb26::Rb26AtomicPointers atomicPointers;
     std::atomic<bool> isPoweredOn { true };
+    std::atomic<bool> mPendingEngineReset { false };
+    int mCurrentProgram { 0 };
 
     // Visualizer waveform circular buffer
     std::atomic<int> scopeWritePos { 0 };
