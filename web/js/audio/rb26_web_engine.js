@@ -623,10 +623,10 @@ export class Rb26WebEngine {
     this.masterLimiter.attack.setValueAtTime(0.001, ctx.currentTime);
     this.masterLimiter.release.setValueAtTime(0.080, ctx.currentTime);
 
-    // Master Output DC Blocker (20 Hz 2nd-order Butterworth Highpass)
+    // Master Output DC Blocker (35 Hz 2nd-order Butterworth Highpass)
     this.masterDcBlocker = ctx.createBiquadFilter();
     this.masterDcBlocker.type = 'highpass';
-    this.masterDcBlocker.frequency.setValueAtTime(20, ctx.currentTime);
+    this.masterDcBlocker.frequency.setValueAtTime(35, ctx.currentTime);
     this.masterDcBlocker.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.masterOutputBus.connect(this.outputTrimGain);
@@ -932,7 +932,7 @@ export class Rb26WebEngine {
           this.masterDcBlocker.disconnect();
           const newDcBlocker = this.ctx.createBiquadFilter();
           newDcBlocker.type = 'highpass';
-          newDcBlocker.frequency.setValueAtTime(20, now);
+          newDcBlocker.frequency.setValueAtTime(35, now);
           newDcBlocker.Q.setValueAtTime(BUTTERWORTH_Q, now);
           newDcBlocker.connect(this.ctx.destination);
           newDcBlocker.connect(this.splitter);

@@ -554,6 +554,18 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.strictEqual(typeof engine.triggerSynthPad, 'function', 'Rb26WebEngine must implement triggerSynthPad');
       assert.strictEqual(typeof engine.connectInput, 'function', 'Rb26WebEngine must implement connectInput');
     });
+
+    it('verifies Web Reverb Engine master DC blocker cutoff is configured to 35 Hz', () => {
+      const engineJs = fs.readFileSync(path.join(__dirname, 'js', 'audio', 'rb26_web_engine.js'), 'utf8');
+      assert.ok(
+        engineJs.includes('this.masterDcBlocker.frequency.setValueAtTime(35, ctx.currentTime);'),
+        'masterDcBlocker must be configured to 35 Hz to eliminate subsonic bloat and DC leakage'
+      );
+      assert.ok(
+        engineJs.includes('newDcBlocker.frequency.setValueAtTime(35, now);'),
+        'newDcBlocker flush path must be configured to 35 Hz'
+      );
+    });
   });
 
   //----------------------------------------------------------------------------
