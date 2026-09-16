@@ -11,7 +11,7 @@ class EarlyReflections {
 public:
     static constexpr size_t kNumTaps = 12;
 
-    EarlyReflections() noexcept = default;
+    EarlyReflections() noexcept { prepare(48000.0); }
     ~EarlyReflections() noexcept = default;
 
     void prepare(double sampleRate, float maxRoomSize = 2.0f) noexcept;
@@ -56,6 +56,12 @@ private:
     std::array<size_t, kNumTaps> mTapDelaysSamples {};
     std::array<float, kNumTaps> mTapGainsL {};
     std::array<float, kNumTaps> mTapGainsR {};
+
+    static constexpr int kCrossfadeSamples = 256;
+    int mCrossfadeRemaining { 0 };
+    std::array<size_t, kNumTaps> mOldTapDelaysSamples {};
+    std::array<float, kNumTaps> mOldTapGainsL {};
+    std::array<float, kNumTaps> mOldTapGainsR {};
 
     std::vector<float> mBufferL;
     std::vector<float> mBufferR;

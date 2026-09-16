@@ -28,6 +28,8 @@ void TailModulator::reset() noexcept {
     mBloomEnvelope = 1.0f;
     mFastEnv = 0.0f;
     mSlowEnv = 0.0f;
+    mRateSmoother.reset(mTargetRateHz);
+    mDepthSmoother.reset(mTargetDepthMs);
 }
 
 void TailModulator::setParameters(float rateHz, float depthMs, float bloomMs) noexcept {
@@ -91,8 +93,9 @@ void TailModulator::processSample(float inputTransientLevel,
         }
 
         const float lfoVal = FastSinTable::sin(mPhases[k] + kPhaseOffsets[k]);
-        // Zero-mean bipolar excursion
-        outExcursionsSamples[k] = flushDenormal((effectiveDepth * 0.5f) * lfoVal);
+        // Strictly non-negative unipolar excursion in [0.0, effectiveDepth]
+        const float unipolarLfo = std::clamp(0.5f * (1.0f + lfoVal), 0.0f, 1.0f);
+        outExcursionsSamples[k] = flushDenormal(effectiveDepth * unipolarLfo);
     }
 }
 

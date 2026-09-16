@@ -20,7 +20,7 @@ public:
     static constexpr int kMaxCapacity = 65536;
     static constexpr int kBufferMask = kMaxCapacity - 1;
 
-    DualTapDelayPitchShifter() noexcept = default;
+    DualTapDelayPitchShifter() noexcept { prepare(48000.0); }
 
     void prepare(double sampleRate) noexcept;
     void reset() noexcept;
@@ -34,6 +34,7 @@ private:
     float mSampleRate { 48000.0f };
     float mWindowSec { 0.050f };       // 50 ms default window
     float mWindowSamples { 2400.0f };
+    float mTargetWindowSamples { 2400.0f };
     int mSemitones { 12 };
     float mRatio { 2.0f };             // 2^(semitones / 12)
     float mPhaseInc { 0.0f };

@@ -159,10 +159,10 @@ public:
         const float depth = std::clamp(punchDepth, 0.0f, 1.0f);
 
         float targetGain = 1.0f;
-        if (TR > 1.18f && depth > 0.001f) {
-            const float excess = TR - 1.18f;
+        if (TR > 1.8f && depth > 0.001f) {
+            const float excess = TR - 1.8f;
             const float raw = 1.0f / (1.0f + 0.70f * depth * excess);
-            const float floorGain = std::pow(10.0f, -1.2f * depth); // -24 dB at depth=1.0
+            const float floorGain = std::pow(10.0f, -0.62f * std::pow(depth, 0.35f));
             targetGain = std::max(floorGain, raw);
         }
 

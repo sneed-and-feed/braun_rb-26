@@ -88,6 +88,13 @@ void Rb26ReverbEngine::reset() noexcept {
     mLastPitchFbL = 0.0f;
     mLastPitchFbR = 0.0f;
 
+    mInputTrimSmoother.reset(dbToGain(mParams.inputTrimDb));
+    mPreDelaySmoother.reset(mParams.preDelayMs);
+    mDryWetSmoother.reset(mParams.dryWetMix);
+    mEarlyLateSmoother.reset(mParams.earlyLateMix);
+    mStereoWidthSmoother.reset(mParams.stereoWidth);
+    mOutputTrimSmoother.reset(dbToGain(mParams.outputTrimDb));
+
     mPitchFeedbackSmoother.reset(mParams.pitchFeedback);
     mPitchDelaySmoother.reset(mParams.pitchDelayMs);
     mPitchBlendSmoother.reset(mParams.pitchBlend);
@@ -242,16 +249,21 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
         // 1. Pre-Delay
         const float curPreMs = mPreDelaySmoother.next();
-        const size_t preDelaySamples = static_cast<size_t>(
-            std::clamp((curPreMs * 0.001f) * fs, 0.0f, static_cast<float>(kPreDelayBufferCapacity - 1))
-        );
+        const float preDelaySamples = std::clamp((curPreMs * 0.001f) * fs, 0.0f, static_cast<float>(kPreDelayBufferCapacity - 64));
 
         mPreDelayBufferL[mPreDelayWriteIndex] = flushDenormal(tankInL);
         mPreDelayBufferR[mPreDelayWriteIndex] = flushDenormal(tankInR);
 
-        const size_t preReadIdx = (mPreDelayWriteIndex + kPreDelayBufferCapacity - preDelaySamples) & kPreDelayBufferMask;
-        const float preL = mPreDelayBufferL[preReadIdx];
-        const float preR = mPreDelayBufferR[preReadIdx];
+        const float preL = TailModulator::readHermite(mPreDelayBufferL.data(),
+                                                      kPreDelayBufferCapacity,
+                                                      kPreDelayBufferMask,
+                                                      mPreDelayWriteIndex,
+                                                      preDelaySamples);
+        const float preR = TailModulator::readHermite(mPreDelayBufferR.data(),
+                                                      kPreDelayBufferCapacity,
+                                                      kPreDelayBufferMask,
+                                                      mPreDelayWriteIndex,
+                                                      preDelaySamples);
         mPreDelayWriteIndex = (mPreDelayWriteIndex + 1) & kPreDelayBufferMask;
 
         // 2. Decoupled LR4 Crossover & Low-Band Modal Matrix
@@ -278,17 +290,19 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             const float pBlend = mPitchBlendSmoother.next();
             const float delayMult = 1.0f + 0.35f * std::max(0.0f, -pBlend);
             const float effDelayMs = curPitchDelayMs * delayMult;
-            const size_t delaySamplesL = static_cast<size_t>(
-                std::clamp((effDelayMs * 0.001f) * fs, 1.0f, static_cast<float>(kPitchDelayCapacity - 64))
-            );
-            const size_t delaySamplesR = static_cast<size_t>(
-                std::clamp((effDelayMs * 0.001f * 1.07f) * fs, 1.0f, static_cast<float>(kPitchDelayCapacity - 64))
-            );
+            const float delaySamplesL = std::clamp((effDelayMs * 0.001f) * fs, 1.0f, static_cast<float>(kPitchDelayCapacity - 64));
+            const float delaySamplesR = std::clamp((effDelayMs * 0.001f * 1.07f) * fs, 1.0f, static_cast<float>(kPitchDelayCapacity - 64));
 
-            const size_t pReadIdxL = (mPitchDelayWriteIndex + kPitchDelayCapacity - delaySamplesL) & kPitchDelayMask;
-            const size_t pReadIdxR = (mPitchDelayWriteIndex + kPitchDelayCapacity - delaySamplesR) & kPitchDelayMask;
-            const float delayedPitchL = mPitchDelayBufferL[pReadIdxL];
-            const float delayedPitchR = mPitchDelayBufferR[pReadIdxR];
+            const float delayedPitchL = TailModulator::readHermite(mPitchDelayBufferL.data(),
+                                                                  kPitchDelayCapacity,
+                                                                  kPitchDelayMask,
+                                                                  mPitchDelayWriteIndex,
+                                                                  delaySamplesL);
+            const float delayedPitchR = TailModulator::readHermite(mPitchDelayBufferR.data(),
+                                                                  kPitchDelayCapacity,
+                                                                  kPitchDelayMask,
+                                                                  mPitchDelayWriteIndex,
+                                                                  delaySamplesR);
 
             const float fb = mPitchFeedbackSmoother.next();
             const float safePitchFb = fb * 0.30f;

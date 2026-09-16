@@ -318,7 +318,7 @@ void ManifoldDelayNetwork::updateSpatialWeights() noexcept {
 void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>& inExcursions,
                                             std::array<float, kNumLines>& outFiltered,
                                             float freezeAmount) noexcept {
-    const float effAlpha = (1.0f - std::clamp(freezeAmount, 0.0f, 1.0f)) * mDampingAlpha;
+    const float freeze = std::clamp(freezeAmount, 0.0f, 1.0f);
     for (size_t k = 0; k < kNumLines; ++k) {
         // 1. Slewed nominal delay length + dynamic tail modulation excursion
         const float curLen = mLengthSmoothers[k].next();
@@ -332,8 +332,9 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
                                                            totalDelay);
 
         // 3. One-pole air absorption lowpass filter (bypassed when freezeAmount == 1.0f)
-        mDampingStates[k] = flushDenormal(mDampingStates[k] + effAlpha * (rawSample - mDampingStates[k]));
-        float s = mDampingStates[k];
+        const float filtered = flushDenormal(mDampingStates[k] + mDampingAlpha * (rawSample - mDampingStates[k]));
+        mDampingStates[k] = filtered;
+        float s = (1.0f - freeze) * filtered + freeze * rawSample;
 
         // 4. Manifold-specific loop filtering
         if (mCurrentManifold == ManifoldType::PoincareHyperbolic) {

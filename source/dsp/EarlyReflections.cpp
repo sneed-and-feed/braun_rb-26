@@ -24,6 +24,7 @@ void EarlyReflections::reset() noexcept {
     std::fill(mBufferL.begin(), mBufferL.end(), 0.0f);
     std::fill(mBufferR.begin(), mBufferR.end(), 0.0f);
     mWriteIndex = 0;
+    mCrossfadeRemaining = 0;
 
     for (size_t i = 0; i < kNumAllpass; ++i) {
         std::fill(mAllpassBuffers[i].begin(), mAllpassBuffers[i].end(), 0.0f);
@@ -41,6 +42,13 @@ void EarlyReflections::setParameters(float roomSize, float diffusionDensity) noe
 }
 
 void EarlyReflections::updateTaps() noexcept {
+    if (mWriteIndex > 0 && mTapDelaysSamples[0] > 0) {
+        mOldTapDelaysSamples = mTapDelaysSamples;
+        mOldTapGainsL = mTapGainsL;
+        mOldTapGainsR = mTapGainsR;
+        mCrossfadeRemaining = kCrossfadeSamples;
+    }
+
     for (size_t k = 0; k < kNumTaps; ++k) {
         const float delaySec = (kTapConfigs[k].baseDelayMs * 0.001f) * mRoomSize;
         const size_t delaySamples = static_cast<size_t>(std::round(delaySec * mSampleRate));
@@ -70,6 +78,11 @@ inline float EarlyReflections::processAllpass(size_t index, float input, float d
 
 void EarlyReflections::processSample(float inL, float inR, float& outL, float& outR) noexcept {
     ScopedNoDenormals noDenormals;
+    if (mBufferL.empty()) [[unlikely]] {
+        outL = inL;
+        outR = inR;
+        return;
+    }
     // 20% lateral cross-coupling for room reflection spatial realism
     const float inBufL = inL + 0.20f * inR;
     const float inBufR = inR + 0.20f * inL;
@@ -80,10 +93,23 @@ void EarlyReflections::processSample(float inL, float inR, float& outL, float& o
     float sumL = 0.0f;
     float sumR = 0.0f;
 
-    for (size_t k = 0; k < kNumTaps; ++k) {
-        const size_t readIdx = (mWriteIndex + kBufferCapacity - mTapDelaysSamples[k]) & kBufferMask;
-        sumL += mBufferL[readIdx] * mTapGainsL[k];
-        sumR += mBufferR[readIdx] * mTapGainsR[k];
+    if (mCrossfadeRemaining > 0) {
+        const float fadeNew = 1.0f - static_cast<float>(mCrossfadeRemaining) / static_cast<float>(kCrossfadeSamples);
+        const float fadeOld = 1.0f - fadeNew;
+        --mCrossfadeRemaining;
+
+        for (size_t k = 0; k < kNumTaps; ++k) {
+            const size_t oldReadIdx = (mWriteIndex + kBufferCapacity - mOldTapDelaysSamples[k]) & kBufferMask;
+            const size_t newReadIdx = (mWriteIndex + kBufferCapacity - mTapDelaysSamples[k]) & kBufferMask;
+            sumL += (mBufferL[oldReadIdx] * mOldTapGainsL[k] * fadeOld) + (mBufferL[newReadIdx] * mTapGainsL[k] * fadeNew);
+            sumR += (mBufferR[oldReadIdx] * mOldTapGainsR[k] * fadeOld) + (mBufferR[newReadIdx] * mTapGainsR[k] * fadeNew);
+        }
+    } else {
+        for (size_t k = 0; k < kNumTaps; ++k) {
+            const size_t readIdx = (mWriteIndex + kBufferCapacity - mTapDelaysSamples[k]) & kBufferMask;
+            sumL += mBufferL[readIdx] * mTapGainsL[k];
+            sumR += mBufferR[readIdx] * mTapGainsR[k];
+        }
     }
 
     mWriteIndex = (mWriteIndex + 1) & kBufferMask;

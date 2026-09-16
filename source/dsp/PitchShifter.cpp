@@ -22,6 +22,10 @@ void DualTapDelayPitchShifter::reset() noexcept {
     std::fill(mDelayBuffer.begin(), mDelayBuffer.end(), 0.0f);
     mWriteIndex = 0;
     mPhase = 0.0f;
+    mWindowSamples = mTargetWindowSamples;
+    const float slope = 1.0f - mRatio;
+    const float absSlope = std::abs(slope);
+    mPhaseInc = (absSlope > 1.0e-5f && mWindowSamples > 0.0f) ? (absSlope / mWindowSamples) : 0.0f;
 }
 
 void DualTapDelayPitchShifter::setInterval(int semitones) noexcept {
@@ -39,20 +43,25 @@ void DualTapDelayPitchShifter::setInterval(int semitones) noexcept {
     } else {
         mWindowSec = 0.200f; // 200 ms for Dimmer -24st -> 0.04% error
     }
-    mWindowSamples = std::max(64.0f, mWindowSec * mSampleRate);
-
-    const float slope = 1.0f - mRatio;
-    const float absSlope = std::abs(slope);
-
-    if (absSlope > 1.0e-5f && mWindowSamples > 0.0f) {
-        // Delta phi = |1 - r| / (W * fs)
-        mPhaseInc = absSlope / mWindowSamples;
-    } else {
-        mPhaseInc = 0.0f;
+    mTargetWindowSamples = std::max(64.0f, mWindowSec * mSampleRate);
+    if (mWriteIndex == 0) {
+        mWindowSamples = mTargetWindowSamples;
+        const float slope = 1.0f - mRatio;
+        const float absSlope = std::abs(slope);
+        mPhaseInc = (absSlope > 1.0e-5f && mWindowSamples > 0.0f) ? (absSlope / mWindowSamples) : 0.0f;
     }
 }
 
 float DualTapDelayPitchShifter::processSample(float input) noexcept {
+    if (mDelayBuffer.empty()) [[unlikely]] {
+        return flushDenormal(input);
+    }
+    if (std::abs(mTargetWindowSamples - mWindowSamples) > 0.05f) {
+        mWindowSamples += 0.005f * (mTargetWindowSamples - mWindowSamples);
+        const float slope = 1.0f - mRatio;
+        const float absSlope = std::abs(slope);
+        mPhaseInc = (absSlope > 1.0e-5f && mWindowSamples > 0.0f) ? (absSlope / mWindowSamples) : 0.0f;
+    }
     // Write sample to delay buffer
     mDelayBuffer[static_cast<size_t>(mWriteIndex)] = flushDenormal(input);
 
@@ -136,6 +145,7 @@ PitchShifter::PitchShifter() noexcept
     mPitchFeedbackSmoother.setTimeConstant(0.025f); // 25 ms
     mSpiralDepthSmoother.setTimeConstant(0.025f);   // 25 ms
     mSpiralRateSmoother.setTimeConstant(0.030f);    // 30 ms
+    prepare(48000.0, 512);
 }
 
 void PitchShifter::prepare(double sampleRate, int /*maxBlockSize*/) noexcept {
@@ -200,6 +210,13 @@ void PitchShifter::reset() noexcept {
     mRecircShimmerR = 0.0f;
     mRecircDimmerL = 0.0f;
     mRecircDimmerR = 0.0f;
+
+    mShimmerSendSmoother.reset(mShimmerSendSmoother.getTarget());
+    mDimmerSendSmoother.reset(mDimmerSendSmoother.getTarget());
+    mPitchBlendSmoother.reset(mPitchBlendSmoother.getTarget());
+    mPitchFeedbackSmoother.reset(mPitchFeedbackSmoother.getTarget());
+    mSpiralDepthSmoother.reset(mSpiralDepthSmoother.getTarget());
+    mSpiralRateSmoother.reset(mSpiralRateSmoother.getTarget());
 }
 
 void PitchShifter::setParameters(float shimmerSend,
@@ -245,6 +262,11 @@ void PitchShifter::setSpiralParameters(int spiralMode,
 
 void PitchShifter::processSample(float inL, float inR, float& outL, float& outR) noexcept {
     ScopedNoDenormals noDenormals;
+    if (mShimmerCircBufferL.empty()) [[unlikely]] {
+        outL = inL;
+        outR = inR;
+        return;
+    }
     const float sSend = mShimmerSendSmoother.next();
     const float dSend = mDimmerSendSmoother.next();
     const float blend = mPitchBlendSmoother.next();
@@ -378,6 +400,11 @@ void PitchShifter::process(const float* inL,
                            float* outR,
                            int numSamples) noexcept {
     ScopedNoDenormals noDenormals;
+    if (mShimmerCircBufferL.empty()) [[unlikely]] {
+        std::copy(inL, inL + numSamples, outL);
+        std::copy(inR, inR + numSamples, outR);
+        return;
+    }
     for (int n = 0; n < numSamples; ++n) {
         processSample(inL[n], inR[n], outL[n], outR[n]);
     }

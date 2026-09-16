@@ -8,6 +8,7 @@ ShepardPitchSpiral::ShepardPitchSpiral() noexcept {
     mDepthSmoother.setTimeConstant(0.025f);
     mRateSmoother.setTimeConstant(0.030f);
     mPartchRatioSmoother.setTimeConstant(0.035f);
+    prepare(48000.0);
 }
 
 void ShepardPitchSpiral::prepare(double sampleRate) noexcept {
@@ -46,6 +47,10 @@ void ShepardPitchSpiral::reset() noexcept {
         mVoicesR[m].currentRatio = 1.0f;
         mVoicesR[m].currentWeight = 0.0f;
     }
+
+    mDepthSmoother.reset(mDepthSmoother.getTarget());
+    mRateSmoother.reset(mRateHz);
+    mPartchRatioSmoother.reset(mPartchRatioSmoother.getTarget());
 }
 
 void ShepardPitchSpiral::setMode(SpiralMode mode) noexcept {
@@ -116,6 +121,11 @@ inline float ShepardPitchSpiral::readHermite(const std::vector<float>& buffer, f
 
 void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float& outR) noexcept {
     ScopedNoDenormals noDenormals;
+    if (mDelayBufferL.empty()) [[unlikely]] {
+        outL = flushDenormal(inL);
+        outR = flushDenormal(inR);
+        return;
+    }
     if (mMode == SpiralMode::Bypass) [[unlikely]] {
         outL = flushDenormal(inL);
         outR = flushDenormal(inR);

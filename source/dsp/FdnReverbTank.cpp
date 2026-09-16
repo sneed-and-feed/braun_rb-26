@@ -40,6 +40,9 @@ void FdnReverbTank::reset() noexcept {
         std::fill(mAllpassBuffers[i].begin(), mAllpassBuffers[i].end(), 0.0f);
         mAllpassWriteIndices[i] = 0;
     }
+
+    mFreezeInputSmoother.reset(mFreezeHold ? 0.0f : 1.0f);
+    mFreezeLoopSmoother.reset(mFreezeHold ? 1.0f : 0.0f);
 }
 
 void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float highDampingHz,
