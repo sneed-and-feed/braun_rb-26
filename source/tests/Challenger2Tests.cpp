@@ -950,6 +950,70 @@ bool runZeroShimmerDimmerSpikeStressTests() {
                 std::cout << "      Verdict : PASS (Smooth modulation transitions, 0 CPU spikes, 0 pops)\n";
             }
         }
+
+        // 4. Deck 04 User DAW Setting: 5% Min Floor Shimmer/Dimmer, Full Dimmer Blend (-1.0f), 40% Pitch Regen
+        {
+            rb26::Rb26ReverbEngine engine;
+            engine.prepare(fs, static_cast<int>(blockSize));
+
+            rb26::Rb26Parameters params;
+            params.shimmerSend = 0.05f;   // 5% minimum floor
+            params.dimmerSend = 0.05f;    // 5% minimum floor
+            params.pitchBlend = -1.0f;    // -100% full dimmer
+            params.pitchFeedback = 0.40f; // 40% regen
+            params.decayRt60Sec = 6.5f;
+            params.roomSize = 1.0f;
+            params.diffusionDensity = 0.75f;
+            params.dryWetMix = 0.40f;
+            engine.setParameters(params);
+
+            std::vector<float> outL(testDurationSamples, 0.0f);
+            std::vector<float> outR(testDurationSamples, 0.0f);
+
+            gAllocationCount = 0;
+            gBytesAllocated = 0;
+            gTrackAllocations = true;
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+
+            size_t processed = 0;
+            while (processed < testDurationSamples) {
+                const size_t chunk = std::min(blockSize, testDurationSamples - processed);
+                const float* inPtrs[2] = { noiseL.data() + processed, noiseR.data() + processed };
+                float* outPtrs[2] = { outL.data() + processed, outR.data() + processed };
+                engine.process(inPtrs, outPtrs, 2, static_cast<int>(chunk));
+                processed += chunk;
+            }
+
+            auto t1 = std::chrono::high_resolution_clock::now();
+            gTrackAllocations = false;
+
+            double elapsedMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            double cpuLoadPct = (elapsedMs / audioDurationMs) * 100.0;
+
+            size_t totalNonFinite = 0;
+            size_t totalDenormals = 0;
+            for (size_t i = 0; i < testDurationSamples; ++i) {
+                if (!std::isfinite(outL[i]) || !std::isfinite(outR[i])) totalNonFinite++;
+                if (std::fpclassify(outL[i]) == FP_SUBNORMAL || std::fpclassify(outR[i]) == FP_SUBNORMAL) totalDenormals++;
+            }
+
+            std::cout << "      [6.4] Deck 04 5% Min Floor (Shim 5%, Dim 5%, Blend -100%, FB 40%) : " << std::fixed << std::setprecision(3)
+                      << elapsedMs << " ms (CPU load: " << std::setprecision(2) << cpuLoadPct << "%)\n";
+            std::cout << "            Allocations = " << gAllocationCount << ", Non-finite = " << totalNonFinite
+                      << ", Denormals = " << totalDenormals << "\n";
+
+            const double maxAllowedCpuPct = (fs <= 48000.0) ? 25.0 : (fs <= 96000.0 ? 45.0 : 75.0);
+            if (cpuLoadPct > maxAllowedCpuPct) {
+                std::cout << "      Verdict : FAIL (CPU spike under Deck 04 5% minimum floor setting: " << cpuLoadPct << "%)\n";
+                allPassed = false;
+            } else if (gAllocationCount != 0 || totalNonFinite != 0 || totalDenormals != 0) {
+                std::cout << "      Verdict : FAIL (Non-finite/denormal outputs detected)\n";
+                allPassed = false;
+            } else {
+                std::cout << "      Verdict : PASS (Smooth bounded CPU under Deck 04 5% floor setting)\n";
+            }
+        }
     }
 
     return allPassed;

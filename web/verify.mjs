@@ -177,7 +177,14 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
         assert.ok(typeof preset.params.shimmer_send === 'number');
         assert.ok(typeof preset.params.dimmer_send === 'number');
         assert.ok(typeof preset.params.dry_wet_mix === 'number');
+        assert.ok(preset.params.shimmer_send >= 5, `${preset.id} shimmer_send must be >= 5%`);
+        assert.ok(preset.params.dimmer_send >= 5, `${preset.id} dimmer_send must be >= 5%`);
       }
+
+      // Verify app.js FACTORY_PRESETS do not have 0% shimmer or dimmer sends
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      assert.strictEqual(appJs.match(/dimmer_send:\s*0\b/g), null, 'app.js FACTORY_PRESETS must not contain dimmer_send: 0');
+      assert.strictEqual(appJs.match(/shimmer_send:\s*0\b/g), null, 'app.js FACTORY_PRESETS must not contain shimmer_send: 0');
     });
 
     it('verifies Hermite soft saturation transfer curve in Web Engine', async () => {

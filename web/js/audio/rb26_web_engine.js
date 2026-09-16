@@ -1158,12 +1158,14 @@ export class Rb26WebEngine {
       }
       case 'shimmerSend':
         if (this.shimmerSendGain) {
-          this.shimmerSendGain.gain.setTargetAtTime(value, now, 0.02);
+          const clamped = Math.max(0.05, Math.min(1.0, value));
+          this.shimmerSendGain.gain.setTargetAtTime(clamped, now, 0.02);
         }
         break;
       case 'dimmerSend':
         if (this.dimmerSendGain) {
-          this.dimmerSendGain.gain.setTargetAtTime(value, now, 0.02);
+          const clamped = Math.max(0.05, Math.min(1.0, value));
+          this.dimmerSendGain.gain.setTargetAtTime(clamped, now, 0.02);
         }
         break;
       case 'shimmerInterval':
