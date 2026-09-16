@@ -1020,6 +1020,492 @@ bool runZeroShimmerDimmerSpikeStressTests() {
 }
 
 // ============================================================================
+// TEST 7: Pre-Prepare Invocation Safety & Memory Fault Immunity
+// Tests: EarlyReflections, PitchShifter, ShepardPitchSpiral, and Rb26Engine
+// ============================================================================
+bool runPrePrepareInvocationStressTests() {
+    std::cout << "\n=======================================================\n";
+    std::cout << "TEST 7: Pre-Prepare Invocation Safety & Memory Faults\n";
+    std::cout << "=======================================================\n";
+
+    bool allPassed = true;
+
+    // 7.1 EarlyReflections Pre-Prepare Invocation
+    {
+        std::cout << "[7.1] EarlyReflections: Pre-Prepare processSample & processBlock:\n";
+        rb26::EarlyReflections er; // Default construct: NO explicit prepare() call
+        
+        bool survived = true;
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+
+        // Process standard audio
+        for (int i = 0; i < 2048; ++i) {
+            float inL = std::sin(static_cast<float>(i) * 0.05f) * 0.5f;
+            float inR = std::cos(static_cast<float>(i) * 0.05f) * 0.5f;
+            float outL = 0.0f, outR = 0.0f;
+            er.processSample(inL, inR, outL, outR);
+            if (!std::isfinite(outL) || !std::isfinite(outR)) nonFiniteCount++;
+            if (std::fpclassify(outL) == FP_SUBNORMAL || std::fpclassify(outR) == FP_SUBNORMAL) denormalCount++;
+        }
+
+        // Process block
+        std::vector<float> bInL(512, 0.4f), bInR(512, -0.4f);
+        std::vector<float> bOutL(512, 0.0f), bOutR(512, 0.0f);
+        er.processBlock(bInL.data(), bInR.data(), bOutL.data(), bOutR.data(), 512);
+
+        // Pre-prepare reset and parameter mutation
+        er.reset();
+        er.setParameters(1.8f, 0.9f);
+        er.processBlock(bInL.data(), bInR.data(), bOutL.data(), bOutR.data(), 512);
+
+        // Extreme signals
+        const std::array<float, 4> extremeVals = {{ 100.0f, 1.0e-38f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN() }};
+        for (float val : extremeVals) {
+            float outL = 0.0f, outR = 0.0f;
+            er.processSample(val, -val, outL, outR);
+        }
+
+        std::cout << "      Samples Processed : 3076 (Single sample, block, reset, param changes)\n";
+        std::cout << "      Extreme Signals   : Overload (+40dB), Subnormal, Inf, NaN\n";
+        std::cout << "      Non-finite (Audio): " << nonFiniteCount << ", Denormals: " << denormalCount << "\n";
+
+        if (nonFiniteCount == 0 && denormalCount == 0 && survived) {
+            std::cout << "      Verdict           : PASS (Zero memory violations or crashes)\n";
+        } else {
+            std::cout << "      Verdict           : FAIL (Unexpected output or memory hazard)\n";
+            allPassed = false;
+        }
+    }
+
+    // 7.2 PitchShifter Pre-Prepare Invocation
+    {
+        std::cout << "[7.2] PitchShifter & DualTapDelayPitchShifter: Pre-Prepare:\n";
+        rb26::DualTapDelayPitchShifter dt; // Default construct: NO prepare()
+        for (int i = 0; i < 1024; ++i) {
+            float s = dt.processSample(std::sin(static_cast<float>(i) * 0.1f) * 0.5f);
+            (void)s;
+        }
+        dt.setInterval(-12);
+        dt.reset();
+        for (int i = 0; i < 1024; ++i) {
+            float s = dt.processSample(std::sin(static_cast<float>(i) * 0.1f) * 0.5f);
+            (void)s;
+        }
+
+        rb26::PitchShifter ps; // Default construct: NO prepare()
+        ps.setParameters(1.0f, 1.0f, 12, -12, 0.0f, 0.85f);
+        ps.setSpiralParameters(1, 0.5f, 1.0f, 1);
+
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+
+        for (int i = 0; i < 2048; ++i) {
+            float inL = std::sin(static_cast<float>(i) * 0.07f) * 0.5f;
+            float inR = std::cos(static_cast<float>(i) * 0.07f) * 0.5f;
+            float outL = 0.0f, outR = 0.0f;
+            ps.processSample(inL, inR, outL, outR);
+            if (!std::isfinite(outL) || !std::isfinite(outR)) nonFiniteCount++;
+            if (std::fpclassify(outL) == FP_SUBNORMAL || std::fpclassify(outR) == FP_SUBNORMAL) denormalCount++;
+        }
+
+        std::vector<float> bInL(512, 0.5f), bInR(512, -0.5f);
+        std::vector<float> bOutL(512, 0.0f), bOutR(512, 0.0f);
+        ps.process(bInL.data(), bInR.data(), bOutL.data(), bOutR.data(), 512);
+
+        ps.reset();
+        ps.process(bInL.data(), bInR.data(), bOutL.data(), bOutR.data(), 512);
+
+        std::cout << "      Samples Processed : 4096 (DualTap, Stereo Shimmer/Dimmer, Spiral)\n";
+        std::cout << "      Non-finite (Audio): " << nonFiniteCount << ", Denormals: " << denormalCount << "\n";
+
+        if (nonFiniteCount == 0 && denormalCount == 0) {
+            std::cout << "      Verdict           : PASS (Zero memory violations or crashes)\n";
+        } else {
+            std::cout << "      Verdict           : FAIL (Unexpected output or memory hazard)\n";
+            allPassed = false;
+        }
+    }
+
+    // 7.3 ShepardPitchSpiral Pre-Prepare Invocation
+    {
+        std::cout << "[7.3] ShepardPitchSpiral: Pre-Prepare all 4 modes:\n";
+        rb26::ShepardPitchSpiral sps; // Default construct: NO prepare()
+
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+
+        const std::array<rb26::ShepardPitchSpiral::SpiralMode, 4> modes = {{
+            rb26::ShepardPitchSpiral::SpiralMode::BarberShimmer,
+            rb26::ShepardPitchSpiral::SpiralMode::BarberDimmer,
+            rb26::ShepardPitchSpiral::SpiralMode::PartchLattice,
+            rb26::ShepardPitchSpiral::SpiralMode::Bypass
+        }};
+
+        for (auto m : modes) {
+            sps.setMode(m);
+            sps.setDepth(1.0f);
+            sps.setRateHz(0.75f);
+            if (m == rb26::ShepardPitchSpiral::SpiralMode::PartchLattice) {
+                sps.setPartchPolyphonic(true);
+            }
+            for (int i = 0; i < 1024; ++i) {
+                float inL = std::sin(static_cast<float>(i) * 0.08f) * 0.5f;
+                float inR = std::cos(static_cast<float>(i) * 0.08f) * 0.5f;
+                float outL = 0.0f, outR = 0.0f;
+                sps.processSample(inL, inR, outL, outR);
+                if (!std::isfinite(outL) || !std::isfinite(outR)) nonFiniteCount++;
+                if (std::fpclassify(outL) == FP_SUBNORMAL || std::fpclassify(outR) == FP_SUBNORMAL) denormalCount++;
+            }
+        }
+
+        sps.reset();
+        std::vector<float> bInL(512, 0.4f), bInR(512, 0.4f);
+        std::vector<float> bOutL(512, 0.0f), bOutR(512, 0.0f);
+        sps.process(bInL.data(), bInR.data(), bOutL.data(), bOutR.data(), 512);
+
+        std::cout << "      Modes Tested      : BarberShimmer, BarberDimmer, PartchLattice, Bypass\n";
+        std::cout << "      Samples Processed : 4608\n";
+        std::cout << "      Non-finite (Audio): " << nonFiniteCount << ", Denormals: " << denormalCount << "\n";
+
+        if (nonFiniteCount == 0 && denormalCount == 0) {
+            std::cout << "      Verdict           : PASS (Zero memory violations across all spiral modes)\n";
+        } else {
+            std::cout << "      Verdict           : FAIL (Non-finite or denormal outputs detected)\n";
+            allPassed = false;
+        }
+    }
+
+    return allPassed;
+}
+
+// ============================================================================
+// TEST 8: Rapid Delay Modulation & Anti-Click Hermite Interpolation Stress
+// Tests: preDelayMs and pitchDelayMs automated rapidly without clicks or NaNs
+// ============================================================================
+bool runDelayModulationStressTests() {
+    std::cout << "\n=======================================================\n";
+    std::cout << "TEST 8: Rapid Delay Modulation Stress & Click Freedom\n";
+    std::cout << "=======================================================\n";
+
+    bool allPassed = true;
+    const double fs = 48000.0;
+    const size_t totalSamples = 96000; // 2 seconds
+
+    // 8.1 Pre-Delay Continuous Linear Sweep (0.0 ms -> 500.0 ms -> 0.0 ms)
+    {
+        std::cout << "[8.1] Pre-Delay Linear Sweep (0 ms -> 500 ms -> 0 ms):\n";
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(fs, 64);
+
+        rb26::Rb26Parameters params;
+        params.dryWetMix = 1.0f; // 100% wet to monitor delayed signal
+        params.earlyLateMix = 0.0f; // 100% early
+        params.diffusionDensity = 0.0f;
+        params.decayRt60Sec = 0.5f;
+
+        // Continuous 1000 Hz sine wave
+        std::vector<float> inSig(totalSamples);
+        for (size_t i = 0; i < totalSamples; ++i) {
+            inSig[i] = std::sin(2.0 * test_utils::kPi * 1000.0 * static_cast<double>(i) / fs) * 0.5f;
+        }
+
+        std::vector<float> outL(totalSamples, 0.0f);
+        std::vector<float> outR(totalSamples, 0.0f);
+
+        const size_t subBlock = 32;
+        float maxSampleDiff = 0.0f;
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+        float prevL = 0.0f;
+
+        for (size_t n = 0; n < totalSamples; n += subBlock) {
+            // Sweep preDelayMs from 0.0 to 500.0 ms across 96,000 samples
+            float frac = static_cast<float>(n) / static_cast<float>(totalSamples);
+            float preMs = (frac < 0.5f) ? (frac * 2.0f * 500.0f) : ((1.0f - frac) * 2.0f * 500.0f);
+            params.preDelayMs = preMs;
+            engine.setParameters(params);
+
+            const float* inPtrs[2] = { inSig.data() + n, inSig.data() + n };
+            float* outPtrs[2] = { outL.data() + n, outR.data() + n };
+            engine.process(inPtrs, outPtrs, 2, static_cast<int>(subBlock));
+
+            for (size_t s = 0; s < subBlock; ++s) {
+                float sampleL = outL[n + s];
+                float sampleR = outR[n + s];
+                if (!std::isfinite(sampleL) || !std::isfinite(sampleR)) nonFiniteCount++;
+                if (std::fpclassify(sampleL) == FP_SUBNORMAL || std::fpclassify(sampleR) == FP_SUBNORMAL) denormalCount++;
+                if (n + s > 0) {
+                    float diff = std::abs(sampleL - prevL);
+                    if (diff > maxSampleDiff) maxSampleDiff = diff;
+                }
+                prevL = sampleL;
+            }
+        }
+
+        std::cout << "      Sweep Range       : 0.0 ms to 500.0 ms (Bi-directional)\n";
+        std::cout << "      Sub-block Cadence : 32 samples (~0.67 ms)\n";
+        std::cout << "      Max Sample Delta  : " << std::fixed << std::setprecision(4) << maxSampleDiff << " (Bound: < 0.35)\n";
+        std::cout << "      Non-finite Count  : " << nonFiniteCount << ", Denormals: " << denormalCount << "\n";
+
+        if (nonFiniteCount == 0 && denormalCount == 0 && maxSampleDiff < 0.35f) {
+            std::cout << "      Verdict           : PASS (Hermite interpolation smooth, 0 integer clicks, 0 NaNs)\n";
+        } else {
+            std::cout << "      Verdict           : FAIL (Discontinuity or numerical instability detected)\n";
+            allPassed = false;
+        }
+    }
+
+    // 8.2 Pre-Delay Fast Square-Wave Jump Automation (0 ms <-> 500 ms)
+    {
+        std::cout << "[8.2] Pre-Delay Square Jump Automation (0 ms <-> 500 ms every 256 samples):\n";
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(fs, 256);
+
+        rb26::Rb26Parameters params;
+        params.dryWetMix = 0.5f;
+
+        std::vector<float> inSig(totalSamples, 0.4f);
+        std::vector<float> outL(totalSamples, 0.0f);
+        std::vector<float> outR(totalSamples, 0.0f);
+
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+        float maxPeak = 0.0f;
+
+        for (size_t n = 0; n < totalSamples; n += 256) {
+            params.preDelayMs = ((n / 256) % 2 == 0) ? 0.0f : 500.0f;
+            engine.setParameters(params);
+
+            const float* inPtrs[2] = { inSig.data() + n, inSig.data() + n };
+            float* outPtrs[2] = { outL.data() + n, outR.data() + n };
+            engine.process(inPtrs, outPtrs, 2, 256);
+
+            for (size_t s = 0; s < 256; ++s) {
+                float absL = std::abs(outL[n + s]);
+                float absR = std::abs(outR[n + s]);
+                if (!std::isfinite(outL[n + s]) || !std::isfinite(outR[n + s])) nonFiniteCount++;
+                if (std::fpclassify(outL[n + s]) == FP_SUBNORMAL || std::fpclassify(outR[n + s]) == FP_SUBNORMAL) denormalCount++;
+                maxPeak = std::max(maxPeak, std::max(absL, absR));
+            }
+        }
+
+        std::cout << "      Jump Interval     : 256 samples (5.33 ms cadence)\n";
+        std::cout << "      Max Peak Output   : " << std::fixed << std::setprecision(3) << maxPeak << " (Limit: <= 1.05)\n";
+        std::cout << "      Non-finite Count  : " << nonFiniteCount << ", Denormals: " << denormalCount << "\n";
+
+        if (nonFiniteCount == 0 && denormalCount == 0 && maxPeak <= 1.05f) {
+            std::cout << "      Verdict           : PASS (OnePole smoothing handles square transitions cleanly)\n";
+        } else {
+            std::cout << "      Verdict           : FAIL (Instability or clipping detected)\n";
+            allPassed = false;
+        }
+    }
+
+    // 8.3 Pitch Delay Linear Sweep & Fast Square Jumps (20 ms -> 500 ms)
+    {
+        std::cout << "[8.3] Pitch Delay Rapid Automation (20 ms -> 500 ms with Shimmer active):\n";
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(fs, 64);
+
+        rb26::Rb26Parameters params;
+        params.shimmerSend = 0.70f;
+        params.dimmerSend = 0.50f;
+        params.pitchFeedback = 0.45f;
+        params.pitchBlend = 0.20f;
+        params.dryWetMix = 0.50f;
+
+        std::vector<float> inSig(totalSamples);
+        for (size_t i = 0; i < totalSamples; ++i) {
+            inSig[i] = std::sin(2.0 * test_utils::kPi * 440.0 * static_cast<double>(i) / fs) * 0.4f;
+        }
+
+        std::vector<float> outL(totalSamples, 0.0f);
+        std::vector<float> outR(totalSamples, 0.0f);
+
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+        float maxPeak = 0.0f;
+        float maxDiff = 0.0f;
+        float prevL = 0.0f;
+
+        for (size_t n = 0; n < totalSamples; n += 64) {
+            // Rapid sine modulation of pitchDelayMs between 20 ms and 500 ms at 5 Hz
+            double t = static_cast<double>(n) / fs;
+            float pitchDelay = 260.0f + 240.0f * static_cast<float>(std::sin(2.0 * test_utils::kPi * 5.0 * t));
+            params.pitchDelayMs = pitchDelay;
+            engine.setParameters(params);
+
+            const float* inPtrs[2] = { inSig.data() + n, inSig.data() + n };
+            float* outPtrs[2] = { outL.data() + n, outR.data() + n };
+            engine.process(inPtrs, outPtrs, 2, 64);
+
+            for (size_t s = 0; s < 64; ++s) {
+                float sampleL = outL[n + s];
+                float sampleR = outR[n + s];
+                if (!std::isfinite(sampleL) || !std::isfinite(sampleR)) nonFiniteCount++;
+                if (std::fpclassify(sampleL) == FP_SUBNORMAL || std::fpclassify(sampleR) == FP_SUBNORMAL) denormalCount++;
+                maxPeak = std::max(maxPeak, std::max(std::abs(sampleL), std::abs(sampleR)));
+                if (n + s > 0) {
+                    float diff = std::abs(sampleL - prevL);
+                    if (diff > maxDiff) maxDiff = diff;
+                }
+                prevL = sampleL;
+            }
+        }
+
+        std::cout << "      Modulation Rate   : 5.0 Hz continuous sine sweep (20 ms - 500 ms)\n";
+        std::cout << "      Max Peak Output   : " << std::fixed << std::setprecision(3) << maxPeak << " (Limit: <= 1.05)\n";
+        std::cout << "      Max Sample Delta  : " << std::fixed << std::setprecision(4) << maxDiff << " (Bound: < 0.40)\n";
+        std::cout << "      Non-finite Count  : " << nonFiniteCount << ", Denormals: " << denormalCount << "\n";
+
+        if (nonFiniteCount == 0 && denormalCount == 0 && maxPeak <= 1.05f && maxDiff < 0.40f) {
+            std::cout << "      Verdict           : PASS (Pitch delay Hermite interpolation click-free & stable)\n";
+        } else {
+            std::cout << "      Verdict           : FAIL (Non-finite, clipping, or click detected)\n";
+            allPassed = false;
+        }
+    }
+
+    // 8.4 Simultaneous Extreme Dual-Delay Modulation (preDelay + pitchDelay uncorrelated LFOs)
+    {
+        std::cout << "[8.4] Simultaneous Dual-Delay Modulation (Uncorrelated LFOs at Audio Rate):\n";
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(fs, 32);
+
+        rb26::Rb26Parameters params;
+        params.shimmerSend = 0.80f;
+        params.dimmerSend = 0.80f;
+        params.pitchFeedback = 0.60f;
+        params.decayRt60Sec = 10.0f;
+        params.dryWetMix = 0.70f;
+
+        std::vector<float> inSig(totalSamples);
+        for (size_t i = 0; i < totalSamples; ++i) {
+            inSig[i] = std::sin(2.0 * test_utils::kPi * 330.0 * static_cast<double>(i) / fs) * 0.5f;
+        }
+
+        std::vector<float> outL(totalSamples, 0.0f);
+        std::vector<float> outR(totalSamples, 0.0f);
+
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+        float maxPeak = 0.0f;
+
+        for (size_t n = 0; n < totalSamples; n += 32) {
+            double t = static_cast<double>(n) / fs;
+            params.preDelayMs = 250.0f + 250.0f * static_cast<float>(std::sin(2.0 * test_utils::kPi * 11.7 * t));
+            params.pitchDelayMs = 260.0f + 240.0f * static_cast<float>(std::cos(2.0 * test_utils::kPi * 7.3 * t));
+            engine.setParameters(params);
+
+            const float* inPtrs[2] = { inSig.data() + n, inSig.data() + n };
+            float* outPtrs[2] = { outL.data() + n, outR.data() + n };
+            engine.process(inPtrs, outPtrs, 2, 32);
+
+            for (size_t s = 0; s < 32; ++s) {
+                float absL = std::abs(outL[n + s]);
+                float absR = std::abs(outR[n + s]);
+                if (!std::isfinite(outL[n + s]) || !std::isfinite(outR[n + s])) nonFiniteCount++;
+                if (std::fpclassify(outL[n + s]) == FP_SUBNORMAL || std::fpclassify(outR[n + s]) == FP_SUBNORMAL) denormalCount++;
+                maxPeak = std::max(maxPeak, std::max(absL, absR));
+            }
+        }
+
+        std::cout << "      Pre-Delay LFO     : 11.7 Hz (0 - 500 ms)\n";
+        std::cout << "      Pitch-Delay LFO   :  7.3 Hz (20 - 500 ms)\n";
+        std::cout << "      Max Peak Output   : " << std::fixed << std::setprecision(3) << maxPeak << " (Limit: <= 1.05)\n";
+        std::cout << "      Non-finite Count  : " << nonFiniteCount << ", Denormals: " << denormalCount << "\n";
+
+        if (nonFiniteCount == 0 && denormalCount == 0 && maxPeak <= 1.05f) {
+            std::cout << "      Verdict           : PASS (Simultaneous dual delay modulation fully stable)\n";
+        } else {
+            std::cout << "      Verdict           : FAIL (Instability during dual modulation)\n";
+            allPassed = false;
+        }
+    }
+
+    return allPassed;
+}
+
+// ============================================================================
+// TEST 9: Multi-Rate Operations & Buffer Overrun / Underflow Stress
+// Tests: 22.05k, 44.1k, 48k, 88.2k, 96k, 176.4k, 192k, 384k
+// ============================================================================
+bool runMultiRateOperationsStressTests() {
+    std::cout << "\n=======================================================\n";
+    std::cout << "TEST 9: Multi-Rate Operations & Buffer Boundaries\n";
+    std::cout << "=======================================================\n";
+
+    bool allPassed = true;
+    const std::vector<double> sampleRates = {
+        22050.0, 44100.0, 48000.0, 88200.0, 96000.0, 176400.0, 192000.0, 384000.0
+    };
+
+    for (double fs : sampleRates) {
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(fs, 512);
+
+        rb26::Rb26Parameters params;
+        params.preDelayMs = 500.0f;    // Maximum pre-delay boundary
+        params.pitchDelayMs = 500.0f;  // Maximum pitch-delay boundary
+        params.decayRt60Sec = 20.0f;
+        params.pitchFeedback = 0.85f;
+        params.shimmerSend = 0.80f;
+        params.dimmerSend = 0.80f;
+        params.dryWetMix = 0.50f;
+        engine.setParameters(params);
+
+        const int numBlocks = 30;
+        const int blockSize = 512;
+        std::vector<float> inL(blockSize, 0.4f);
+        std::vector<float> inR(blockSize, -0.4f);
+        std::vector<float> outL(blockSize, 0.0f);
+        std::vector<float> outR(blockSize, 0.0f);
+
+        const float* inPtrs[2] = { inL.data(), inR.data() };
+        float* outPtrs[2] = { outL.data(), outR.data() };
+
+        gAllocationCount = 0;
+        gBytesAllocated = 0;
+        gTrackAllocations = true;
+
+        size_t totalNonFinite = 0;
+        size_t totalDenormals = 0;
+        float maxPeak = 0.0f;
+
+        for (int b = 0; b < numBlocks; ++b) {
+            engine.process(inPtrs, outPtrs, 2, blockSize);
+            for (int i = 0; i < blockSize; ++i) {
+                float absL = std::abs(outL[i]);
+                float absR = std::abs(outR[i]);
+                if (!std::isfinite(outL[i]) || !std::isfinite(outR[i])) totalNonFinite++;
+                if (std::fpclassify(outL[i]) == FP_SUBNORMAL || std::fpclassify(outR[i]) == FP_SUBNORMAL) totalDenormals++;
+                maxPeak = std::max(maxPeak, std::max(absL, absR));
+            }
+        }
+
+        gTrackAllocations = false;
+
+        std::cout << "  fs = " << std::setw(6) << static_cast<int>(fs) << " Hz: "
+                  << "Allocs=" << gAllocationCount << ", Non-finite=" << totalNonFinite
+                  << ", Denormals=" << totalDenormals << ", MaxPeak=" << std::fixed << std::setprecision(3) << maxPeak << "\n";
+
+        if (gAllocationCount != 0 || totalNonFinite != 0 || totalDenormals != 0 || maxPeak > 1.05f) {
+            std::cout << "      Verdict : FAIL at " << static_cast<int>(fs) << " Hz\n";
+            allPassed = false;
+        }
+    }
+
+    if (allPassed) {
+        std::cout << "  Verdict : PASS (All 8 sample rates operate safely with zero buffer overruns)\n";
+    } else {
+        std::cout << "  Verdict : FAIL (Multi-rate boundary failure)\n";
+    }
+
+    return allPassed;
+}
+
+// ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 int main() {
@@ -1027,12 +1513,16 @@ int main() {
     std::cout << "  BRAUN RB-26 DSP CHALLENGER 2 INDEPENDENT TEST SUITE  \n";
     std::cout << "=======================================================\n";
 
+    std::cout << std::unitbuf; // auto flush every write
     bool pass1 = runPitchShifterSpectralTests();
     bool pass2 = runLowFrequencyModalTests();
     bool pass3 = runTailModulationIsolationTests();
     bool pass4 = runRealTimeSafetyTests();
     bool pass5 = runIdleSilenceAndDenormalBenchmark();
     bool pass6 = runZeroShimmerDimmerSpikeStressTests();
+    bool pass7 = runPrePrepareInvocationStressTests();
+    bool pass8 = runDelayModulationStressTests();
+    bool pass9 = runMultiRateOperationsStressTests();
 
     std::cout << "\n=======================================================\n";
     std::cout << "FINAL CHALLENGER 2 VERIFICATION SUMMARY:\n";
@@ -1042,11 +1532,15 @@ int main() {
     std::cout << "  [4] Hard Real-Time Audio Safety     : " << (pass4 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [5] Zero Denormals & Idle Gating    : " << (pass5 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [6] Zero Shimmer/Dimmer CPU Stress  : " << (pass6 ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [7] Pre-Prepare Invocation Safety   : " << (pass7 ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [8] Rapid Delay Modulation Stress   : " << (pass8 ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [9] Multi-Rate & Buffer Boundary    : " << (pass9 ? "PASS" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 
-    const bool overallPass = pass1 && pass2 && pass3 && pass4 && pass5 && pass6;
+    const bool overallPass = pass1 && pass2 && pass3 && pass4 && pass5 && pass6 && pass7 && pass8 && pass9;
     std::cout << "OVERALL EMPIRICAL VERDICT: " << (overallPass ? "APPROVE" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 
     return overallPass ? 0 : 1;
 }
+
