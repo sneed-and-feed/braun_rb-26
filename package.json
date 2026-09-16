@@ -6,8 +6,7 @@
   "scripts": {
     "test": "node web/verify.mjs",
     "test:browser": "node web/test-browser.mjs",
-    "start": "node server.js",
-    "deploy": "cmd /c deploy-pages.bat"
+    "start": "node server.js"
   },
   "keywords": [
     "web-audio",

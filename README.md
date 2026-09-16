@@ -310,12 +310,6 @@ npm start
 # runs: node server.js (http://localhost:3826)
 ```
 
-**Deploy to GitHub Pages**:
-```bash
-npm run deploy
-# runs: deploy-pages.bat (syncs to sneed-and-feed.github.io/rb-26)
-```
-
 ---
 
 ## Project Structure
@@ -324,9 +318,8 @@ npm run deploy
 braun_rb-26/
 ├── .github/
 │   └── workflows/
-│       └── test.yml            # CI: Automated unit & DSP test runner (Node 22)
-├── package.json                # Project manifest (scripts: test, test:browser, start, deploy)
-├── deploy-pages.bat            # One-click deployment sync to sneed-and-feed.github.io
+│       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
+├── package.json                # Project manifest (scripts: test, test:browser, start)
 ├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.2.0)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
@@ -356,7 +349,6 @@ braun_rb-26/
 │       ├── TestHarness.h               # Lightweight assertion framework
 │       └── Tier{1-4}_*Tests.h          # Tiered test categories
 └── web/                        # Client-side Web Audio showcase
-    ├── .nojekyll               # GitHub Pages Jekyll bypass flag
     ├── index.html              # 19" 2U rack HTML layout (503 lines)
     ├── css/
     │   ├── style.css           # Braun design tokens (Light + Dark themes)
