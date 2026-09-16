@@ -399,17 +399,14 @@ public:
     void setRootPitchClass(int root) noexcept { mParams.rootPitchClass = ((root % 12) + 12) % 12; }
     void setChordSpeed(StrumSpeed speed) noexcept { mParams.chordSpeed = speed; }
     void setPoissonEnable(bool enable) noexcept {
-        mParams.poissonEnable = enable;
         mPoissonEnable.store(enable, std::memory_order_relaxed);
     }
     void setPoissonEpm(float epm) noexcept {
         const float clamped = std::clamp(epm, 4.0f, 60.0f);
-        mParams.poissonEpm = clamped;
         mPoissonEpm.store(clamped, std::memory_order_relaxed);
     }
     void setPoissonHumanize(float humanize) noexcept {
         const float clamped = std::clamp(humanize, 0.0f, 1.0f);
-        mParams.poissonHumanize = clamped;
         mPoissonHumanize.store(clamped, std::memory_order_relaxed);
     }
 

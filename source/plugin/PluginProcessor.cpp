@@ -231,14 +231,14 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
     }
 
+    // Wait-free POD snapshot load with std::memory_order_relaxed (0 locks, 0 memory allocs)
+    const auto snapshot = atomicPointers.loadSnapshot();
+    reverbEngine.setParameters(snapshot.toDspParams());
+
     if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
     {
         reverbEngine.reset();
     }
-
-    // Wait-free POD snapshot load with std::memory_order_relaxed (0 locks, 0 memory allocs)
-    const auto snapshot = atomicPointers.loadSnapshot();
-    reverbEngine.setParameters(snapshot.toDspParams());
 
     // Prepare non-allocating stack pointers for channel routing
     const float* inChannels[2];

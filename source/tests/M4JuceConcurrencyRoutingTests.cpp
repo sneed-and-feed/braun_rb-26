@@ -311,18 +311,20 @@ void runTest4_MasterLimiterBypassAndSingleLimiting() {
     BRAUN_RB26AudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
 
+    // 100% Dry signal path so the impulse immediately reaches the output stage without delay line latency
+    if (auto* p = processor.getAPVTS().getParameter("dry_wet_mix")) {
+        p->setValueNotifyingHost(p->convertTo0to1(0.0f));
+    }
+    // High output trim (+12 dB) to push output above 1.0
+    if (auto* p = processor.getAPVTS().getParameter("output_trim_db")) {
+        p->setValueNotifyingHost(p->convertTo0to1(12.0f));
+    }
+
     // Case A: Limiter disabled (limiter_enable = 0.0f)
     if (auto* p = processor.getAPVTS().getParameter("limiter_enable")) {
         p->setValueNotifyingHost(0.0f);
     }
-    // Set high output trim (+12 dB) to push output above 1.0
-    if (auto* p = processor.getAPVTS().getParameter("output_trim_db")) {
-        p->setValueNotifyingHost(p->convertTo0to1(12.0f));
-    }
-    // Set 100% wet
-    if (auto* p = processor.getAPVTS().getParameter("dry_wet_mix")) {
-        p->setValueNotifyingHost(p->convertTo0to1(1.0f));
-    }
+    processor.reset();
 
     juce::AudioBuffer<float> bufferA(2, 512);
     bufferA.clear();
@@ -334,12 +336,13 @@ void runTest4_MasterLimiterBypassAndSingleLimiting() {
     processor.processBlock(bufferA, midi);
 
     const float peakUnbounded = bufferA.getMagnitude(0, 512);
+    RB26_TEST_ASSERT(peakUnbounded > 1.2f);
 
     // Case B: Limiter enabled (limiter_enable = 1.0f)
-    processor.reset();
     if (auto* p = processor.getAPVTS().getParameter("limiter_enable")) {
         p->setValueNotifyingHost(1.0f);
     }
+    processor.reset();
 
     juce::AudioBuffer<float> bufferB(2, 512);
     bufferB.clear();
@@ -350,8 +353,9 @@ void runTest4_MasterLimiterBypassAndSingleLimiting() {
 
     const float peakLimited = bufferB.getMagnitude(0, 512);
 
-    // When limiter is enabled, softLimit strictly bounds output <= 1.0f
+    // When limiter is enabled, softLimit strictly bounds output <= 1.0f while active audio (> 0.90f) is present
     RB26_TEST_ASSERT(peakLimited <= 1.0001f);
+    RB26_TEST_ASSERT(peakLimited > 0.90f);
     std::cout << "  -> Unbounded Peak (limiter off): " << peakUnbounded << ", Limited Peak: " << peakLimited << "\n";
     RB26_TEST_ASSERT(peakLimited <= peakUnbounded);
 

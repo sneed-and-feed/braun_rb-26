@@ -49,10 +49,7 @@ public:
 
     // Power lifecycle control
     void setPower(bool powered) noexcept {
-        const bool wasPowered = isPoweredOn.exchange(powered, std::memory_order_relaxed);
-        if (wasPowered && !powered) {
-            exciterEngine.releaseAllVoices();
-        }
+        isPoweredOn.store(powered, std::memory_order_relaxed);
         mPendingEngineReset.store(true, std::memory_order_release);
     }
     bool isPower() const noexcept { return isPoweredOn.load(std::memory_order_relaxed); }
