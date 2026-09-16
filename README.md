@@ -294,7 +294,26 @@ node --test web/verify.mjs
 
 **Headless browser assertions** (Microsoft Edge / Chromium via CDP):
 ```bash
-node web/test-browser.mjs
+npm run test:browser
+# or: node web/test-browser.mjs
+```
+
+**Continuous Integration & Verification Suite** (Node.js 22):
+```bash
+npm test
+# runs: node web/verify.mjs (29 tests across 11 suites)
+```
+
+**Preview Server**:
+```bash
+npm start
+# runs: node server.js (http://localhost:3826)
+```
+
+**Deploy to GitHub Pages**:
+```bash
+npm run deploy
+# runs: deploy-pages.bat (syncs to sneed-and-feed.github.io/rb-26)
 ```
 
 ---
@@ -303,6 +322,12 @@ node web/test-browser.mjs
 
 ```
 braun_rb-26/
+├── .github/
+│   └── workflows/
+│       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
+│       └── deploy.yml          # CD: Automated GitHub Pages deployment
+├── package.json                # Project manifest (scripts: test, test:browser, start, deploy)
+├── deploy-pages.bat            # One-click deployment sync to sneed-and-feed.github.io
 ├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.2.0)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
@@ -332,6 +357,7 @@ braun_rb-26/
 │       ├── TestHarness.h               # Lightweight assertion framework
 │       └── Tier{1-4}_*Tests.h          # Tiered test categories
 └── web/                        # Client-side Web Audio showcase
+    ├── .nojekyll               # GitHub Pages Jekyll bypass flag
     ├── index.html              # 19" 2U rack HTML layout (503 lines)
     ├── css/
     │   ├── style.css           # Braun design tokens (Light + Dark themes)
@@ -346,7 +372,7 @@ braun_rb-26/
     │       └── crt-display.js  # 4-mode CRT vector scope (WAVE, EDC, LISSAJOUS, SPECTRUM)
     ├── presets/
     │   └── factory_presets.json
-    ├── verify.mjs              # Node.js test runner (28 tests across 11 suites)
+    ├── verify.mjs              # Node.js test runner (29 tests across 11 suites)
     └── test-browser.mjs        # Headless Edge browser assertions via CDP
 ```
 
