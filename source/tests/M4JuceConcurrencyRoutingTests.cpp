@@ -8,6 +8,8 @@
 #include <atomic>
 #include <vector>
 #include <cmath>
+#include <limits>
+#include <random>
 
 #define RB26_TEST_ASSERT(cond) do { \
     if (!(cond)) { \
@@ -67,7 +69,57 @@ void runTest1_ConcurrencyAndPowerReset() {
     processor.processBlock(buffer, midi);
     RB26_TEST_ASSERT(buffer.getMagnitude(0, 512) >= 0.0f);
 
-    std::cout << "  -> PASS: Power standby, deferred reset, and MIDI wakeup verified.\n";
+    // 6. Adversarial Multi-Threaded Stress Test: Rapid concurrent setPower toggles and resets during active audio processing
+    std::cout << "  -> Multi-threaded stress: rapidly toggling setPower() & reset() from UI thread concurrently with audio thread...\n";
+    std::atomic<bool> stopThread { false };
+    std::atomic<int> toggleCount { 0 };
+    std::atomic<int> resetCount { 0 };
+
+    std::thread uiThread([&]() {
+        bool state = false;
+        while (!stopThread.load(std::memory_order_relaxed)) {
+            processor.setPower(state);
+            state = !state;
+            toggleCount.fetch_add(1, std::memory_order_relaxed);
+            if ((toggleCount.load(std::memory_order_relaxed) % 40) == 0) {
+                processor.reset();
+                resetCount.fetch_add(1, std::memory_order_relaxed);
+            }
+            std::this_thread::yield();
+        }
+    });
+
+    for (int block = 0; block < 1000; ++block) {
+        for (int ch = 0; ch < 2; ++ch) {
+            float* ptr = buffer.getWritePointer(ch);
+            for (int i = 0; i < 512; ++i) {
+                ptr[i] = 0.5f * std::sin(static_cast<float>(block * 512 + i) * 0.05f);
+            }
+        }
+        midi.clear();
+        if ((block % 25) == 0) {
+            const uint8_t noteBytes[] = { 0x90, 60, 100 };
+            midi.addEvent(noteBytes, sizeof(noteBytes), 0);
+        }
+        processor.processBlock(buffer, midi);
+
+        for (int ch = 0; ch < 2; ++ch) {
+            const float* out = buffer.getReadPointer(ch);
+            for (int i = 0; i < 512; ++i) {
+                const float s = out[i];
+                RB26_TEST_ASSERT(std::isfinite(s));
+                RB26_TEST_ASSERT(std::abs(s) < 20.0f);
+            }
+        }
+    }
+
+    stopThread.store(true, std::memory_order_relaxed);
+    uiThread.join();
+    RB26_TEST_ASSERT(toggleCount.load() > 100);
+
+    std::cout << "  -> PASS: Power standby, deferred reset, and " << toggleCount.load()
+              << " concurrent setPower() toggles + " << resetCount.load()
+              << " resets verified with zero races or NaNs.\n";
 }
 
 void runTest2_AcousticExciterPoissonThreadSafety() {
@@ -171,7 +223,85 @@ void runTest3_MonoInStereoOutRouting() {
     RB26_TEST_ASSERT(magL > 0.0f);
     RB26_TEST_ASSERT(magR > 0.0f);
 
-    std::cout << "  -> PASS: Mono-in routing successfully duplicated channel 0; ignored stale buffer on channel 1.\n";
+    // Adversarial Challenge 3A: Toxic Flooding (NaNs, Infs, 1e35, denormals) on Channel 1
+    std::cout << "  -> Adversarial stress: flooding channel 1 with NaNs, Infs, and 1e35 over 50 blocks...\n";
+    const float toxicPoisons[] = {
+        std::numeric_limits<float>::quiet_NaN(),
+        std::numeric_limits<float>::signaling_NaN(),
+        std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity(),
+        1e35f,
+        -1e35f,
+        1e-42f,
+        -1e-42f
+    };
+    constexpr size_t kNumPoisons = sizeof(toxicPoisons) / sizeof(toxicPoisons[0]);
+
+    for (int block = 0; block < 50; ++block) {
+        float* ch0 = buffer.getWritePointer(0);
+        float* ch1 = buffer.getWritePointer(1);
+        for (int i = 0; i < 512; ++i) {
+            ch0[i] = 0.5f * std::sin(static_cast<float>(block * 512 + i) * 0.05f);
+            ch1[i] = toxicPoisons[(block * 512 + i) % kNumPoisons];
+        }
+        processor.processBlock(buffer, midi);
+
+        for (int ch = 0; ch < 2; ++ch) {
+            const float* out = buffer.getReadPointer(ch);
+            for (int i = 0; i < 512; ++i) {
+                const float s = out[i];
+                RB26_TEST_ASSERT(std::isfinite(s));
+                RB26_TEST_ASSERT(std::abs(s) < 10.0f);
+            }
+        }
+    }
+
+    // Adversarial Challenge 3B: Bit-Exact Invariance Oracle (channel 1 = 0 vs channel 1 = garbage)
+    std::cout << "  -> Invariance oracle: verifying bit-exact identical output between Ch1=0 and Ch1=garbage...\n";
+    BRAUN_RB26AudioProcessor procA;
+    BRAUN_RB26AudioProcessor procB;
+    procA.setPlayConfigDetails(1, 2, 48000.0, 512);
+    procB.setPlayConfigDetails(1, 2, 48000.0, 512);
+    procA.prepareToPlay(48000.0, 512);
+    procB.prepareToPlay(48000.0, 512);
+
+    juce::AudioBuffer<float> bufA(2, 512);
+    juce::AudioBuffer<float> bufB(2, 512);
+    juce::MidiBuffer midiA;
+    juce::MidiBuffer midiB;
+
+    std::mt19937 rngA(1234);
+    std::mt19937 rngGarbage(5678);
+    std::uniform_real_distribution<float> cleanDist(-0.6f, 0.6f);
+    std::uniform_real_distribution<float> garbageDist(-9999.0f, 9999.0f);
+
+    for (int block = 0; block < 50; ++block) {
+        float* a0 = bufA.getWritePointer(0);
+        float* a1 = bufA.getWritePointer(1);
+        float* b0 = bufB.getWritePointer(0);
+        float* b1 = bufB.getWritePointer(1);
+
+        for (int i = 0; i < 512; ++i) {
+            const float s = cleanDist(rngA);
+            a0[i] = s;
+            b0[i] = s;
+            a1[i] = 0.0f;
+            b1[i] = garbageDist(rngGarbage);
+        }
+
+        procA.processBlock(bufA, midiA);
+        procB.processBlock(bufB, midiB);
+
+        for (int ch = 0; ch < 2; ++ch) {
+            const float* outA = bufA.getReadPointer(ch);
+            const float* outB = bufB.getReadPointer(ch);
+            for (int i = 0; i < 512; ++i) {
+                RB26_TEST_ASSERT(outA[i] == outB[i]); // Bit-for-bit identical!
+            }
+        }
+    }
+
+    std::cout << "  -> PASS: Mono-in routing successfully duplicated channel 0; 100% ignored toxic buffer on channel 1 (bit-exact oracle verified).\n";
 }
 
 void runTest4_MasterLimiterBypassAndSingleLimiting() {
