@@ -452,6 +452,206 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.ok(html.includes('id="btn-reset-all"'), 'Reset button must exist');
       assert.ok(html.includes('id="drop-overlay"'), 'Drag and drop overlay must exist');
     });
+
+    it('verifies standalone JUCE mode (isJuce=true) dispatches startRecording and stopRecording IPC', async () => {
+      const origDoc = globalThis.document;
+      const origWin = globalThis.window;
+
+      const elements = {};
+      const createElement = (tag) => {
+        const el = {
+          tagName: tag.toUpperCase(),
+          classList: {
+            _classes: new Set(),
+            add(c) { this._classes.add(c); },
+            remove(c) { this._classes.delete(c); },
+            toggle(c, f) {
+              if (f !== undefined) { f ? this._classes.add(c) : this._classes.delete(c); return f; }
+              if (this._classes.has(c)) { this._classes.delete(c); return false; }
+              this._classes.add(c); return true;
+            },
+            contains(c) { return this._classes.has(c); }
+          },
+          style: {},
+          attributes: {},
+          innerHTML: '',
+          textContent: '',
+          children: [],
+          appendChild(c) { this.children.push(c); return c; },
+          removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); return c; },
+          _recText: null,
+          _statusText: null,
+          querySelector(sel) {
+            if (sel === '.braun-rec-text') {
+              if (!this._recText) { this._recText = createElement('span'); this._recText.textContent = 'REC WAV'; }
+              return this._recText;
+            }
+            if (sel === '.braun-status-text') {
+              if (!this._statusText) { this._statusText = createElement('span'); this._statusText.textContent = 'STANDBY'; }
+              return this._statusText;
+            }
+            return createElement('div');
+          },
+          querySelectorAll: () => [],
+          getContext: () => ({
+            resetTransform: () => {}, scale: () => {}, fillRect: () => {}, beginPath: () => {},
+            moveTo: () => {}, lineTo: () => {}, stroke: () => {}, fillText: () => {}, save: () => {},
+            restore: () => {}, drawImage: () => {}
+          }),
+          _listeners: {},
+          addEventListener(evt, fn) { (this._listeners[evt] = this._listeners[evt] || []).push(fn); },
+          async click() {
+            if (this._listeners.click) {
+              const e = { stopPropagation() {}, preventDefault() {}, target: this };
+              for (const fn of this._listeners.click) await fn(e);
+            }
+          }
+        };
+        return el;
+      };
+
+      globalThis.document = {
+        createElement,
+        getElementById: (id) => elements[id] || (elements[id] = createElement('div')),
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        body: createElement('body'),
+        addEventListener: () => {},
+        removeEventListener: () => {}
+      };
+
+      const emittedEvents = [];
+      const listeners = new Map();
+      globalThis.window = {
+        devicePixelRatio: 1,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        requestAnimationFrame: (cb) => setTimeout(cb, 16),
+        cancelAnimationFrame: (id) => clearTimeout(id),
+        __JUCE__: {
+          backend: {
+            emitEvent: (name, payload) => { emittedEvents.push({ name, payload }); },
+            addEventListener: (name, handler) => { listeners.set(name, handler); }
+          }
+        }
+      };
+
+      try {
+        const { BraunRb26App } = await import('./js/app.js');
+        const app = new BraunRb26App();
+        app.isJuce = true;
+        app.isPowered = true;
+        app._initButtons();
+        app._initJuceBridge();
+
+        const recordBtn = elements['btn-record-wav'];
+        const textEl = recordBtn.querySelector('.braun-rec-text');
+
+        assert.strictEqual(app._isJuceRecording, false);
+
+        // 1. Click to start recording
+        await recordBtn.click();
+        assert.strictEqual(app._isJuceRecording, true);
+        assert.ok(recordBtn.classList.contains('is-recording'));
+        assert.strictEqual(textEl.textContent, 'STOP & SAVE');
+        assert.ok(emittedEvents.some(e => e.name === 'startRecording'));
+
+        // 2. Click to stop recording
+        await recordBtn.click();
+        assert.strictEqual(app._isJuceRecording, false);
+        assert.ok(!recordBtn.classList.contains('is-recording'));
+        assert.strictEqual(textEl.textContent, 'REC WAV');
+        assert.ok(emittedEvents.some(e => e.name === 'stopRecording'));
+
+        // 3. Test recordingSaved IPC handler
+        app._isJuceRecording = true;
+        recordBtn.classList.add('is-recording');
+        textEl.textContent = 'STOP & SAVE';
+
+        const recordingSavedHandler = listeners.get('recordingSaved');
+        assert.ok(typeof recordingSavedHandler === 'function', 'recordingSaved listener must be registered');
+
+        recordingSavedHandler({ path: 'C:\\Users\\test\\Music\\Braun RB-26 Recordings\\braun-rb26-2026-09-17.wav' });
+        assert.strictEqual(app._isJuceRecording, false);
+        assert.ok(!recordBtn.classList.contains('is-recording'));
+        assert.strictEqual(textEl.textContent, 'REC WAV');
+
+        // Graceful handling of null/empty payloads
+        assert.doesNotThrow(() => recordingSavedHandler(null));
+        assert.doesNotThrow(() => recordingSavedHandler({}));
+
+        // 4. Test paramUpdate for isRecording
+        const paramUpdateHandler = listeners.get('paramUpdate');
+        assert.ok(typeof paramUpdateHandler === 'function');
+        paramUpdateHandler({ id: 'isRecording', value: 1.0 });
+        assert.strictEqual(app._isJuceRecording, true);
+        assert.ok(recordBtn.classList.contains('is-recording'));
+        assert.strictEqual(textEl.textContent, 'STOP & SAVE');
+
+        paramUpdateHandler({ id: 'isRecording', value: 0.0 });
+        assert.strictEqual(app._isJuceRecording, false);
+        assert.ok(!recordBtn.classList.contains('is-recording'));
+        assert.strictEqual(textEl.textContent, 'REC WAV');
+
+        // 5. Test auto-wake power before recording when unpowered
+        app.isPowered = false;
+        app._isJuceRecording = false;
+        recordBtn.classList.remove('is-recording');
+        textEl.textContent = 'REC WAV';
+
+        await recordBtn.click();
+        assert.strictEqual(app.isPowered, true, 'Synthesizer power must turn on');
+        assert.strictEqual(app._isJuceRecording, true, 'Recording must be engaged');
+        assert.ok(recordBtn.classList.contains('is-recording'));
+
+        // 6. Test power-down terminates active recording via stopRecording IPC
+        const prevStopCount = emittedEvents.filter(e => e.name === 'stopRecording').length;
+        await app.setPower(false);
+        assert.strictEqual(app._isJuceRecording, false, 'Recording must be terminated on power-down');
+        assert.ok(!recordBtn.classList.contains('is-recording'));
+        assert.strictEqual(textEl.textContent, 'REC WAV');
+        const nextStopCount = emittedEvents.filter(e => e.name === 'stopRecording').length;
+        assert.strictEqual(nextStopCount, prevStopCount + 1, 'stopRecording IPC must be dispatched on power-down');
+      } finally {
+        if (origDoc === undefined) delete globalThis.document; else globalThis.document = origDoc;
+        if (origWin === undefined) delete globalThis.window; else globalThis.window = origWin;
+      }
+    });
+
+    it('verifies dynamic isJuce getter parity with AS-42 across environments and redundant IPC delivery', async () => {
+      const origDoc = globalThis.document;
+      const origWin = globalThis.window;
+
+      try {
+        const { BraunRb26App } = await import('./js/app.js');
+
+        // Case A: Browser environment with no JUCE objects
+        globalThis.window = { location: { hostname: 'localhost', protocol: 'http:' } };
+        globalThis.document = { createElement: () => ({ classList: { add() {}, remove() {}, contains: () => false }, querySelector: () => null }) };
+        const browserApp = new BraunRb26App();
+        assert.strictEqual(browserApp.isJuce, false, 'Default web browser environment must evaluate isJuce to false');
+
+        // Case B: Window with window.__IS_JUCE__ injected by userScript
+        globalThis.window = { __IS_JUCE__: true, location: { hostname: 'localhost', protocol: 'http:' } };
+        const juceUserScriptApp = new BraunRb26App();
+        assert.strictEqual(juceUserScriptApp.isJuce, true, 'window.__IS_JUCE__ must evaluate isJuce to true');
+
+        // Case C: Window with juce: protocol
+        globalThis.window = { location: { hostname: '', protocol: 'juce:' } };
+        const juceProtocolApp = new BraunRb26App();
+        assert.strictEqual(juceProtocolApp.isJuce, true, 'juce: protocol must evaluate isJuce to true');
+
+        // Case D: Dynamic injection after instantiation
+        globalThis.window = { location: { hostname: 'localhost', protocol: 'http:' } };
+        const dynamicApp = new BraunRb26App();
+        assert.strictEqual(dynamicApp.isJuce, false, 'Initially false before JUCE backend loads');
+        globalThis.window.__JUCE__ = { backend: {} };
+        assert.strictEqual(dynamicApp.isJuce, true, 'Dynamic getter must evaluate to true immediately when __JUCE__ appears');
+      } finally {
+        if (origDoc === undefined) delete globalThis.document; else globalThis.document = origDoc;
+        if (origWin === undefined) delete globalThis.window; else globalThis.window = origWin;
+      }
+    });
   });
 
   //----------------------------------------------------------------------------

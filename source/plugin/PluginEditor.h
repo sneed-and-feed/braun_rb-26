@@ -27,7 +27,10 @@ public:
     // Web Integration & Bridge Methods
     void handleParamChangeFromWeb(const juce::var& data);
     void handleExciterTriggerFromWeb(const juce::var& data);
+    void handleStartRecordingFromWeb();
+    void handleStopRecordingFromWeb();
     void sendParameterUpdateToWeb(const juce::String& apvtsId, const juce::String& webId, float newValue);
+    void sendRecordingStateUpdateToWeb(bool isRecording);
     void syncAllParametersToWeb();
     std::optional<juce::WebBrowserComponent::Resource> getResource(const juce::String& url);
 

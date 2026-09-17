@@ -8,10 +8,13 @@ BRAUN_RB26AudioProcessor::BRAUN_RB26AudioProcessor()
       apvts(*this, nullptr, "Parameters", rb26::createParameterLayout())
 {
     atomicPointers.initialize(apvts);
+    recorderThread.startThread();
 }
 
 BRAUN_RB26AudioProcessor::~BRAUN_RB26AudioProcessor()
 {
+    stopRecording();
+    recorderThread.stopThread(2000);
 }
 
 const juce::String BRAUN_RB26AudioProcessor::getName() const
@@ -314,6 +317,18 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     // Push processed audio frames to wait-free visualizer oscilloscope buffer
     pushScopeSamples(outChannels[0], outChannels[1], numSamples);
 
+    // Push processed audio to lossless WAV recorder if active (lock-free)
+    if (activeWriter.load(std::memory_order_acquire) != nullptr)
+    {
+        activeWriterWorkers.fetch_add(1, std::memory_order_acquire);
+        if (auto* writer = activeWriter.load(std::memory_order_acquire))
+        {
+            const float* channels[] = { outChannels[0], outChannels[1] };
+            writer->write(channels, numSamples);
+        }
+        activeWriterWorkers.fetch_sub(1, std::memory_order_release);
+    }
+
     // Audio effects do not produce MIDI messages
     midiMessages.clear();
 }
@@ -353,6 +368,88 @@ void BRAUN_RB26AudioProcessor::getScopeSamples(float* destL, float* destR, int n
         if (readPos >= kScopeBufferSize)
             readPos = 0;
     }
+}
+
+void BRAUN_RB26AudioProcessor::startRecording()
+{
+    const juce::ScopedLock sl(recorderLock);
+    if (activeWriter.load(std::memory_order_relaxed) != nullptr || threadedWriter != nullptr)
+        return;
+
+    const double sampleRateToUse = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+
+    auto musicDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::userMusicDirectory);
+    if (!musicDir.isDirectory() && !musicDir.createDirectory().wasOk())
+    {
+        musicDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::userDocumentsDirectory);
+        if (!musicDir.isDirectory() && !musicDir.createDirectory().wasOk())
+            musicDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::userHomeDirectory);
+    }
+
+    const auto recordingsDir = musicDir.getChildFile("Braun RB-26 Recordings");
+    if (!recordingsDir.exists())
+    {
+        const auto result = recordingsDir.createDirectory();
+        if (result.failed())
+            return;
+    }
+
+    const juce::String timestamp = juce::Time::getCurrentTime().formatted("%Y-%m-%d-%H-%M-%S");
+    const juce::File wavFile = recordingsDir.getNonexistentChildFile("braun-rb26-" + timestamp, ".wav");
+
+    if (auto stream = wavFile.createOutputStream())
+    {
+        juce::WavAudioFormat wavFormat;
+        if (auto* rawWriter = wavFormat.createWriterFor(stream.get(), sampleRateToUse, 2, 16, {}, 0))
+        {
+            stream.release();
+            lastRecordedFile = wavFile;
+            threadedWriter = std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(rawWriter, recorderThread, 131072);
+            activeWriter.store(threadedWriter.get(), std::memory_order_release);
+        }
+    }
+}
+
+void BRAUN_RB26AudioProcessor::stopRecording()
+{
+    const juce::ScopedLock sl(recorderLock);
+    if (activeWriter.load(std::memory_order_relaxed) == nullptr && threadedWriter == nullptr)
+        return;
+
+    {
+        const juce::ScopedLock slCb(getCallbackLock());
+        activeWriter.store(nullptr, std::memory_order_release);
+    }
+
+    while (activeWriterWorkers.load(std::memory_order_acquire) > 0)
+    {
+        juce::Thread::yield();
+    }
+
+    threadedWriter.reset();
+
+    recordingSavedDirty.store(true, std::memory_order_relaxed);
+
+    if (lastRecordedFile.existsAsFile())
+    {
+        lastRecordedFile.revealToUser();
+    }
+}
+
+bool BRAUN_RB26AudioProcessor::isRecording() const noexcept
+{
+    return activeWriter.load(std::memory_order_relaxed) != nullptr;
+}
+
+juce::File BRAUN_RB26AudioProcessor::getLastRecordedFile() const
+{
+    const juce::ScopedLock sl(recorderLock);
+    return lastRecordedFile;
+}
+
+bool BRAUN_RB26AudioProcessor::consumeRecordingSavedDirty() noexcept
+{
+    return recordingSavedDirty.exchange(false, std::memory_order_relaxed);
 }
 
 bool BRAUN_RB26AudioProcessor::hasEditor() const
