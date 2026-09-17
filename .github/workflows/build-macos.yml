@@ -3,6 +3,8 @@ name: Build macOS Release
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -52,8 +54,8 @@ jobs:
           name: BRAUN_RB26-v1.3.6-macOS-Universal
           path: BRAUN_RB26-v1.3.6-macOS-Universal.zip
 
-      - name: Attach to GitHub Release (Tag Triggers)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.3.6
           files: BRAUN_RB26-v1.3.6-macOS-Universal.zip
