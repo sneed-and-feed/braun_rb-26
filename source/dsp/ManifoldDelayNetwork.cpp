@@ -11,9 +11,9 @@ static constexpr std::array<float, 8> kAiryZeros = {{
     7.94413359f, 9.02265085f, 10.04017434f, 11.00852430f
 }};
 
-// Prime decorrelation offsets for Poincaré Hyperbolic (breaks modal clustering and standing-wave interference at C6 / ~1046.5 Hz)
+// Prime decorrelation offsets for Poincaré Hyperbolic (breaks modal clustering and standing-wave interference at C6 / ~1046.5 Hz across room sizes 0.5x to 1.0x)
 static constexpr std::array<size_t, 8> kPoincarePrimeOffsets = {{
-    0, 11, 37, 41, 53, 67, 89, 101
+    0, 11, 29, 47, 67, 79, 89, 103
 }};
 
 // Prime decorrelation offsets for Whispering Gallery
