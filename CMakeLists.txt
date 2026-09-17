@@ -313,6 +313,13 @@ if(TARGET BraunRb26WebAssets)
     target_link_libraries(BRAUN_RB26 PRIVATE BraunRb26WebAssets)
 endif()
 
+if(UNIX AND NOT APPLE)
+    get_directory_property(_sub_target JUCE_EMBEDDED_LINUX_SUBPROCESS_TARGET)
+    if(_sub_target)
+        target_link_libraries(BRAUN_RB26 PUBLIC ${_sub_target})
+    endif()
+endif()
+
 # Attach CLAP format target via clap-juce-extensions
 if(TARGET clap_juce_extensions)
     clap_juce_extensions_plugin(

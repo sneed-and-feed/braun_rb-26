@@ -74,6 +74,17 @@ target_link_libraries(rb26_m4_tests PRIVATE
 
 if(UNIX AND NOT APPLE)
     target_link_libraries(rb26_m4_tests PRIVATE CURL::libcurl)
+    get_directory_property(_sub_target DIRECTORY ${CMAKE_SOURCE_DIR} JUCE_EMBEDDED_LINUX_SUBPROCESS_TARGET)
+    if(_sub_target)
+        target_link_libraries(rb26_m4_tests PRIVATE ${_sub_target})
+    endif()
+    target_include_directories(rb26_m4_tests PRIVATE
+        ${CMAKE_BINARY_DIR}/juce_LinuxSubprocessHelper
+        ${CMAKE_BINARY_DIR}/juce_LinuxSubprocessHelper/$<CONFIG>
+    )
+    if(TARGET juce_linux_subprocess_helper)
+        add_dependencies(rb26_m4_tests juce_linux_subprocess_helper)
+    endif()
 endif()
 
 set_target_properties(rb26_m4_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
