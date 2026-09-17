@@ -89,6 +89,12 @@ private:
     juce::TextButton viewModeButton;
 #endif
 
+    // Preset management controls for Native UI
+    juce::Label presetLabel;
+    juce::ComboBox presetComboBox;
+    juce::TextButton prevPresetBtn;
+    juce::TextButton nextPresetBtn;
+
     // Rotary Sliders & Labels for APVTS parameters
     struct KnobSlot {
         juce::String paramId;

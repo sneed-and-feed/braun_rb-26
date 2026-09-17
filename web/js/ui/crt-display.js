@@ -291,7 +291,7 @@ export class BraunCrtDisplay {
       this.timeDataL[i] = lData[i];
       const r = (rData && typeof rData[i] === 'number') ? rData[i] : lData[i];
       this.timeDataR[i] = r;
-      if (!hasSignal && (Math.abs(lData[i]) > 0.005 || Math.abs(r) > 0.005)) {
+      if (!hasSignal && (Math.abs(lData[i]) > 0.0005 || Math.abs(r) > 0.0005)) {
         hasSignal = true;
       }
     }
@@ -458,17 +458,19 @@ export class BraunCrtDisplay {
     ctx.fillText('ANALOG OSCILLOSCOPE [CH1 + CH2 SUM]', 10, 15);
 
     const len = this.bufferSize;
-    // Streamlined single-pass Schmitt trigger rising zero-crossing search
+    // Streamlined single-pass Schmitt trigger rising zero-crossing search using stereo composite
     let startIdx = 0;
     const searchLimit = Math.min(len >> 1, len - 2);
     let fallbackIdx = -1;
     for (let i = 0; i < searchLimit; i++) {
-      if (this.timeDataL[i] < -0.005 && this.timeDataL[i + 1] >= 0.0) {
+      const c0 = 0.5 * (this.timeDataL[i] + this.timeDataR[i]);
+      const c1 = 0.5 * (this.timeDataL[i + 1] + this.timeDataR[i + 1]);
+      if (c0 < -0.005 && c1 >= 0.0) {
         startIdx = i;
         fallbackIdx = -1;
         break;
       }
-      if (fallbackIdx === -1 && this.timeDataL[i] < 0.0 && this.timeDataL[i + 1] >= 0.0) {
+      if (fallbackIdx === -1 && c0 < 0.0 && c1 >= 0.0) {
         fallbackIdx = i;
       }
     }

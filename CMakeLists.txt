@@ -14,7 +14,7 @@ if(APPLE)
     endif()
 endif()
 
-project(BRAUN_RB26_PROJECT VERSION 1.3.5 LANGUAGES C CXX)
+project(BRAUN_RB26_PROJECT VERSION 1.3.6 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -47,10 +47,27 @@ if(DEFINED USE_WEBVIEW)
     set(RB26_USE_WEBVIEW ${USE_WEBVIEW})
 endif()
 
+option(RB26_BUILD_TESTS "Build BRAUN RB-26 automated test suite" ON)
+
 if(RB26_USE_WEBVIEW)
     message(STATUS "BRAUN RB-26 GUI Mode: Embedded Web Browser (WebView2/WebKit)")
+    add_compile_definitions(
+        JUCE_WEB_BROWSER=1
+        RB26_USE_WEBVIEW=1
+        JUCE_USE_WIN_WEBVIEW2=1
+        JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
+        JUCE_USE_CURL=1
+        JUCE_VST3_CAN_REPLACE_VST2=0
+    )
 else()
     message(STATUS "BRAUN RB-26 GUI Mode: Pure Native JUCE (Dieter Rams LookAndFeel)")
+    add_compile_definitions(
+        JUCE_WEB_BROWSER=0
+        RB26_USE_WEBVIEW=0
+        JUCE_USE_WIN_WEBVIEW2=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+    )
 endif()
 
 include(FetchContent)
@@ -222,7 +239,7 @@ juce_add_plugin(BRAUN_RB26
     PLUGIN_CODE Rb26
     FORMATS ${RB26_FORMATS}
     PRODUCT_NAME "BRAUN_RB26"
-    VERSION "1.3.5"
+    VERSION "1.3.6"
     ${RB26_EXTRA_PLUGIN_ARGS}
 )
 
@@ -297,73 +314,79 @@ endif()
 # ==============================================================================
 # 7. Headless Continuous Verification Test Runner
 # ==============================================================================
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/rb26_headless_dsp_tests.cpp")
-    add_executable(rb26_headless_dsp_tests
-        source/tests/rb26_headless_dsp_tests.cpp
-    )
-    target_link_libraries(rb26_headless_dsp_tests PRIVATE
-        rb26_dsp_core
-    )
-    target_include_directories(rb26_headless_dsp_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/source
-        ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
-        ${CMAKE_CURRENT_SOURCE_DIR}/source/tests
-    )
-    set_target_properties(rb26_headless_dsp_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+if(RB26_BUILD_TESTS)
     enable_testing()
-    add_test(NAME Rb26HeadlessDspTests COMMAND rb26_headless_dsp_tests)
-endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/Challenger2Tests.cpp")
-    add_executable(rb26_dsp_tests
-        source/tests/Challenger2Tests.cpp
-    )
-    target_include_directories(rb26_dsp_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/source
-        ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
-    )
-    target_link_libraries(rb26_dsp_tests PRIVATE
-        rb26_dsp_core
-    )
-    enable_testing()
-    add_test(NAME Rb26DspChallengerTests COMMAND rb26_dsp_tests)
-endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/rb26_headless_dsp_tests.cpp")
+        add_executable(rb26_headless_dsp_tests
+            source/tests/rb26_headless_dsp_tests.cpp
+        )
+        target_link_libraries(rb26_headless_dsp_tests PRIVATE
+            rb26_dsp_core
+        )
+        target_include_directories(rb26_headless_dsp_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/source
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/tests
+        )
+        set_target_properties(rb26_headless_dsp_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+        add_test(NAME Rb26HeadlessDspTests COMMAND rb26_headless_dsp_tests)
+    endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/BraunLookAndFeelTests.cpp")
-    add_executable(rb26_laf_tests
-        source/tests/BraunLookAndFeelTests.cpp
-        source/plugin/LookAndFeel/BraunLookAndFeel.cpp
-    )
-    target_include_directories(rb26_laf_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/source
-        ${CMAKE_CURRENT_SOURCE_DIR}/source/plugin
-        ${CMAKE_CURRENT_SOURCE_DIR}/source/plugin/LookAndFeel
-    )
-    target_link_libraries(rb26_laf_tests PRIVATE
-        juce::juce_gui_basics
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_warning_flags
-    )
-    add_test(NAME Rb26LookAndFeelTests COMMAND rb26_laf_tests)
-endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/Challenger2Tests.cpp")
+        add_executable(rb26_dsp_tests
+            source/tests/Challenger2Tests.cpp
+        )
+        target_include_directories(rb26_dsp_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/source
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
+        )
+        target_link_libraries(rb26_dsp_tests PRIVATE
+            rb26_dsp_core
+        )
+        add_test(NAME Rb26DspChallengerTests COMMAND rb26_dsp_tests)
+    endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/WebResourceTests.cpp" AND TARGET BraunRb26WebAssets)
-    add_executable(rb26_web_resource_tests
-        source/tests/WebResourceTests.cpp
-    )
-    target_include_directories(rb26_web_resource_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/source
-    )
-    target_link_libraries(rb26_web_resource_tests PRIVATE
-        BraunRb26WebAssets
-        juce::juce_core
-        juce::juce_gui_extra
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_warning_flags
-    )
-    add_test(NAME Rb26WebResourceTests COMMAND rb26_web_resource_tests)
-endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/BraunLookAndFeelTests.cpp")
+        add_executable(rb26_laf_tests
+            source/tests/BraunLookAndFeelTests.cpp
+            source/plugin/LookAndFeel/BraunLookAndFeel.cpp
+        )
+        target_compile_definitions(rb26_laf_tests PRIVATE
+            JUCE_WEB_BROWSER=0
+            JUCE_USE_CURL=0
+        )
+        target_include_directories(rb26_laf_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/source
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/plugin
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/plugin/LookAndFeel
+        )
+        target_link_libraries(rb26_laf_tests PRIVATE
+            juce::juce_gui_basics
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags
+        )
+        add_test(NAME Rb26LookAndFeelTests COMMAND rb26_laf_tests)
+    endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/CMakeLists.txt")
-    add_subdirectory(source/tests)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/WebResourceTests.cpp" AND TARGET BraunRb26WebAssets)
+        add_executable(rb26_web_resource_tests
+            source/tests/WebResourceTests.cpp
+        )
+        target_include_directories(rb26_web_resource_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/source
+        )
+        target_link_libraries(rb26_web_resource_tests PRIVATE
+            BraunRb26WebAssets
+            juce::juce_core
+            juce::juce_gui_extra
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags
+        )
+        add_test(NAME Rb26WebResourceTests COMMAND rb26_web_resource_tests)
+    endif()
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/tests/CMakeLists.txt")
+        add_subdirectory(source/tests)
+    endif()
 endif()

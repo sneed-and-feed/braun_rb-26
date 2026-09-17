@@ -49,6 +49,17 @@ if(WIN32 AND RB26_USE_WEBVIEW AND EXISTS "${CMAKE_BINARY_DIR}/packages/Microsoft
     )
 endif()
 
+if(UNIX AND NOT APPLE AND RB26_USE_WEBVIEW)
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(WEBKIT_GTK QUIET gtk+-3.0 webkit2gtk-4.0)
+        if(WEBKIT_GTK_FOUND)
+            target_include_directories(rb26_m4_tests PRIVATE ${WEBKIT_GTK_INCLUDE_DIRS})
+            target_link_libraries(rb26_m4_tests PRIVATE ${WEBKIT_GTK_LIBRARIES})
+        endif()
+    endif()
+endif()
+
 target_link_libraries(rb26_m4_tests PRIVATE
     BRAUN_RB26
     juce::juce_gui_basics

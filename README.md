@@ -1,8 +1,8 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
-[![Version: 1.3.5](https://img.shields.io/badge/Version-1.3.5-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.5)
+[![Version: 1.3.6](https://img.shields.io/badge/Version-1.3.6-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.6)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.5/BRAUN_RB26-v1.3.5-Windows-x64.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-Windows-x64.zip)
 [![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](#build-macos-universal)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
@@ -16,8 +16,8 @@
 
 ---
 
-### [Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.5/BRAUN_RB26-v1.3.5-Windows-x64.zip)
-*Direct download: **[`BRAUN_RB26-v1.3.5-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.5/BRAUN_RB26-v1.3.5-Windows-x64.zip)** (~9 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.5/BRAUN_RB26-v1.3.5-VST3-Windows-x64.zip)** (~3 MB).*
+### [Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-Windows-x64.zip)
+*Direct download: **[`BRAUN_RB26-v1.3.6-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-Windows-x64.zip)** (~9 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-VST3-Windows-x64.zip)** (~3 MB).*
 *Includes `BRAUN_RB26.vst3` for DAWs (Ableton, FL Studio, Reaper, Cubase, Studio One, Bitwig), `BRAUN_RB26.clap`, and `BRAUN_RB26.exe` standalone desktop app. No compiler or CMake required.*
 
 * **macOS (Apple Silicon & Intel)**: Native Audio Unit (AU `.component`), AUv3, VST3, CLAP, and Standalone (`.app`) build with a single command via [CMake](#build-macos-universal).
@@ -26,10 +26,12 @@
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
 > [!TIP]
-> **What's New in v1.3.5 (Native UI bad_cast Resolution, Linux Build Options & Sub-Bass Headroom Stabilization)**:
-> - **Native UI `std::bad_cast` Fix ([#1](https://github.com/sneed-and-feed/braun_rb-26/issues/1))**: Eliminated invalid dynamic cast in `BraunLookAndFeel::drawToggleButton` which caused runtime aborts in Standalone and DAW native fallback UI modes; added off-screen unit testing verifying all native UI widgets render exception-free.
-> - **Linux CMake Build Decoupling ([#1](https://github.com/sneed-and-feed/braun_rb-26/issues/1))**: Fully decoupled `libcurl` (`JUCE_USE_CURL=0`) when building with pure native JUCE UI (`-DRB26_USE_WEBVIEW=OFF`), and added explicit `CURL::libcurl` package resolution and `NEEDS_WEB_BROWSER TRUE` when compiling the embedded WebKit browser on Linux.
-> - **Sub-Bass Preserver & FDN Headroom Stabilization**: Eliminated audio-rate gain chopping in `TransientPunchDetector`, calibrated sample-rate-invariant onset gating, added in-loop 56 Hz DC-blocking and damping biquads, band-limited pitch shifter feedback, and normalized FDN tank injection headroom to suppress metallic bowing artifacts under sustained dual-drone sub-bass excitation.
+> **What's New in v1.3.6 (Pitch Interval Dynamic Toggles, Freeze Semantics, CRT Scope Stereo & DAW Audio-Thread Decoupling)**:
+> - **DualTapDelay Pitch Interval Dynamic Recalculation**: Resolved an issue where streaming audio locked phase increment recalculation behind zero write index; toggles between `+7st`, `+12st`, `+24st` and `-2st`, `-7st`, `-12st` now transition instantaneously with verified $<0.75\%$ frequency precision.
+> - **Freeze Semantics & Affordance Normalization**: Replaced ambiguous `"FREEZE HOLD"` inactive label with explicit `"FREEZE OFF"` / `"FREEZE ON"` indicator state and added instant synchronous parameter dispatch to the JUCE APVTS host tree and MIDI CC 64 latching.
+> - **CRT Visualizer Stereo & 512-Sample Buffer Upgrade**: Scope telemetry upgraded from 240 to 512 discrete stereo samples, eliminating zero-padding boundary lock and Hann-window decimation; Waveform view features composite stereo Schmitt trigger synchronization; Lissajous mode renders full 2D XY stereo correlation goniometer; FFT spectrum analyzer receives full unattenuated 512-sample frames.
+> - **FL Studio & DAW WebView2 Audio-Thread Decoupling**: Completely blocked WebAudio `AudioContext` and software DSP graph initialization when running within JUCE plugins, avoiding secondary thread resource contention and stabilizing CPU usage at ~10-14% of a single core.
+> - **Native UI Preset Management**: Integrated top-bar preset selection dropdown and navigation buttons into the native C++ fallback UI.
 
 ---
 
@@ -384,10 +386,10 @@ braun_rb-26/
 │   └── workflows/
 │       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
 ├── package.json                # Project manifest (scripts: test, test:browser, start)
-├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.3.5)
+├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.3.6)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
-├── releases/                   # Distribution archives (BRAUN_RB26-v1.3.5-Windows-x64.zip)
+├── releases/                   # Distribution archives (BRAUN_RB26-v1.3.6-Windows-x64.zip)
 ├── source/
 │   ├── dsp/                    # Pure C++20 real-time DSP engine
 │   │   ├── Rb26Engine.h/cpp    # Master processor, parameter struct, telemetry

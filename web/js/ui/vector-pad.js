@@ -51,7 +51,7 @@ export class BraunVectorPad {
       <div class="braun-vector-header">
         <div class="braun-vector-title-group">
           <span class="braun-panel-title">VECTOR MODULATION</span>
-          <span class="braun-vector-axis-meta">X: RATE · Y: DEPTH &amp; BLOOM</span>
+          <span class="braun-vector-axis-meta">X: RATE &middot; Y: DEPTH &amp; BLOOM</span>
         </div>
         <div class="braun-vector-controls">
           <button class="braun-vector-mini-btn" id="btn-vector-mode" title="Toggle Momentary Spring / Latch Lock">
@@ -59,7 +59,7 @@ export class BraunVectorPad {
             <span id="vector-mode-label">MOMENTARY</span>
           </button>
           <button class="braun-vector-mini-btn" id="btn-vector-reset" title="Reset Coordinates to Center Origin">
-            RESET [·]
+            RESET [&middot;]
           </button>
         </div>
       </div>
@@ -76,7 +76,7 @@ export class BraunVectorPad {
         <div class="braun-vector-coords">
           <span class="braun-vector-readout-item">X: <span class="braun-vector-readout-val" id="readout-x">0.65 Hz</span></span>
           <span style="color: var(--border-line); margin: 0 5px;">|</span>
-          <span class="braun-vector-readout-item">Y: <span class="braun-vector-readout-val" id="readout-y">DEPTH 45% · BLOOM 85ms</span></span>
+          <span class="braun-vector-readout-item">Y: <span class="braun-vector-readout-val" id="readout-y">DEPTH 45% &middot; BLOOM 85ms</span></span>
         </div>
         <div class="braun-vector-readout-indicator">
           <span class="braun-led" id="vector-status-led"></span>
@@ -374,7 +374,7 @@ export class BraunVectorPad {
       this.readoutX.textContent = `${rateHz.toFixed(2)} Hz`;
     }
     if (this.readoutY) {
-      this.readoutY.textContent = `DEPTH ${depthPct}% · BLOOM ${bloomMs}ms`;
+      this.readoutY.textContent = `DEPTH ${depthPct}% \u00B7 BLOOM ${bloomMs}ms`;
     }
   }
 

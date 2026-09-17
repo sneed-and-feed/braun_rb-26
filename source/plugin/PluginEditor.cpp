@@ -171,7 +171,7 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
 <header>
   <div class="title-group">
     <h1>BRAUN RB-26</h1>
-    <p>STUDIO REVERBERATION UNIT — WENIGER, ABER BESSER</p>
+    <p>STUDIO REVERBERATION UNIT &mdash; WENIGER, ABER BESSER</p>
   </div>
   <div style="display:flex; gap:8px; align-items:center;">
     <button id="btnPower" style="background:var(--braun-orange); color:#fff; padding:4px 10px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; border:none; letter-spacing:1px;">POWER ON</button>
@@ -191,7 +191,7 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
 </div>
 
 <div class="exciter-bar">
-  <div class="deck-header">DECK 07 — ON-BOARD ACOUSTIC EXCITER & AUDITION</div>
+  <div class="deck-header">DECK 07 &mdash; ON-BOARD ACOUSTIC EXCITER &amp; AUDITION</div>
   <div class="exciter-cluster">
     <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">LABORATORY:</span>
     <button class="exciter-btn" onclick="emitExciter({type:'dirac'})">DIRAC IMPULSE [SPACE]</button>
@@ -200,11 +200,11 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
     <button class="exciter-btn" id="btnPoisson" onclick="togglePoisson()">POISSON CLOCK</button>
   </div>
   <div class="exciter-cluster" style="margin-top:4px;">
-    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">CHIMES (A–'):</span>
+    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">CHIMES (A-'):</span>
     <div style="display:flex; gap:4px; flex:1;" id="chimeRow"></div>
   </div>
   <div class="exciter-cluster" style="margin-top:4px;">
-    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">CHORDS (1–=):</span>
+    <span style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">CHORDS (1-=):</span>
     <div style="display:flex; gap:4px; flex-wrap:wrap; flex:1;" id="chordRow"></div>
   </div>
 </div>
@@ -734,6 +734,13 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
 
         recordButton.setToggleState(processorRef.isRecording(), juce::dontSendNotification);
 
+        // Sync preset combo box if external host program changed
+        const int currentProg = processorRef.getCurrentProgram();
+        if (presetComboBox.getSelectedId() != currentProg + 1)
+        {
+            presetComboBox.setSelectedId(currentProg + 1, juce::dontSendNotification);
+        }
+
         // Repaint CRT scope display
         auto crtArea = getLocalBounds().withTrimmedTop(56).removeFromTop(130).reduced(16, 8);
         repaint(crtArea);
@@ -1201,7 +1208,7 @@ void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::R
 
     g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::textMutedColourId));
     g.setFont(juce::FontOptions(10.0f, juce::Font::plain));
-    g.drawText("STUDIO REVERBERATOR · DIN 1451", headerArea.removeFromLeft(220).reduced(4, 0), juce::Justification::centredLeft);
+    g.drawText(juce::String("STUDIO REVERBERATOR ") + juce::String::charToString(0x00B7) + " DIN 1451", headerArea.removeFromLeft(220).reduced(4, 0), juce::Justification::centredLeft);
 
     // Central CRT Phosphor Visualizer Scope
     auto crtArea = bounds.removeFromTop(130).reduced(16, 6);
@@ -1364,6 +1371,51 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
     addChildComponent(viewModeButton);
 #endif
 
+    // Preset management controls for Native UI
+    presetLabel.setText("PRESET:", juce::dontSendNotification);
+    presetLabel.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    presetLabel.setJustificationType(juce::Justification::centredRight);
+    addChildComponent(presetLabel);
+
+    const int numPrograms = processorRef.getNumPrograms();
+    for (int i = 0; i < numPrograms; ++i)
+    {
+        presetComboBox.addItem(processorRef.getProgramName(i), i + 1);
+    }
+    presetComboBox.setSelectedId(processorRef.getCurrentProgram() + 1, juce::dontSendNotification);
+    presetComboBox.onChange = [this] {
+        const int selected = presetComboBox.getSelectedId() - 1;
+        if (selected >= 0 && selected < processorRef.getNumPrograms())
+        {
+            processorRef.setCurrentProgram(selected);
+        }
+    };
+    addChildComponent(presetComboBox);
+
+    prevPresetBtn.setButtonText("<");
+    prevPresetBtn.onClick = [this] {
+        const int total = processorRef.getNumPrograms();
+        if (total > 0)
+        {
+            const int nextIdx = (processorRef.getCurrentProgram() - 1 + total) % total;
+            processorRef.setCurrentProgram(nextIdx);
+            presetComboBox.setSelectedId(nextIdx + 1, juce::dontSendNotification);
+        }
+    };
+    addChildComponent(prevPresetBtn);
+
+    nextPresetBtn.setButtonText(">");
+    nextPresetBtn.onClick = [this] {
+        const int total = processorRef.getNumPrograms();
+        if (total > 0)
+        {
+            const int nextIdx = (processorRef.getCurrentProgram() + 1) % total;
+            processorRef.setCurrentProgram(nextIdx);
+            presetComboBox.setSelectedId(nextIdx + 1, juce::dontSendNotification);
+        }
+    };
+    addChildComponent(nextPresetBtn);
+
     // Audition Exciter trigger buttons
     impulseTriggerBtn.setButtonText("DIRAC IMPULSE");
     impulseTriggerBtn.onClick = [this] {
@@ -1462,6 +1514,10 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
     powerButton.setVisible(nativeVisible);
     themeButton.setVisible(nativeVisible);
     recordButton.setVisible(nativeVisible);
+    presetLabel.setVisible(nativeVisible);
+    presetComboBox.setVisible(nativeVisible);
+    prevPresetBtn.setVisible(nativeVisible);
+    nextPresetBtn.setVisible(nativeVisible);
     impulseTriggerBtn.setVisible(nativeVisible);
     hammerTriggerBtn.setVisible(nativeVisible);
     chordTriggerBtn.setVisible(nativeVisible);
@@ -1495,7 +1551,7 @@ void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
 
     // Header Controls Layout
     auto headerArea = totalBounds.removeFromTop(56);
-    auto rightButtons = headerArea.removeFromRight(headerArea.getWidth() - 340).reduced(10, 10);
+    auto rightButtons = headerArea.removeFromRight(headerArea.getWidth() - 370).reduced(10, 10);
 
 #if JUCE_WEB_BROWSER
     viewModeButton.setBounds(rightButtons.removeFromRight(140).reduced(4, 2));
@@ -1503,6 +1559,16 @@ void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
     recordButton.setBounds(rightButtons.removeFromRight(110).reduced(4, 2));
     themeButton.setBounds(rightButtons.removeFromRight(105).reduced(4, 2));
     powerButton.setBounds(rightButtons.removeFromRight(95).reduced(4, 2));
+
+    // Preset selector positioned in remaining space between title and buttons
+    if (rightButtons.getWidth() >= 160)
+    {
+        nextPresetBtn.setBounds(rightButtons.removeFromRight(26).reduced(2, 3));
+        const int comboW = juce::jlimit(90, 180, rightButtons.getWidth() - 85);
+        presetComboBox.setBounds(rightButtons.removeFromRight(comboW).reduced(2, 3));
+        prevPresetBtn.setBounds(rightButtons.removeFromRight(26).reduced(2, 3));
+        presetLabel.setBounds(rightButtons.removeFromRight(juce::jmin(65, rightButtons.getWidth())).reduced(2, 3));
+    }
 
     // Skip CRT display area
     totalBounds.removeFromTop(130);

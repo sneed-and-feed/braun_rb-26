@@ -510,7 +510,7 @@ export class ReverbComparisonBuffer {
     if (toggleBtn) toggleBtn.classList.toggle('is-buffer-b', this.activeBuffer === 'B');
 
     const copyBtn = document.getElementById('btn-ab-copy');
-    if (copyBtn) copyBtn.textContent = this.activeBuffer === 'A' ? 'COPY A→B' : 'COPY B→A';
+    if (copyBtn) copyBtn.textContent = this.activeBuffer === 'A' ? 'COPY A\u2192B' : 'COPY B\u2192A';
   }
 }
 
@@ -1225,7 +1225,7 @@ export class BraunRb26App {
       defaultX: initX,
       defaultY: initY,
       onEngage: async () => {
-        if (!this.isPowered) return;
+        if (this.isJuce || !this.isPowered) return;
         if (!this.engine.isInitialized) await this.engine.init();
       },
       onChange: ({ rateHz, depthPct, bloomMs }) => {
@@ -1366,7 +1366,7 @@ export class BraunRb26App {
           return;
         }
 
-        if (!this.engine.isInitialized) {
+        if (!this.isJuce && !this.engine.isInitialized) {
           await this.engine.init();
           if (this.engine.masterLimiter) {
             this.wavRecorder = new MasterWavRecorder(this.engine.ctx, this.engine.masterLimiter);
@@ -1692,7 +1692,7 @@ export class BraunRb26App {
       if (el) {
         el.addEventListener('click', async () => {
           if (!this.isPowered) return;
-          if (!this.engine.isInitialized) {
+          if (!this.isJuce && !this.engine.isInitialized) {
             await this.engine.init();
           }
           fn.call(this);
@@ -1802,7 +1802,7 @@ export class BraunRb26App {
         btn._suppressNextClick = true;
         btn.classList.add('is-active');
 
-        if (!this.engine.isInitialized) {
+        if (!this.isJuce && !this.engine.isInitialized) {
           await this.engine.init();
         }
 
@@ -2021,7 +2021,7 @@ export class BraunRb26App {
 
     const triggerKey = async (keyEl, clientY) => {
       if (!this.isPowered) return;
-      if (!this.engine.isInitialized) await this.engine.init();
+      if (!this.isJuce && !this.engine.isInitialized) await this.engine.init();
       if (!keyEl) return;
 
       const hotkey = keyEl.getAttribute('data-hotkey') || '';
@@ -2781,7 +2781,7 @@ export class BraunRb26App {
     }
 
     if (this.isPoissonRunning) {
-      this._startPoissonLoop();
+      if (!this.isJuce) this._startPoissonLoop();
     } else {
       if (this.poissonTimer) {
         clearTimeout(this.poissonTimer);
@@ -2798,6 +2798,7 @@ export class BraunRb26App {
         if (poissonBtn) poissonBtn.classList.remove('is-active');
         return;
       }
+      if (this.isJuce) return;
       if (!this.engine.isInitialized) await this.engine.init();
 
       const lambda = Math.max(0.1, this.poissonEpm) / 60.0;
