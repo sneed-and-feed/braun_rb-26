@@ -967,6 +967,7 @@ export class BraunRb26App {
   _initLifecycleAudioUnlock() {
     const unlockEvents = ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown'];
     const doUnlock = async () => {
+      if (this.isJuce) return;
       if (!this.engine.isInitialized) {
         await this.engine.init();
         if (this.engine.analyserL && this.display) {
@@ -992,6 +993,7 @@ export class BraunRb26App {
 
     // Auto-recovery when tab gains focus
     const onVisibilityChange = async () => {
+      if (this.isJuce) return;
       if (document.visibilityState === 'visible' && this.engine.ctx) {
         if (this.engine.ctx.state === 'suspended' || this.engine.ctx.state === 'interrupted') {
           try {
