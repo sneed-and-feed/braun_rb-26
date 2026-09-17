@@ -1,5 +1,10 @@
 # CMake configuration for test targets in source/tests
 
+if(UNIX AND NOT APPLE)
+    find_package(CURL REQUIRED)
+    link_libraries(CURL::libcurl)
+endif()
+
 add_executable(rb26_challenger1_m2_tests
     Challenger1M2StressTests.cpp
 )

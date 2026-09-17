@@ -185,6 +185,11 @@ target_link_libraries(rb26_dsp_core PUBLIC
     juce::juce_recommended_warning_flags
 )
 
+if(UNIX AND NOT APPLE)
+    find_package(CURL REQUIRED)
+    target_link_libraries(rb26_dsp_core PUBLIC CURL::libcurl)
+endif()
+
 # ==============================================================================
 # 5. Packaging Web Assets (Zip Archive & Binary Data if web UI present and enabled)
 # ==============================================================================
