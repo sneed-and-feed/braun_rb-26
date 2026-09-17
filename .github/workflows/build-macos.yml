@@ -1,0 +1,59 @@
+name: Build macOS Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS Universal (ARM64 & x86_64)
+    runs-on: macos-14
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DRB26_BUILD_TESTS=OFF
+
+      - name: Compile Release Targets
+        run: |
+          cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+
+      - name: Package Distribution Zip
+        run: |
+          mkdir -p package/VST3 package/CLAP package/AU package/Standalone
+          cp -R build/BRAUN_RB26_artefacts/Release/VST3/BRAUN_RB26.vst3 package/VST3/
+          if [ -d "build/BRAUN_RB26_artefacts/Release/AU/BRAUN_RB26.component" ]; then
+            cp -R build/BRAUN_RB26_artefacts/Release/AU/BRAUN_RB26.component package/AU/
+          fi
+          if [ -f "build/BRAUN_RB26_artefacts/Release/CLAP/BRAUN_RB26.clap" ]; then
+            cp build/BRAUN_RB26_artefacts/Release/CLAP/BRAUN_RB26.clap package/CLAP/
+          fi
+          cp -R build/BRAUN_RB26_artefacts/Release/Standalone/BRAUN_RB26.app package/Standalone/
+          cp LICENSE README.md package/
+          cd package
+          zip -r ../BRAUN_RB26-v1.3.6-macOS-Universal.zip *
+          cd ..
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRAUN_RB26-v1.3.6-macOS-Universal
+          path: BRAUN_RB26-v1.3.6-macOS-Universal.zip
+
+      - name: Attach to GitHub Release (Tag Triggers)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BRAUN_RB26-v1.3.6-macOS-Universal.zip
