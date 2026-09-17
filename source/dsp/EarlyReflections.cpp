@@ -10,6 +10,9 @@ void EarlyReflections::prepare(double sampleRate, float maxRoomSize) noexcept {
     mBufferL.assign(kBufferCapacity, 0.0f);
     mBufferR.assign(kBufferCapacity, 0.0f);
     mWriteIndex = 0;
+    mCrossfadeRemaining = 0;
+    mHasProcessedSamples = false;
+    mLastRoomSize = -1.0f;
 
     for (size_t i = 0; i < kNumAllpass; ++i) {
         const size_t len = static_cast<size_t>(std::round(static_cast<double>(kBaseAllpassLengths[i]) * (mSampleRate / 48000.0)));
@@ -26,6 +29,7 @@ void EarlyReflections::reset() noexcept {
     std::fill(mBufferR.begin(), mBufferR.end(), 0.0f);
     mWriteIndex = 0;
     mCrossfadeRemaining = 0;
+    mHasProcessedSamples = false;
 
     for (size_t i = 0; i < kNumAllpass; ++i) {
         std::fill(mAllpassBuffers[i].begin(), mAllpassBuffers[i].end(), 0.0f);
@@ -35,7 +39,8 @@ void EarlyReflections::reset() noexcept {
 
 void EarlyReflections::setParameters(float roomSize, float diffusionDensity) noexcept {
     const float clamped = std::clamp(roomSize, 0.1f, mMaxRoomSize);
-    if (std::abs(clamped - mRoomSize) > 0.001f) {
+    if (std::abs(clamped - mLastRoomSize) > 0.0001f) {
+        mLastRoomSize = clamped;
         mRoomSize = clamped;
         updateTaps();
     }
@@ -43,11 +48,13 @@ void EarlyReflections::setParameters(float roomSize, float diffusionDensity) noe
 }
 
 void EarlyReflections::updateTaps() noexcept {
-    if (mWriteIndex > 0 && mTapDelaysSamples[0] > 0) {
-        mOldTapDelaysSamples = mTapDelaysSamples;
-        mOldTapGainsL = mTapGainsL;
-        mOldTapGainsR = mTapGainsR;
-        mCrossfadeRemaining = kCrossfadeSamples;
+    if (mHasProcessedSamples && mTapDelaysSamples[0] > 0) {
+        if (mCrossfadeRemaining == 0) {
+            mOldTapDelaysSamples = mTapDelaysSamples;
+            mOldTapGainsL = mTapGainsL;
+            mOldTapGainsR = mTapGainsR;
+            mCrossfadeRemaining = kCrossfadeSamples;
+        }
     }
 
     for (size_t k = 0; k < kNumTaps; ++k) {
@@ -83,6 +90,7 @@ void EarlyReflections::processSample(float inL, float inR, float& outL, float& o
         outR = inR;
         return;
     }
+    mHasProcessedSamples = true;
     // 20% lateral cross-coupling for room reflection spatial realism
     const float inBufL = inL + 0.20f * inR;
     const float inBufR = inR + 0.20f * inL;

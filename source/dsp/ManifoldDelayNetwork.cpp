@@ -52,6 +52,9 @@ void ManifoldDelayNetwork::prepare(double sampleRate, float maxRoomSize) noexcep
     // 0.25 Hz circular spatial rotation for Whispering Gallery
     mCausticRotationDelta = (kTwoPi * 0.25f) / fs;
     mCausticRotationAngle = 0.0f;
+    mLastGeometryRoom = -1.0f;
+    mLastDampingHz = -1.0f;
+    mLastDiffusion = -1.0f;
     mIsFirstSet = true;
 
     for (size_t k = 0; k < kNumLines; ++k) {
@@ -118,20 +121,23 @@ void ManifoldDelayNetwork::setParameters(ManifoldType type, float roomSize, floa
     const float clampedRoom = std::clamp(roomSize, 0.05f, mMaxRoomSize);
     const float clampedDiff = std::clamp(diffusionDensity, 0.0f, 1.0f);
     const bool manifoldChanged = (type != mCurrentManifold);
-    const bool roomChanged = std::abs(clampedRoom - mRoomSize) > 0.001f;
-    const bool dampChanged = std::abs(highDampingHz - mHighDampingHz) > 5.0f;
-    const bool diffChanged = std::abs(clampedDiff - mDiffusionDensity) > 0.005f;
+    const bool roomChanged = (manifoldChanged || std::abs(clampedRoom - mLastGeometryRoom) > 0.0001f);
+    const bool dampChanged = (manifoldChanged || std::abs(highDampingHz - mLastDampingHz) > 0.5f);
+    const bool diffChanged = (manifoldChanged || std::abs(clampedDiff - mLastDiffusion) > 0.001f);
 
     mCurrentManifold = type;
     mRoomSize = clampedRoom;
     mHighDampingHz = highDampingHz;
     mDiffusionDensity = clampedDiff;
 
-    if (manifoldChanged || roomChanged) {
+    if (roomChanged) {
+        mLastGeometryRoom = clampedRoom;
         updateManifoldGeometry();
         updateSpatialWeights();
     }
-    if (manifoldChanged || dampChanged || diffChanged) {
+    if (dampChanged || diffChanged) {
+        mLastDampingHz = highDampingHz;
+        mLastDiffusion = clampedDiff;
         updateFilterCoefficients();
     }
 
@@ -335,24 +341,23 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
     const float freeze = std::clamp(freezeAmount, 0.0f, 1.0f);
     for (size_t k = 0; k < kNumLines; ++k) {
         // 1. Slewed nominal delay length + dynamic tail modulation excursion
-        // When freeze is engaged, eliminate modulation excursion and snap to integer sample read
-        // to prevent fractional Hermite interpolation lowpass filtering energy dissipation
+        // Smoothly blend excursion to zero and fractional read to integer read as freeze approaches 1.0
         const float curLen = mLengthSmoothers[k].next();
         const float effExcursion = inExcursions[k] * (1.0f - freeze);
-        const float totalDelay = (freeze >= 0.999f)
-            ? std::round(curLen)
-            : std::clamp(curLen + effExcursion, 16.0f, static_cast<float>(kBufferCapacity - 128));
+        const float clampedDelay = std::clamp(curLen + effExcursion, 16.0f, static_cast<float>(kBufferCapacity - 128));
+        const float targetIntDelay = std::clamp(std::round(clampedDelay), 16.0f, static_cast<float>(kBufferCapacity - 128));
+        const float totalDelay = (1.0f - freeze) * clampedDelay + freeze * targetIntDelay;
 
-        // 2. Fractional Hermite cubic spline read
+        // 2. Fractional Hermite cubic spline read (at freeze == 1.0, totalDelay is exact integer -> zero Hermite loss)
         const float rawSample = TailModulator::readHermite(mBuffers[k].data(),
                                                            kBufferCapacity,
                                                            kBufferMask,
                                                            mWriteIndices[k],
                                                            totalDelay);
 
-        // 3. One-pole air absorption lowpass filter (bypassed when freezeAmount == 1.0f)
+        // 3. One-pole air absorption lowpass filter (smoothly bypassed during freeze hold)
         const float filtered = flushDenormal(mDampingStates[k] + mDampingAlpha * (rawSample - mDampingStates[k]));
-        mDampingStates[k] = (freeze >= 0.999f) ? rawSample : filtered;
+        mDampingStates[k] = filtered;
         float s = (1.0f - freeze) * filtered + freeze * rawSample;
 
         // 4. Dispersion allpasses (Loop decay diffusion across delay lines)
@@ -363,21 +368,15 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
             s = mDispersionStage2[k].process(s);
         }
 
-        // 5. Manifold-specific resonant loop filtering
+        // 5. Manifold-specific resonant loop filtering (continuous filter tracking prevents click upon unfreezing)
         if (mCurrentManifold == ManifoldType::WhisperingGallery) {
             // High-frequency caustic peaking filter (+3.5 dB at 9.5 kHz) + ultrasonic lowpass
-            // Bypassed during freeze hold to prevent runaway caustic resonance
-            if (freeze < 0.999f) {
-                const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s));
-                s = (1.0f - freeze) * pf + freeze * s;
-            }
+            const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s));
+            s = (1.0f - freeze) * pf + freeze * s;
         } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
             // Sitka spruce body formants (A0, T1, Wood fiber) with -3 dB loop trim
-            // Formants and trim are bypassed during freeze hold so held reverb does not decay/mute
-            if (freeze < 0.999f) {
-                const float plateFiltered = mSpruceWood[k].process(mSpruceT1[k].process(mSpruceA0[k].process(s))) * 0.70794578f;
-                s = (1.0f - freeze) * plateFiltered + freeze * s;
-            }
+            const float plateFiltered = mSpruceWood[k].process(mSpruceT1[k].process(mSpruceA0[k].process(s))) * 0.70794578f;
+            s = (1.0f - freeze) * plateFiltered + freeze * s;
         }
 
         outFiltered[k] = flushDenormal(s);

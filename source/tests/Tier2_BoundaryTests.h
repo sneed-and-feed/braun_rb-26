@@ -2017,6 +2017,58 @@ inline void registerTier2Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 2", "T2_F34_6", "Expanded Room Dimensions - Slow Automation Slew Immunity (0.0002 Step Size)", []() {
+        rb26::ManifoldDelayNetwork mdn;
+        mdn.prepare(48000.0, 4.0f);
+        mdn.setParameters(rb26::ManifoldType::PoincareHyperbolic, 1.0f, 6500.0f, 0.75f);
+
+        const auto initialLengths = mdn.getNominalLengths();
+        TEST_ASSERT(initialLengths[0] == 1000, "Initial Poincare nominal length must be 1000 at room size 1.0");
+
+        // Simulate ultra-slow host automation where parameter changes by only 0.0002f per block
+        // (Previously caused hysteresis freeze where mNominalLengths never updated at all!)
+        float currentRoom = 1.0f;
+        for (int step = 0; step < 5000; ++step) {
+            currentRoom += 0.0002f; // reaches 2.0f
+            mdn.setParameters(rb26::ManifoldType::PoincareHyperbolic, currentRoom, 6500.0f, 0.75f);
+        }
+
+        const auto finalLengths = mdn.getNominalLengths();
+        TEST_ASSERT_NEAR(static_cast<float>(finalLengths[0]), 2000.0f, 2.0f,
+                         "Slow automation must update nominal lengths to 2000, not remain frozen at 1000");
+        TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "Slow automation slew immunity must pass");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_F34_7", "Expanded Room Dimensions - Early Reflections Wrap-Around & Scrub Continuity", []() {
+        rb26::EarlyReflections er;
+        er.prepare(48000.0, 4.0f);
+        er.setParameters(1.0f, 0.0f);
+
+        const int bs = 128;
+        std::vector<float> inL(bs, 0.1f), inR(bs, 0.1f);
+        std::vector<float> outL(bs, 0.0f), outR(bs, 0.0f);
+
+        // Process audio and rapidly scrub room size across multiple blocks
+        float prevSample = 0.0f;
+        float maxJump = 0.0f;
+        for (int step = 0; step < 100; ++step) {
+            float scrubRoom = 0.5f + 3.0f * (static_cast<float>(step % 20) / 20.0f);
+            er.setParameters(scrubRoom, 0.0f);
+            er.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), bs);
+
+            for (int i = 0; i < bs; ++i) {
+                float jump = std::abs(outL[i] - prevSample);
+                maxJump = std::max(maxJump, jump);
+                prevSample = outL[i];
+                TEST_ASSERT(!std::isnan(outL[i]) && !std::isinf(outL[i]), "ER output must remain finite during rapid scrub");
+            }
+        }
+        TEST_ASSERT(maxJump < 0.25f, "Rapid scrub must not cause step discontinuities or clicks");
+        TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "Early reflections wrap-around and scrub continuity verified");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 } // registerTier2Tests
 
 } // namespace test

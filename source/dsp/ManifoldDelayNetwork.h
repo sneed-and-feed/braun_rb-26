@@ -143,6 +143,9 @@ private:
     float mDiffusionDensity { 0.75f };
     float mDispCoeff1 { 0.0f };
     float mDispCoeff2 { 0.0f };
+    float mLastGeometryRoom { -1.0f };
+    float mLastDampingHz { -1.0f };
+    float mLastDiffusion { -1.0f };
     bool  mIsFirstSet { true };
 
     // 8 Delay line circular buffers pre-allocated for 192 kHz

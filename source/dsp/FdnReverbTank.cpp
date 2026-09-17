@@ -170,9 +170,9 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
         const float effGain = (1.0f - freezeLoop) * mFeedbackGains[k] + freezeLoop * 1.0f;
         const float feedback = reflected * effGain;
         const float nextIn = feedback + injection[k];
-        saturated[k] = flushDenormal((freezeLoop >= 0.999f)
-            ? std::clamp(nextIn, -1.05f, 1.05f)
-            : applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f));
+        const float satNormal = applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f);
+        const float satFreeze = std::clamp(nextIn, -1.05f, 1.05f);
+        saturated[k] = flushDenormal((1.0f - freezeLoop) * satNormal + freezeLoop * satFreeze);
     }
     mManifoldNetwork.writeFeedback(saturated);
 

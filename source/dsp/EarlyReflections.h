@@ -59,6 +59,8 @@ private:
     double mSampleRate { 48000.0 };
     float mRoomSize { 1.0f };
     float mMaxRoomSize { 4.0f };
+    float mLastRoomSize { -1.0f };
+    bool  mHasProcessedSamples { false };
 
     std::array<size_t, kNumTaps> mTapDelaysSamples {};
     std::array<float, kNumTaps> mTapGainsL {};
