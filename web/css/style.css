@@ -198,11 +198,18 @@ body {
 }
 
 .braun-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
   background-color: var(--bg-panel-inset);
   color: var(--text-primary);
   border: 1px solid var(--border-line);
   border-radius: 2px;
-  padding: 5px 8px;
+  padding: 5px 22px 5px 8px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2710%27%20height%3D%276%27%20viewBox%3D%270%200%2010%206%27%3E%3Cpath%20d%3D%27M1%201l4%204%204-4%27%20stroke%3D%27%235E6064%27%20stroke-width%3D%271.5%27%20fill%3D%27none%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  background-size: 8px 5px;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
@@ -224,11 +231,19 @@ body {
   font-size: 10px;
 }
 
+[data-theme="dark"] .braun-select,
+[data-theme="matte-black"] .braun-select {
+  background-color: #151618;
+  color: #F0F0F0;
+  border-color: #3A3A3A;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2710%27%20height%3D%276%27%20viewBox%3D%270%200%2010%206%27%3E%3Cpath%20d%3D%27M1%201l4%204%204-4%27%20stroke%3D%27%23BDBDBD%27%20stroke-width%3D%271.5%27%20fill%3D%27none%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3C%2Fsvg%3E");
+}
+
 [data-theme="dark"] .braun-select option,
 [data-theme="dark"] .braun-select optgroup,
 [data-theme="matte-black"] .braun-select option,
 [data-theme="matte-black"] .braun-select optgroup {
-  background-color: #1E2023;
+  background-color: #151618;
   color: #F0F0F0;
 }
 

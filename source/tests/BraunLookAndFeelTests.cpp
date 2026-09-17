@@ -34,6 +34,26 @@ int main()
     RB26_LAF_ASSERT(laf.findColour(juce::ComboBox::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanelInset, "Dark ComboBox backgroundColourId mismatch");
     RB26_LAF_ASSERT(laf.findColour(juce::PopupMenu::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanel, "Dark PopupMenu backgroundColourId mismatch");
 
+    // 2b. Verify ComboBox attached to BraunLookAndFeel renders with Dark_TextPrimary (0xFFF0F0F0) and Light_TextPrimary
+    {
+        juce::ComboBox testBox;
+        testBox.setLookAndFeel(&laf);
+
+        laf.setDarkTheme(false);
+        testBox.sendLookAndFeelChange();
+        RB26_LAF_ASSERT(testBox.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Light_TextPrimary,
+                        "juce::ComboBox attached to BraunLookAndFeel must render with Light_TextPrimary in light theme");
+
+        laf.setDarkTheme(true);
+        testBox.sendLookAndFeelChange();
+        RB26_LAF_ASSERT(testBox.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Dark_TextPrimary,
+                        "juce::ComboBox attached to BraunLookAndFeel must render with Dark_TextPrimary in dark theme");
+        RB26_LAF_ASSERT(testBox.findColour(juce::ComboBox::textColourId).getARGB() == 0xFFF0F0F0,
+                        "juce::ComboBox in dark theme must strictly equal 0xFFF0F0F0");
+
+        testBox.setLookAndFeel(nullptr);
+    }
+
     // 3. Verify 3-Tier Knob Sizing
     RB26_LAF_ASSERT(rb26::BraunLookAndFeel::getKnobTierForBounds(64, 64) == rb26::BraunLookAndFeel::KnobTier::Hero, "Hero knob tier mismatch");
     RB26_LAF_ASSERT(rb26::BraunLookAndFeel::getKnobTierForBounds(52, 52) == rb26::BraunLookAndFeel::KnobTier::Secondary, "Secondary knob tier mismatch");
@@ -146,6 +166,11 @@ int main()
                 comboBox.addItem("Hall A", 1);
                 comboBox.addItem("Room B", 2);
                 comboBox.setSelectedId(1, juce::dontSendNotification);
+
+                const auto expectedColour = darkTheme ? rb26::BraunColours::Dark_TextPrimary
+                                                      : rb26::BraunColours::Light_TextPrimary;
+                RB26_LAF_ASSERT(comboBox.findColour(juce::ComboBox::textColourId).getARGB() == expectedColour,
+                                "juce::ComboBox textColourId must match active theme TextPrimary");
 
                 try {
                     comboBox.paintEntireComponent(g, true);

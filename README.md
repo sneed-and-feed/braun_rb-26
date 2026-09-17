@@ -26,12 +26,14 @@
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
 > [!TIP]
-> **What's New in v1.3.6 (Pitch Interval Dynamic Toggles, Freeze Semantics, CRT Scope Stereo & DAW Audio-Thread Decoupling)**:
-> - **DualTapDelay Pitch Interval Dynamic Recalculation**: Resolved an issue where streaming audio locked phase increment recalculation behind zero write index; toggles between `+7st`, `+12st`, `+24st` and `-2st`, `-7st`, `-12st` now transition instantaneously with verified $<0.75\%$ frequency precision.
-> - **Freeze Semantics & Affordance Normalization**: Replaced ambiguous `"FREEZE HOLD"` inactive label with explicit `"FREEZE OFF"` / `"FREEZE ON"` indicator state and added instant synchronous parameter dispatch to the JUCE APVTS host tree and MIDI CC 64 latching.
-> - **CRT Visualizer Stereo & 512-Sample Buffer Upgrade**: Scope telemetry upgraded from 240 to 512 discrete stereo samples, eliminating zero-padding boundary lock and Hann-window decimation; Waveform view features composite stereo Schmitt trigger synchronization; Lissajous mode renders full 2D XY stereo correlation goniometer; FFT spectrum analyzer receives full unattenuated 512-sample frames.
-> - **FL Studio & DAW WebView2 Audio-Thread Decoupling**: Completely blocked WebAudio `AudioContext` and software DSP graph initialization when running within JUCE plugins, avoiding secondary thread resource contention and stabilizing CPU usage at ~10-14% of a single core.
-> - **Native UI Preset Management**: Integrated top-bar preset selection dropdown and navigation buttons into the native C++ fallback UI.
+> **What's New in v1.3.6 (GCC / Linux Compatibility, Native & Web ComboBox Dark Contrast, and Build Test Controls)**:
+> - **GCC/Linux `_MSVC_LANG` Compatibility**: Guarded `_MSVC_LANG` in `source/tests/Tier4_ScenarioTests.h` with `#if defined(_MSVC_LANG)`, eliminating undeclared identifier compilation failures on GCC and Clang for Linux/macOS.
+> - **Native UI ComboBox Dark Mode Contrast**: Updated `BraunLookAndFeel::drawLabel` to query parent `juce::ComboBox::textColourId` (`Dark_TextPrimary` 0xFFF0F0F0) and `getComboBoxFont(*box)` rather than relying on potentially cached light-mode label bindings, and wired `sendLookAndFeelChange()` propagation to `PluginEditor` theme toggling.
+> - **Web UI `<select>` ComboBox Styling & Linux Contrast**: Added `-webkit-appearance: none; -moz-appearance: none; appearance: none;` with custom SVG arrow indicators to `.braun-select`, enforcing strict `#151618` background and `#F0F0F0` text contrast under `[data-theme="dark"]` and `[data-theme="matte-black"]` on Linux WebKitGTK and desktop browsers.
+> - **CMake Test Suite Option (`RB26_BUILD_TESTS`)**: Added `option(RB26_BUILD_TESTS "Build RB-26 test suites" ON)` to `CMakeLists.txt`, allowing downstream packagers to cleanly disable automated test targets.
+> - **DualTapDelay Pitch Interval Dynamic Recalculation**: Resolved an issue where streaming audio locked phase increment recalculation behind zero write index; toggles between `+7st`, `+12st`, `+24st` and `-2st`, `-7st`, `-12st` transition instantaneously with verified $<0.75\%$ frequency precision.
+> - **Freeze Semantics & Affordance Normalization**: Replaced ambiguous `"FREEZE HOLD"` inactive label with explicit `"FREEZE OFF"` / `"FREEZE ON"` indicator state with synchronous APVTS host tree and MIDI CC 64 latching.
+> - **CRT Visualizer Stereo & 512-Sample Buffer Upgrade**: Scope telemetry upgraded from 240 to 512 discrete stereo samples with full Lissajous 2D XY correlation goniometer and 512-sample FFT spectrum frames.
 
 ---
 

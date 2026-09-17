@@ -342,12 +342,21 @@ void BraunLookAndFeel::drawLabel(juce::Graphics& g, juce::Label& label)
     if (!label.isBeingEdited())
     {
         auto alpha = label.isEnabled() ? 1.0f : 0.5f;
-        g.setColour(label.findColour(juce::Label::textColourId).withMultipliedAlpha(alpha));
-        g.setFont(getLabelFont(label));
+        auto font = getLabelFont(label);
+        auto textColour = label.findColour(juce::Label::textColourId);
+
+        if (auto* box = dynamic_cast<juce::ComboBox*>(label.getParentComponent()))
+        {
+            textColour = box->findColour(juce::ComboBox::textColourId);
+            font = getComboBoxFont(*box);
+        }
+
+        g.setColour(textColour.withMultipliedAlpha(alpha));
+        g.setFont(font);
 
         auto textArea = getLabelBorderSize(label).subtractedFrom(label.getLocalBounds());
         g.drawFittedText(label.getText(), textArea, label.getJustificationType(),
-                         juce::jmax(1, (int)((float)textArea.getHeight() / label.getFont().getHeight())),
+                         juce::jmax(1, (int)((float)textArea.getHeight() / font.getHeight())),
                          label.getMinimumHorizontalScale());
     }
 }

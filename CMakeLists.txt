@@ -47,7 +47,7 @@ if(DEFINED USE_WEBVIEW)
     set(RB26_USE_WEBVIEW ${USE_WEBVIEW})
 endif()
 
-option(RB26_BUILD_TESTS "Build BRAUN RB-26 automated test suite" ON)
+option(RB26_BUILD_TESTS "Build RB-26 test suites" ON)
 
 if(RB26_USE_WEBVIEW)
     message(STATUS "BRAUN RB-26 GUI Mode: Embedded Web Browser (WebView2/WebKit)")
@@ -379,7 +379,6 @@ if(RB26_BUILD_TESTS)
         target_link_libraries(rb26_web_resource_tests PRIVATE
             BraunRb26WebAssets
             juce::juce_core
-            juce::juce_gui_extra
             juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags
         )

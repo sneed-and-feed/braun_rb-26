@@ -379,7 +379,11 @@ inline void registerTier4Tests() {
 
     // S16: Cross-Platform Build Validation
     registerTest("Tier 4", "T4_S16", "Scenario S16 - Cross-Platform Build Validation (Standards Conformance)", []() {
+#if defined(_MSVC_LANG)
         TEST_ASSERT(__cplusplus >= 202002L || _MSVC_LANG >= 202002L, "Codebase must compile with C++20 standard compliance");
+#else
+        TEST_ASSERT(__cplusplus >= 202002L, "Codebase must compile with C++20 standard compliance");
+#endif
         return test::gCurrentTestAssertFailures == 0;
     });
 

@@ -1,5 +1,4 @@
 #include <juce_core/juce_core.h>
-#include <juce_gui_extra/juce_gui_extra.h>
 #include <BinaryData.h>
 #include <cassert>
 #include <iostream>

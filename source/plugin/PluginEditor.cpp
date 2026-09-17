@@ -1343,6 +1343,7 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
     themeButton.onClick = [this] {
         braunLookAndFeel.setDarkTheme(!braunLookAndFeel.isDarkTheme());
         themeButton.setButtonText(braunLookAndFeel.isDarkTheme() ? "THEME: DARK" : "THEME: LIGHT");
+        sendLookAndFeelChange();
         repaint();
     };
     addChildComponent(themeButton);
