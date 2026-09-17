@@ -1,6 +1,7 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.1)
+[![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
 [![VST3 Plugin](https://img.shields.io/badge/VST3-Windows%20x64-blue?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)
 [![CLAP Plugin](https://img.shields.io/badge/CLAP-Windows%20x64-green?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -33,7 +34,7 @@
 
 The RB-26 is a research-grade algorithmic reverberator that extends the Braun functionalist design language into spatial acoustics. It ships as native **VST3**, **CLAP**, **AU/AUv3**, and **Standalone** plugin formats compiled from a single C++20 DSP core, plus a fully-featured **Web Audio** showcase that runs entirely client-side in any modern browser.
 
-Unlike conventional reverb processors, the RB-26 implements four **non-Euclidean spatial manifold** geometries, **Shepard-Risset continuous pitch spirals**, a **bidirectional pitch-shifted feedback diffusion** network ("Shimmer" + "Dimmer"), a decoupled **4th-order Linkwitz-Riley low-end matrix**, an interactive **Deck 05 Vector Modulation Pad**, and an onboard **playable acoustic exciter engine** with Harold Budd felt-piano physical modeling — all zero-allocation, real-time safe, and verifiable against 381 headless DSP stress tests.
+Unlike conventional reverb processors, the RB-26 implements four **non-Euclidean spatial manifold** geometries, **Shepard-Risset continuous pitch spirals**, a **bidirectional pitch-shifted feedback diffusion** network ("Shimmer" + "Dimmer"), a decoupled **4th-order Linkwitz-Riley low-end matrix**, an interactive **Deck 05 Vector Modulation Pad**, and an onboard **playable acoustic exciter engine** with Harold Budd felt-piano physical modeling — all zero-allocation, real-time safe, and verifiable against 388 headless DSP stress tests.
 
 ---
 
@@ -47,7 +48,7 @@ Launch the local static server:
 start.bat
 ```
 
-Opens `http://localhost:3826/` with the full 19" 2U rackmount interface, 21 rotary knobs, Deck 05 Vector Modulation Pad, 4-mode CRT vector scope, 12 factory presets, and onboard exciter.
+Opens `http://localhost:3826/` with the full 19" 2U rackmount interface, 21 rotary knobs, Deck 05 Vector Modulation Pad, 4-mode CRT vector scope, 10 factory presets, and onboard exciter.
 
 > [!NOTE]
 > The instrument initializes in **Standby** mode (`power = false`) by default to protect studio monitors. Click the orange **POWER** switch or press `P` to engage the audio graph.
@@ -150,9 +151,9 @@ Four specialized acoustic geometries that go beyond conventional room simulation
 
 | Manifold | Geometry | Acoustic Behavior |
 |---|---|---|
-| **Poincaré Hyperbolic Cavity** | Negative curvature ($\kappa < 0$) | Exponential reflection growth, diffuse low-frequency dispersion via Airy function zeros |
+| **Poincaré Hyperbolic Cavity** | Negative curvature $(\kappa < 0)$ | Exponential reflection growth, diffuse low-frequency dispersion via Airy function zeros |
 | **Whispering Gallery Caustic** | Circular caustic focusing | High-frequency edge caustics wrapping around the stereo horizon |
-| **Anharmonic Spruce Soundboard** | Biharmonic plate ($\nabla^4$) | Physical spruce resonance formants with air-viscosity dispersion |
+| **Anharmonic Spruce Soundboard** | Biharmonic plate $(\nabla^4)$ | Physical spruce resonance formants with air-viscosity dispersion |
 | **Stockhausen Klangdom Sphere** | 3D spherical coordinate delays | Multi-vector spatial diffusion with golden-ratio LFO drift |
 
 ### Bidirectional Pitch Diffusion
@@ -168,21 +169,21 @@ Barber-pole pitch illusion creating the perception of endlessly ascending or des
 
 ### Decoupled Low-End Matrix
 
-- **4th-order Linkwitz-Riley crossover** (60–400 Hz): $|H_\text{LP} + H_\text{HP}| = 1$ magnitude-complementary splitting
-- **Orthogonal modal matrix** with Hadamard output summing: eliminates comb-filter phase cancellation below 200 Hz ($< 4.80$ dB maximum notch depth)
-- **Transient punch ducking**: fast envelope follower attenuates low-end reverb injection by $-12$ dB on kick transients, recovering over 150 ms
+- **4th-order Linkwitz-Riley crossover** (60–400 Hz): $\lvert H_\text{LP} + H_\text{HP} \rvert = 1$ magnitude-complementary splitting
+- **Orthogonal modal matrix** with Hadamard output summing: eliminates comb-filter phase cancellation below 200 Hz ($< 4.80\text{ dB}$ maximum notch depth)
+- **Transient punch ducking**: fast envelope follower attenuates low-end reverb injection by $-12\text{ dB}$ on kick transients, recovering over 150 ms
 - **Sub-bass elliptical filter**: mono collapse below 120 Hz with 24.1 dB side-channel rejection at 30 Hz
 
 ### Bounded Soft Saturation & Headroom Limiting
 
-Hermite polynomial soft clipping: $f(x) = \frac{3x}{2} - \frac{x^3}{2}$ for $|x| \le 1$, ensuring zero-overshoot limiting with continuous first derivative. Exciter voices are gain-staged to $-13\text{ dBFS}$ nominal headroom, coupled to a master output soft saturation limiter in the plugin processor to eliminate hard digital clipping.
+Hermite polynomial soft clipping: $f(x) = \frac{3x}{2} - \frac{x^3}{2}$ for $\lvert x \rvert \le 1$, ensuring zero-overshoot limiting with continuous first derivative. Exciter voices are gain-staged to $-13\text{ dBFS}$ nominal headroom, coupled to a master output soft saturation limiter in the plugin processor to eliminate hard digital clipping.
 
 ### Deck 05 Vector Modulation Pad
 
 An interactive 2D Cartesian controller embedded into Deck 05 (Tail Modulation):
-- **Horizontal Axis ($X$)**: Modulates Tail Modulation Rate (0.05 Hz to 5.0 Hz).
-- **Vertical Axis ($Y$)**: Modulates Tail Modulation Depth (0.0 ms to 5.0 ms).
-- **Physics & Mechanics**: Circular boundary clamping ($r \le 1.0$), touch/pointer capture, bidirectional knob-to-pad synchronization, and zero-drift spring-back return.
+- **Horizontal Axis** ($X$): Modulates Tail Modulation Rate (0.05 Hz to 5.0 Hz).
+- **Vertical Axis** ($Y$): Modulates Tail Modulation Depth (0.0 ms to 5.0 ms).
+- **Physics & Mechanics**: Circular boundary clamping $(r \le 1.0)$, touch/pointer capture, bidirectional knob-to-pad synchronization, and zero-drift spring-back return.
 
 ### CRT Phosphor Vector Scope (Deck 06)
 
@@ -198,13 +199,13 @@ Equipped with a hardware-calibrated CRT oscilloscope supporting four distinct re
 
 Enables standalone acoustic testing, performance, and auditioning without external DAW tracks or audio files:
 
-- **Felt Piano** — Harold Budd physical model: soft felt hammer impact noise, 540 Hz spruce soundboard formant filter ($Q = 1.2$), 24 dB una corda high-frequency damping, sympathetic string detuning ($\pm 0.15$ Hz), and mechanical felt acoustic damping on key release (`keyup`).
+- **Felt Piano** — Harold Budd physical model: soft felt hammer impact noise, 540 Hz spruce soundboard formant filter $(Q = 1.2)$, 24 dB una corda high-frequency damping, sympathetic string detuning $(\pm 0.15\text{ Hz})$, and mechanical felt acoustic damping on key release (`keyup`).
 - **Dirac Impulse** — single-sample unit impulse for precision IR measurement.
 - **Acoustic Mallet** — broadband hammer thud with 8 ms exponential envelope.
 - **Broadband Burst** — pink noise burst filtered through 2nd-order Butterworth lowpass at 8 kHz with DC mean removal.
 - **Playable Chime Strip** — 11-key responsive keyboard with velocity sensitivity, full QWERTY keyboard hotkey mapping (`A` through `'`), and modal scale quantization (8 scales: Chromatic, Pentatonic, Dorian, Lydian, Mixolydian, Whole-Tone, Phrygian, Harmonic Minor) without duplicate note assignments.
 - **12 Modal Chord Voicings** — Pavilion Sus, Plateaux Maj9, Deep Drone Fifth, Ethereal 11th, Blade Runner, Tears in Rain, and 6 more, triggered via keys `1` through `=`.
-- **Anti-Click Timeline Architecture** — Mathematical gain estimation and exponential release (`setTargetAtTime`) eliminating Chromium timeline snapback transients ($|\Delta x| < 0.01$).
+- **Anti-Click Timeline Architecture** — Mathematical gain estimation and exponential release (`setTargetAtTime`) eliminating Chromium timeline snapback transients $(\lvert \Delta x \rvert < 0.01)$.
 - **Poisson Ambient Clock** — stochastic self-evolving stimulus generator with adjustable EPM (events per minute) and humanize jitter.
 
 ---
@@ -213,18 +214,16 @@ Enables standalone acoustic testing, performance, and auditioning without extern
 
 | # | Preset | RT60 | Character |
 |---|---|---|---|
-| 1 | CALIBRATED DEFAULT | 6.5 s | Balanced studio plate for acoustic instruments and vocals |
-| 2 | AMBIENT GUITAR CLOUD | 16 s | Ethereal wash with +12st Shimmer bloom and stereo widening |
-| 3 | ETHEREAL SYNTH PAD | 12 s | Shimmer + Dimmer dual diffusion with balanced octave harmonics |
-| 4 | CLUB KICK TIGHT | 1.2 s | Aggressive transient punch ducking for 4-on-the-floor |
-| 5 | DARK SUB DRONE | 14 s | Sub-harmonic space driven by -12st Dimmer diffusion |
-| 6 | CATHEDRAL SHIMMER | 22 s | Massive cathedral bloom with high diffusion and sparkling decay |
-| 7 | INFINITE FREEZE DRONE | ∞ | Locked infinite feedback recirculation with input isolation |
-| 8 | SUB-BASS PRESERVER | 4 s | Transparent space with strict elliptical mono collapse |
-| 9 | POINCARE HYPERBOLIC CAVITY | 8.5 s | Negative-curvature non-Euclidean delay cluster |
-| 10 | WHISPERING GALLERY CAUSTIC | 7 s | Caustic ray reflections with high-frequency edge caustics |
-| 11 | ANHARMONIC SPRUCE SOUNDBOARD | 9 s | Resonant acoustic soundboard formants |
-| 12 | STOCKHAUSEN KLANGDOM SPHERE | 11 s | 3D spherical diffusion matrix with golden-ratio LFO drift |
+| 1 | CALIBRATED DEFAULT | 6.5 s | Balanced studio reverb with natural 6.5s RT60 decay and gentle shimmer/dimmer harmonic balance |
+| 2 | AMBIENT GUITAR CLOUD | 9.5 s | Lush 9.5-second ambient guitar cloud with +12st Shimmer bloom and wide stereo dispersion |
+| 3 | AS-42 TAPE & SHIMMER COMPANION | 8.5 s | Warm vintage tape-modulated plate with +12st octave shimmer companion tuned for acoustic instruments |
+| 4 | SOFT FELT ACOUSTIC HALL | 4.8 s | Warm, intimate wooden hall tuned for felt piano and strings with organic high damping |
+| 5 | GERMAN PLATE 140 | 3.8 s | High-density EMT-style steel plate emulation with fast onset diffusion and shimmering top-end dispersion |
+| 6 | CATHEDRAL DIFFUSION | 18 s | Massive 18-second acoustic space with pristine high-frequency shimmer bloom and air damping |
+| 7 | ETHEREAL SYNTH PAD | 10.5 s | Lush 10.5-second tail designed for polyphonic pads and brass, featuring balanced shimmer and dimmer |
+| 8 | BLOOM SHIMMER VOID | 14 s | Deep ambient void where cascading octave shimmers bloom slowly behind melodic phrases |
+| 9 | INFINITE ETHEREAL FREEZE | ∞ | Lossless infinite recirculating ambient texture with input isolation and gentle tail modulation |
+| 10 | SUB-BASS PRESERVER | 4.5 s | Decoupled low-end preservation isolating kick/sub bass fundamental under 180Hz while adding space |
 
 ---
 
@@ -285,9 +284,19 @@ cmake --build build --config Release --parallel
 
 ### Running Tests
 
-**C++ DSP tests** (381 assertions):
+**C++ Headless DSP E2E suite** (388 test cases across 4 tiers):
+```powershell
+.\build\Release\rb26_headless_dsp_tests.exe
+```
+
+**C++ Challenger DSP stress & multi-rate suite**:
 ```powershell
 .\build\Release\rb26_dsp_tests.exe
+```
+
+**CTest full test runner** (Runs all C++ test targets):
+```powershell
+ctest --test-dir build -C Release --output-on-failure
 ```
 
 **C++ LookAndFeel native checks**:
@@ -295,21 +304,21 @@ cmake --build build --config Release --parallel
 .\build\Release\rb26_laf_tests.exe
 ```
 
-**Web Audio verification** (28 tests across 11 suites):
+**Embedded Web Resource integrity check**:
+```powershell
+.\build\Release\rb26_web_resource_tests.exe
+```
+
+**Continuous Integration & Verification Suite** (Node.js 22, 30 tests across 11 suites):
 ```bash
-node --test web/verify.mjs
+npm test
+# runs: node web/verify.mjs
 ```
 
 **Headless browser assertions** (Microsoft Edge / Chromium via CDP):
 ```bash
 npm run test:browser
 # or: node web/test-browser.mjs
-```
-
-**Continuous Integration & Verification Suite** (Node.js 22):
-```bash
-npm test
-# runs: node web/verify.mjs (29 tests across 11 suites)
 ```
 
 **Preview Server**:

@@ -1184,20 +1184,31 @@ async function runBrowserTest() {
       throw new Error(`DC accumulation detected in feedback loop! Level: ${dcDb.toFixed(2)} dBFS`);
     }
 
-    // Test Low-End Matrix Loop Gain Boundedness strictly < 0.88
+    // Test Low-End Matrix Loop Gain Boundedness strictly < 0.88 in normal mode & lossless 1.0 in freeze
     console.log('[BrowserTest] Verifying low-end modal matrix loop gain is strictly < 0.88 across extreme damping settings...');
     await evaluate(`
       window.__RB26__.knobs.damping_low.setValue(2.5, true);
       window.__RB26__.knobs.rt60_decay.setValue(30.0, true);
-      window.__RB26__.engine.setParam('freezeHold', true);
+      window.__RB26__.engine.setParam('freezeHold', false);
     `);
     const maxModalFb = await evaluate(`
       Math.max(...window.__RB26__.engine.modalFeedbackGains.map(g => g.gain.value))
     `);
-    console.log(`[BrowserTest] Maximum modal feedback gain under extreme settings: ${maxModalFb.toFixed(6)} (must be < 0.88)`);
+    console.log(`[BrowserTest] Maximum modal feedback gain under extreme normal settings: ${maxModalFb.toFixed(6)} (must be < 0.88)`);
     if (maxModalFb >= 0.88) {
       throw new Error(`Modal matrix loop gain not strictly bounded < 0.88! Found: ${maxModalFb}`);
     }
+
+    // Verify lossless 1.0 feedback during freeze hold
+    await evaluate(`window.__RB26__.engine.setParam('freezeHold', true);`);
+    const freezeModalFb = await evaluate(`
+      Math.max(...window.__RB26__.engine.modalFeedbackGains.map(g => g.gain.value))
+    `);
+    console.log(`[BrowserTest] Freeze hold modal feedback gain: ${freezeModalFb.toFixed(6)} (must be 1.000000)`);
+    if (Math.abs(freezeModalFb - 1.0) > 1e-5) {
+      throw new Error(`Expected modal matrix freeze gain 1.0, got ${freezeModalFb}`);
+    }
+
     await evaluate(`
       window.__RB26__.knobs.damping_low.setValue(1.0, true);
       window.__RB26__.knobs.rt60_decay.setValue(6.5, true);
