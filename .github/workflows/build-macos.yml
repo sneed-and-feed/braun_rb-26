@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+    paths-ignore: ['**.md', 'docs/**', 'wiki/**']
     tags:
       - 'v*'
 
@@ -77,4 +78,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload v1.3.6 BRAUN_RB26-v1.3.6-macOS-Universal.zip --clobber
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt: uploading release asset to v1.3.6..."
+            if gh release upload v1.3.6 BRAUN_RB26-v1.3.6-macOS-Universal.zip --repo ${{ github.repository }} --clobber; then
+              echo "Upload succeeded!"
+              exit 0
+            fi
+            echo "Upload attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
