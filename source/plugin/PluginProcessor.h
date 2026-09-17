@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "Parameters.h"
 #include "../dsp/Rb26Engine.h"
 #include "../dsp/AcousticExciter.h"
@@ -64,6 +65,13 @@ public:
     void pushScopeSamples(const float* left, const float* right, int numSamples) noexcept;
     void getScopeSamples(float* destL, float* destR, int numSamplesToRead) const noexcept;
 
+    // Lossless WAV Background Recorder
+    void startRecording();
+    void stopRecording();
+    bool isRecording() const noexcept;
+    juce::File getLastRecordedFile() const;
+    bool consumeRecordingSavedDirty() noexcept;
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     rb26::Rb26ReverbEngine reverbEngine;
@@ -77,6 +85,15 @@ private:
     std::atomic<int> scopeWritePos { 0 };
     float scopeBufferL[kScopeBufferSize] {};
     float scopeBufferR[kScopeBufferSize] {};
+
+    // Lock-free background WAV recorder
+    juce::TimeSliceThread recorderThread { "Braun RB-26 WAV Recorder Thread" };
+    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> threadedWriter;
+    std::atomic<juce::AudioFormatWriter::ThreadedWriter*> activeWriter { nullptr };
+    std::atomic<int> activeWriterWorkers { 0 };
+    juce::File lastRecordedFile;
+    std::atomic<bool> recordingSavedDirty { false };
+    juce::CriticalSection recorderLock;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BRAUN_RB26AudioProcessor)
 };

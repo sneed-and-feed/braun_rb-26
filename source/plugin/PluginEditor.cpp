@@ -225,7 +225,7 @@ const paramsMeta = [
 
   { id: 'room_size', webId: 'roomSize', label: 'Room Size', deck: 'FDN Tank', min: 0.1, max: 4.0, def: 0.65, unit: '' },
   { id: 'decay_rt60_sec', webId: 'decayRt60Sec', label: 'Decay Time', deck: 'FDN Tank', min: 0.2, max: 30.0, def: 3.5, unit: 's' },
-  { id: 'high_damping_hz', webId: 'highDampingHz', label: 'Damping', deck: 'FDN Tank', min: 1000, max: 20000, def: 6500, unit: 'Hz' },
+  { id: 'high_damping_hz', webId: 'highDampingHz', label: 'Damping', deck: 'FDN Tank', min: 1000, max: 20000, def: 1800, unit: 'Hz' },
   { id: 'freeze_hold', webId: 'freezeHold', label: 'Freeze', deck: 'FDN Tank', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
   { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.30, unit: '%' },
@@ -516,6 +516,12 @@ juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOpti
         })
         .withEventListener("exciterTrigger", [&editor](const juce::var& data) {
             editor.handleExciterTriggerFromWeb(data);
+        })
+        .withEventListener("startRecording", [&editor](const juce::var& /*data*/) {
+            editor.handleStartRecordingFromWeb();
+        })
+        .withEventListener("stopRecording", [&editor](const juce::var& /*data*/) {
+            editor.handleStopRecordingFromWeb();
         });
 
     return options;
@@ -630,6 +636,7 @@ void BRAUN_RB26AudioProcessorEditor::syncAllParametersToWeb()
         }
     }
     sendParameterUpdateToWeb("power", "power", processorRef.isPower() ? 1.0f : 0.0f);
+    sendRecordingStateUpdateToWeb(processorRef.isRecording());
 }
 
 void BRAUN_RB26AudioProcessorEditor::timerCallback()
@@ -639,6 +646,13 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
     {
         hwndCheckCounter = 0;
         ensureHwndStyles();
+    }
+
+    if (processorRef.consumeRecordingSavedDirty())
+    {
+        auto* obj = new juce::DynamicObject();
+        obj->setProperty("path", processorRef.getLastRecordedFile().getFullPathName());
+        webComponent.emitEventIfBrowserIsVisible("recordingSaved", juce::var(obj));
     }
 
     // Initial state synchronization on webview ready
@@ -788,6 +802,20 @@ void BRAUN_RB26AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         return;
     }
 
+    // Handle recording commands sent as paramChange
+    if (incomingId.equalsIgnoreCase("startRecording"))
+    {
+        processorRef.startRecording();
+        sendRecordingStateUpdateToWeb(processorRef.isRecording());
+        return;
+    }
+    if (incomingId.equalsIgnoreCase("stopRecording"))
+    {
+        processorRef.stopRecording();
+        sendRecordingStateUpdateToWeb(processorRef.isRecording());
+        return;
+    }
+
     const auto& meta = rb26::getParameterMetadataTable();
     for (const auto& item : meta)
     {
@@ -877,6 +905,26 @@ void BRAUN_RB26AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
         processorRef.getExciterEngine().setPoissonEpm(epm);
         processorRef.getExciterEngine().setPoissonHumanize(hum);
     }
+}
+
+void BRAUN_RB26AudioProcessorEditor::sendRecordingStateUpdateToWeb(bool isRecording)
+{
+    auto* obj = new juce::DynamicObject();
+    obj->setProperty("id", "isRecording");
+    obj->setProperty("value", isRecording ? 1.0f : 0.0f);
+    webComponent.emitEventIfBrowserIsVisible("paramUpdate", juce::var(obj));
+}
+
+void BRAUN_RB26AudioProcessorEditor::handleStartRecordingFromWeb()
+{
+    processorRef.startRecording();
+    sendRecordingStateUpdateToWeb(processorRef.isRecording());
+}
+
+void BRAUN_RB26AudioProcessorEditor::handleStopRecordingFromWeb()
+{
+    processorRef.stopRecording();
+    sendRecordingStateUpdateToWeb(processorRef.isRecording());
 }
 
 std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEditor::getResource(const juce::String& url)

@@ -300,6 +300,76 @@ int main() {
         std::cout << "  -> PASS: PitchShifter::isActive() correctly identifies all inactive states!\n";
     }
 
+    // -------------------------------------------------------------------------
+    // TEST 4: C6 (~1046.5 Hz) METALLIC RINGING & POINCARÉ MODAL CLUSTERING
+    // -------------------------------------------------------------------------
+    std::cout << "\n[TEST 4] C6 (~1046.5 Hz) METALLIC RINGING & POINCARÉ MODAL CLUSTERING\n";
+    {
+        // 4.1 Verify Poincaré delay length decorrelation modulo 46 across room sizes 0.5x, 0.65x, and 1.0x (C6 period = 45.867 samples at 48 kHz)
+        rb26::ManifoldDelayNetwork mdn;
+        mdn.prepare(fs);
+        const double c6Period = fs / 1046.5;
+
+        for (float room : { 0.5f, 0.65f, 1.0f }) {
+            mdn.setParameters(rb26::ManifoldType::PoincareHyperbolic, room, 1800.0f, 0.75f);
+            const auto& lengths = mdn.getNominalLengths();
+            size_t nearC6CongruentCount = 0;
+            for (size_t k = 0; k < rb26::ManifoldDelayNetwork::kNumLines; ++k) {
+                const double cycles = static_cast<double>(lengths[k]) / c6Period;
+                const double distToCycle = std::abs(cycles - std::round(cycles)) * c6Period;
+                if (distToCycle < 2.0) {
+                    nearC6CongruentCount++;
+                }
+            }
+            std::cout << "  Poincare delay line C6 standing-wave mode counts (room " << room << "): " << nearC6CongruentCount << " / 8\n";
+            DIAG_ASSERT(nearC6CongruentCount == 0, "No Poincare delay line should cluster within 2 samples of integer C6 cycles");
+        }
+
+        // 4.2 Verify C6 excitation decay in full ReverbEngine with default settings
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(fs, 128);
+        rb26::Rb26Parameters p;
+        engine.setParameters(p);
+
+        // Inject 500 samples of pure C6 tone (1046.5 Hz)
+        const int numStimSamples = 500;
+        std::vector<float> stimL(numStimSamples), stimR(numStimSamples);
+        for (int i = 0; i < numStimSamples; ++i) {
+            const float s = 0.5f * std::sin(2.0f * 3.14159265f * 1046.5f * static_cast<float>(i) / static_cast<float>(fs));
+            stimL[i] = s;
+            stimR[i] = s;
+        }
+
+        const float* stimPtrs[2] = { stimL.data(), stimR.data() };
+        std::vector<float> outStimL(numStimSamples), outStimR(numStimSamples);
+        float* outStimPtrs[2] = { outStimL.data(), outStimR.data() };
+        engine.process(stimPtrs, outStimPtrs, 2, numStimSamples);
+
+        // Run 48000 samples of silence (~1 second) and measure late energy (samples 24000 to 48000)
+        const int blockSize = 128;
+        std::vector<float> zeroIn(blockSize, 0.0f);
+        std::vector<float> blockOutL(blockSize), blockOutR(blockSize);
+        const float* zeroPtrs[2] = { zeroIn.data(), zeroIn.data() };
+        float* outPtrs[2] = { blockOutL.data(), blockOutR.data() };
+
+        double lateEnergy = 0.0;
+        int lateSampleCount = 0;
+
+        for (int n = 0; n < 48000; n += blockSize) {
+            engine.process(zeroPtrs, outPtrs, 2, blockSize);
+            if (n >= 24000) {
+                for (int i = 0; i < blockSize; ++i) {
+                    lateEnergy += blockOutL[i] * blockOutL[i] + blockOutR[i] * blockOutR[i];
+                    lateSampleCount += 2;
+                }
+            }
+        }
+        const double lateRms = std::sqrt(lateEnergy / lateSampleCount);
+        std::cout << "  C6 Late Tail RMS (0.5s - 1.0s): " << lateRms << "\n";
+        DIAG_ASSERT(lateRms < 0.035, "C6 late tail must not exhibit frosty metallic ringing or runaway resonance");
+        std::cout << "  -> PASS: C6 metallic ringing and standing-wave clustering successfully eliminated!\n";
+    }
+
     // Benchmark CPU consumption of Rb26ReverbEngine with Pitch Active vs Bypassed
     std::cout << "\n[BENCHMARK] Rb26ReverbEngine CPU Benchmark (Active vs 0% Bypassed)\n";
     {

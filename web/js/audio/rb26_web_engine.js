@@ -189,7 +189,7 @@ export class Rb26WebEngine {
       subMonoHz: 120.0,
       decayRt60Sec: 6.5,
       roomSize: 1.0,
-      highDampingHz: 7500.0,
+      highDampingHz: 1800.0,
       freezeHold: false,
       shimmerSend: 0.40,
       dimmerSend: 0.35,

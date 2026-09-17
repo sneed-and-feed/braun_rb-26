@@ -179,7 +179,7 @@ private:
     ManifoldType mCurrentManifold { ManifoldType::PoincareHyperbolic };
     float mRoomSize { 0.65f };
     float mMaxRoomSize { 4.0f };
-    float mHighDampingHz { 6500.0f };
+    float mHighDampingHz { 1800.0f };
     float mDiffusionDensity { 0.75f };
     float mDispCoeff1 { 0.0f };
     float mDispCoeff2 { 0.0f };

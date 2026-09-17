@@ -502,7 +502,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.subMonoHz = 120.0f;
         p.params.decayRt60Sec = 6.5f;
         p.params.roomSize = 1.0f;
-        p.params.highDampingHz = 7500.0f;
+        p.params.highDampingHz = 1800.0f;
         p.params.freezeHold = false;
         p.params.shimmerSend = 0.40f;
         p.params.dimmerSend = 0.35f;

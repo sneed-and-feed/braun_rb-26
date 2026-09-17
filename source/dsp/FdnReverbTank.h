@@ -53,7 +53,7 @@ private:
     float mRoomSize { 0.65f };
     float mMaxRoomSize { 4.0f };
     float mDecayRt60 { 3.5f };
-    float mHighDampingHz { 6500.0f };
+    float mHighDampingHz { 1800.0f };
     float mDiffusionDensity { 0.75f };
     bool mFreezeHold { false };
     ManifoldType mCurrentManifold { ManifoldType::PoincareHyperbolic };

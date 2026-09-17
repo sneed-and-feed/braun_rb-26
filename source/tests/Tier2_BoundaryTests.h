@@ -2069,6 +2069,27 @@ inline void registerTier2Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 2", "T2_F34_8", "Poincare Delay Decorrelation & C6 Metallic Ringing Suppression", []() {
+        rb26::ManifoldDelayNetwork mdn;
+        mdn.prepare(48000.0, 4.0f);
+        const double c6Period = 48000.0 / 1046.5;
+
+        // Verify across room sizes 0.5x, 0.65x, and 1.0x that no lines cluster within 2 samples of integer C6 multiples
+        for (float room : { 0.5f, 0.65f, 1.0f }) {
+            mdn.setParameters(rb26::ManifoldType::PoincareHyperbolic, room, 1800.0f, 0.75f);
+            const auto lengths = mdn.getNominalLengths();
+            for (size_t k = 0; k < rb26::ManifoldDelayNetwork::kNumLines; ++k) {
+                const double cycles = static_cast<double>(lengths[k]) / c6Period;
+                const double dist = std::abs(cycles - std::round(cycles)) * c6Period;
+                TEST_ASSERT(dist >= 2.0, "Poincare delay line must not resonate with C6 standing wave");
+            }
+        }
+
+        // Verify in-loop allpass feedback is controlled to prevent group delay spikes
+        TEST_ASSERT(mdn.getDiffusionDensity() == 0.75f, "Diffusion density must be 0.75");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 } // registerTier2Tests
 
 } // namespace test

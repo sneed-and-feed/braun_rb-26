@@ -439,6 +439,99 @@ void runTest6_ApvtsPrepareSnapshot() {
     std::cout << "  -> PASS: prepareToPlay immediately initialized smoothers to active APVTS values.\n";
 }
 
+void runTest7_LosslessWavRecorderDirectoryAndIntegrity() {
+    std::cout << "[Test 7] Lossless WAV Recorder Music Directory & RIFF Integrity...\n";
+    juce::ScopedJuceInitialiser_GUI guiInit;
+
+    BRAUN_RB26AudioProcessor processor;
+    processor.prepareToPlay(48000.0, 512);
+
+    RB26_TEST_ASSERT(!processor.isRecording());
+    RB26_TEST_ASSERT(!processor.consumeRecordingSavedDirty());
+
+    // 1. Start recording
+    processor.startRecording();
+    RB26_TEST_ASSERT(processor.isRecording());
+
+    // 2. Process audio blocks
+    juce::AudioBuffer<float> buffer(2, 512);
+    juce::MidiBuffer midi;
+    for (int b = 0; b < 20; ++b) {
+        for (int ch = 0; ch < 2; ++ch) {
+            float* ptr = buffer.getWritePointer(ch);
+            for (int i = 0; i < 512; ++i) {
+                ptr[i] = 0.5f * std::sin(static_cast<float>(b * 512 + i) * 0.02f);
+            }
+        }
+        processor.processBlock(buffer, midi);
+    }
+
+    // 3. Stop recording
+    processor.stopRecording();
+    RB26_TEST_ASSERT(!processor.isRecording());
+    RB26_TEST_ASSERT(processor.consumeRecordingSavedDirty());
+    RB26_TEST_ASSERT(!processor.consumeRecordingSavedDirty()); // exchange reset
+
+    // 4. Verify recorded file properties
+    const juce::File recordedFile = processor.getLastRecordedFile();
+    RB26_TEST_ASSERT(recordedFile.existsAsFile());
+    RB26_TEST_ASSERT(recordedFile.getFileExtension() == ".wav");
+
+    // 5. Verify parent directory matches AS-42 convention: "Braun RB-26 Recordings" under music/documents/home directory
+    const juce::File parentDir = recordedFile.getParentDirectory();
+    RB26_TEST_ASSERT(parentDir.getFileName() == "Braun RB-26 Recordings");
+    
+    auto expectedMusicDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::userMusicDirectory);
+    if (!expectedMusicDir.isDirectory() && !expectedMusicDir.createDirectory().wasOk())
+    {
+        expectedMusicDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::userDocumentsDirectory);
+        if (!expectedMusicDir.isDirectory() && !expectedMusicDir.createDirectory().wasOk())
+            expectedMusicDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::userHomeDirectory);
+    }
+    RB26_TEST_ASSERT(parentDir.getParentDirectory().getFullPathName() == expectedMusicDir.getFullPathName());
+
+    // 6. Verify RIFF/WAV header
+    RB26_TEST_ASSERT(recordedFile.getSize() > 44);
+    {
+        juce::FileInputStream inStream(recordedFile);
+        RB26_TEST_ASSERT(inStream.openedOk());
+        char riffHeader[4];
+        inStream.read(riffHeader, 4);
+        RB26_TEST_ASSERT(std::memcmp(riffHeader, "RIFF", 4) == 0);
+    }
+
+    // 7. Test Idempotency: stopRecording() when already stopped must be a safe no-op
+    processor.stopRecording();
+    RB26_TEST_ASSERT(!processor.isRecording());
+    RB26_TEST_ASSERT(!processor.consumeRecordingSavedDirty());
+
+    // 8. Test Second Consecutive Recording Session
+    processor.startRecording();
+    RB26_TEST_ASSERT(processor.isRecording());
+
+    // Duplicate startRecording() while already active must be a safe no-op
+    processor.startRecording();
+    RB26_TEST_ASSERT(processor.isRecording());
+
+    for (int b = 0; b < 10; ++b) {
+        processor.processBlock(buffer, midi);
+    }
+
+    processor.stopRecording();
+    RB26_TEST_ASSERT(!processor.isRecording());
+    RB26_TEST_ASSERT(processor.consumeRecordingSavedDirty());
+
+    const juce::File secondFile = processor.getLastRecordedFile();
+    RB26_TEST_ASSERT(secondFile.existsAsFile());
+    RB26_TEST_ASSERT(secondFile.getSize() > 44);
+
+    // Clean up created test files
+    recordedFile.deleteFile();
+    secondFile.deleteFile();
+
+    std::cout << "  -> PASS: Lossless WAV recording exported to /music subfolder with valid RIFF header.\n";
+}
+
 } // namespace
 
 int main() {
@@ -452,6 +545,7 @@ int main() {
     runTest4_MasterLimiterBypassAndSingleLimiting();
     runTest5_HostDawPresetsExposure();
     runTest6_ApvtsPrepareSnapshot();
+    runTest7_LosslessWavRecorderDirectoryAndIntegrity();
 
     std::cout << "================================================================\n";
     std::cout << "  ALL MILESTONE 4 AUDIT TESTS PASSED (100% SUCCESS)\n";

@@ -96,7 +96,7 @@ export const FACTORY_PRESETS = {
     params: {
       predelay: 24.0, diffusion: 75, input_trim: 0.0,
       low_crossover: 180, damping_low: 1.0, low_punch: 65, mono_bass: 120,
-      rt60_decay: 6.5, room_size: 100, damping_high: 7500, decay_hold: false,
+      rt60_decay: 6.5, room_size: 100, damping_high: 1800, decay_hold: false,
       shimmer_send: 40, dimmer_send: 35, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 0, pitch_regen: 45,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
@@ -522,9 +522,9 @@ export class BraunRb26App {
     this.engine = new Rb26WebEngine();
     this.knobs = {};
     this.display = null;
-    this.isJuce = Boolean(
+    this._isJuce = Boolean(
       typeof window !== 'undefined' &&
-      (window.__IS_JUCE__ || window.__JUCE__?.backend || window.location?.hostname === 'juce.backend')
+      (window.__IS_JUCE__ || window.__JUCE__?.backend || window.__JUCE__ || (window.location && (window.location.protocol === 'juce:' || window.location.hostname === 'juce.backend')))
     );
     this.isPowered = this.isJuce;
     this.currentPresetKey = 'DEFAULT';
@@ -536,6 +536,7 @@ export class BraunRb26App {
     // Master Utilities
     this.abBuffer = new ReverbComparisonBuffer(this);
     this.wavRecorder = null;
+    this._isJuceRecording = false;
 
     // Deck 07 Exciter State
     this.currentScaleKey = 'BUDD_PENTATONIC';
@@ -550,6 +551,18 @@ export class BraunRb26App {
     this._activeVoices = new Map();
     this._activeChordButtons = new Map();
     this._initRoomSizeSmoother();
+  }
+
+  get isJuce() {
+    return Boolean(
+      this._isJuce ||
+      (typeof window !== 'undefined' && (window.__IS_JUCE__ || window.__JUCE__?.backend || window.__JUCE__)) ||
+      (typeof window !== 'undefined' && window.location && (window.location.protocol === 'juce:' || window.location.hostname === 'juce.backend'))
+    );
+  }
+
+  set isJuce(val) {
+    this._isJuce = Boolean(val);
   }
 
   _initRoomSizeSmoother() {
@@ -640,9 +653,37 @@ export class BraunRb26App {
         this._heldKeys.clear();
       }
       if (this.isPoissonRunning) this.togglePoisson();
+
+      // Stop recording if active when powering down
+      if (this.isJuce && this._isJuceRecording) {
+        this._isJuceRecording = false;
+        const recordBtn = document.getElementById('btn-record-wav');
+        if (recordBtn) {
+          recordBtn.classList.remove('is-recording');
+          const recText = recordBtn.querySelector('.braun-rec-text');
+          if (recText) recText.textContent = 'REC WAV';
+        }
+        try {
+          const backend = window.__JUCE__?.backend;
+          if (backend && typeof backend.emitEvent === 'function') {
+            backend.emitEvent('stopRecording', {});
+          }
+        } catch (err) {
+          console.warn('JUCE backend emitEvent stopRecording error:', err);
+        }
+        this._emitJuceParam('stopRecording', 1.0, true);
+      } else if (!this.isJuce && this.wavRecorder && this.wavRecorder.isRecording) {
+        this.wavRecorder.stop();
+        const recordBtn = document.getElementById('btn-record-wav');
+        if (recordBtn) {
+          recordBtn.classList.remove('is-recording');
+          const recText = recordBtn.querySelector('.braun-rec-text');
+          if (recText) recText.textContent = 'REC WAV';
+        }
+      }
     }
 
-    if (this.engine) {
+    if (this.engine && !this.isJuce) {
       if (this.isPowered) {
         if (!this.engine.isInitialized) await this.engine.init();
         if (this.engine.analyserL && this.display && !this.display.analyserL) {
@@ -747,6 +788,17 @@ export class BraunRb26App {
             const nextPower = data.value > 0.5;
             if (this.isPowered !== nextPower) {
               this.setPower(nextPower);
+            }
+            return;
+          }
+
+          if ((data.id === 'recording' || data.id === 'isRecording' || data.apvtsId === 'isRecording') && typeof data.value === 'number') {
+            this._isJuceRecording = (data.value > 0.5);
+            const recordBtn = document.getElementById('btn-record-wav');
+            if (recordBtn) {
+              recordBtn.classList.toggle('is-recording', this._isJuceRecording);
+              const recText = recordBtn.querySelector('.braun-rec-text');
+              if (recText) recText.textContent = this._isJuceRecording ? 'STOP & SAVE' : 'REC WAV';
             }
             return;
           }
@@ -867,6 +919,20 @@ export class BraunRb26App {
         backend.addEventListener('telemetryFrame', (frame) => {
           if (frame && this.display) {
             this.display.pushTelemetry(frame.lowEnergy || 0, frame.midEnergy || 0, frame.highEnergy || 0);
+          }
+        });
+
+        // Listen for recordingSaved event from JUCE C++ WAV recorder
+        backend.addEventListener('recordingSaved', (payload) => {
+          this._isJuceRecording = false;
+          const recordBtn = document.getElementById('btn-record-wav');
+          if (recordBtn) {
+            recordBtn.classList.remove('is-recording');
+            const recText = recordBtn.querySelector('.braun-rec-text');
+            if (recText) recText.textContent = 'REC WAV';
+          }
+          if (payload && payload.path) {
+            console.log('[JUCE] Lossless WAV recording saved to:', payload.path);
           }
         });
 
@@ -1047,7 +1113,7 @@ export class BraunRb26App {
     });
 
     this.knobs.damping_high = createKnob('knob-damping-high', {
-      label: 'HIGH DAMP', min: 1000, max: 20000, step: 50, unit: 'Hz', value: 7500, size: 'medium', isLog: true,
+      label: 'HIGH DAMP', min: 1000, max: 20000, step: 50, unit: 'Hz', value: 1800, size: 'medium', isLog: true,
       onChange: (v) => { this.engine.setParam('highDampingHz', v); this._emitJuceParam('highDampingHz', v); }
     });
 
@@ -1256,6 +1322,45 @@ export class BraunRb26App {
     const recordBtn = document.getElementById('btn-record-wav');
     if (recordBtn) {
       recordBtn.addEventListener('click', async () => {
+        if (!this.isPowered) {
+          try {
+            await this.setPower(true);
+          } catch (err) {
+            console.warn('setPower failed on record click:', err);
+          }
+        }
+
+        if (this.isJuce) {
+          this._isJuceRecording = !this._isJuceRecording;
+          const recText = recordBtn.querySelector('.braun-rec-text');
+          if (this._isJuceRecording) {
+            recordBtn.classList.add('is-recording');
+            if (recText) recText.textContent = 'STOP & SAVE';
+            try {
+              const backend = window.__JUCE__?.backend;
+              if (backend && typeof backend.emitEvent === 'function') {
+                backend.emitEvent('startRecording', {});
+              }
+            } catch (err) {
+              console.warn('JUCE backend emitEvent startRecording error:', err);
+            }
+            this._emitJuceParam('startRecording', 1.0, true);
+          } else {
+            recordBtn.classList.remove('is-recording');
+            if (recText) recText.textContent = 'REC WAV';
+            try {
+              const backend = window.__JUCE__?.backend;
+              if (backend && typeof backend.emitEvent === 'function') {
+                backend.emitEvent('stopRecording', {});
+              }
+            } catch (err) {
+              console.warn('JUCE backend emitEvent stopRecording error:', err);
+            }
+            this._emitJuceParam('stopRecording', 1.0, true);
+          }
+          return;
+        }
+
         if (!this.engine.isInitialized) {
           await this.engine.init();
           if (this.engine.masterLimiter) {
