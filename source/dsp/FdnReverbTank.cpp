@@ -136,16 +136,17 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     const float mid = 0.70710678f * (dryL + dryR);
     const float side = 0.70710678f * (dryL - dryR);
 
-    // Distribute into 8 FDN lines with balanced spatial phase
+    // Distribute into 8 FDN lines with balanced spatial phase and 1/sqrt(8) normalization
+    constexpr float kNormFactor = 0.35355339f; // 1 / sqrt(8)
     const std::array<float, kNumLines> injection = {{
-        dryL,
-        dryR,
-        mid,
-        side,
-        dryL - 0.5f * dryR,
-        dryR - 0.5f * dryL,
-        0.70710678f * (dryL - side),
-        0.70710678f * (dryR + side)
+        dryL * kNormFactor,
+        dryR * kNormFactor,
+        mid * kNormFactor,
+        side * kNormFactor,
+        (dryL - 0.5f * dryR) * kNormFactor,
+        (dryR - 0.5f * dryL) * kNormFactor,
+        0.70710678f * (dryL - side) * kNormFactor,
+        0.70710678f * (dryR + side) * kNormFactor
     }};
 
     // 2. Tail modulation excursions

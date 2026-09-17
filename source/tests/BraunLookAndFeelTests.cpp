@@ -1,7 +1,15 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "LookAndFeel/BraunLookAndFeel.h"
-#include <cassert>
 #include <iostream>
+#include <typeinfo>
+#include <cstdlib>
+
+#define RB26_LAF_ASSERT(cond, msg) do { \
+    if (!(cond)) { \
+        std::cerr << "FAILED: " << (msg) << " (" #cond ") at " << __FILE__ << ":" << __LINE__ << "\n"; \
+        return 1; \
+    } \
+} while (false)
 
 int main()
 {
@@ -11,25 +19,25 @@ int main()
     rb26::BraunLookAndFeel laf;
 
     // 1. Verify Light Palette
-    assert(laf.findColour(rb26::BraunColours::bgAppColourId).getARGB() == rb26::BraunColours::Light_BgApp);
-    assert(laf.findColour(rb26::BraunColours::textPrimaryColourId).getARGB() == rb26::BraunColours::Light_TextPrimary);
-    assert(laf.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Light_TextPrimary);
-    assert(laf.findColour(juce::ComboBox::backgroundColourId).getARGB() == rb26::BraunColours::Light_BgPanelInset);
+    RB26_LAF_ASSERT(laf.findColour(rb26::BraunColours::bgAppColourId).getARGB() == rb26::BraunColours::Light_BgApp, "Light bgAppColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(rb26::BraunColours::textPrimaryColourId).getARGB() == rb26::BraunColours::Light_TextPrimary, "Light textPrimaryColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Light_TextPrimary, "Light ComboBox textColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(juce::ComboBox::backgroundColourId).getARGB() == rb26::BraunColours::Light_BgPanelInset, "Light ComboBox backgroundColourId mismatch");
 
     // 2. Verify Dark Palette Toggle
     laf.setDarkTheme(true);
-    assert(laf.isDarkTheme());
-    assert(laf.findColour(rb26::BraunColours::bgAppColourId).getARGB() == rb26::BraunColours::Dark_BgApp);
-    assert(laf.findColour(rb26::BraunColours::textPrimaryColourId).getARGB() == rb26::BraunColours::Dark_TextPrimary);
-    assert(laf.findColour(rb26::BraunColours::knobFillColourId).getARGB() == rb26::BraunColours::Dark_KnobFill);
-    assert(laf.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Dark_TextPrimary);
-    assert(laf.findColour(juce::ComboBox::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanelInset);
-    assert(laf.findColour(juce::PopupMenu::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanel);
+    RB26_LAF_ASSERT(laf.isDarkTheme(), "isDarkTheme mismatch");
+    RB26_LAF_ASSERT(laf.findColour(rb26::BraunColours::bgAppColourId).getARGB() == rb26::BraunColours::Dark_BgApp, "Dark bgAppColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(rb26::BraunColours::textPrimaryColourId).getARGB() == rb26::BraunColours::Dark_TextPrimary, "Dark textPrimaryColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(rb26::BraunColours::knobFillColourId).getARGB() == rb26::BraunColours::Dark_KnobFill, "Dark knobFillColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Dark_TextPrimary, "Dark ComboBox textColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(juce::ComboBox::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanelInset, "Dark ComboBox backgroundColourId mismatch");
+    RB26_LAF_ASSERT(laf.findColour(juce::PopupMenu::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanel, "Dark PopupMenu backgroundColourId mismatch");
 
     // 3. Verify 3-Tier Knob Sizing
-    assert(rb26::BraunLookAndFeel::getKnobTierForBounds(64, 64) == rb26::BraunLookAndFeel::KnobTier::Hero);
-    assert(rb26::BraunLookAndFeel::getKnobTierForBounds(52, 52) == rb26::BraunLookAndFeel::KnobTier::Secondary);
-    assert(rb26::BraunLookAndFeel::getKnobTierForBounds(42, 42) == rb26::BraunLookAndFeel::KnobTier::Trim);
+    RB26_LAF_ASSERT(rb26::BraunLookAndFeel::getKnobTierForBounds(64, 64) == rb26::BraunLookAndFeel::KnobTier::Hero, "Hero knob tier mismatch");
+    RB26_LAF_ASSERT(rb26::BraunLookAndFeel::getKnobTierForBounds(52, 52) == rb26::BraunLookAndFeel::KnobTier::Secondary, "Secondary knob tier mismatch");
+    RB26_LAF_ASSERT(rb26::BraunLookAndFeel::getKnobTierForBounds(42, 42) == rb26::BraunLookAndFeel::KnobTier::Trim, "Trim knob tier mismatch");
 
     // 4. Verify CrtVisualizerComponent & Mode Switching
     std::cout << "[RB-26 LookAndFeel Test] Initializing CrtVisualizerComponent...\n";
@@ -37,19 +45,168 @@ int main()
     crt.setBounds(0, 0, 600, 200);
 
     crt.setMode(rb26::CrtVisualizerComponent::DisplayMode::EdcWaterfall);
-    assert(crt.getMode() == rb26::CrtVisualizerComponent::DisplayMode::EdcWaterfall);
+    RB26_LAF_ASSERT(crt.getMode() == rb26::CrtVisualizerComponent::DisplayMode::EdcWaterfall, "EdcWaterfall mode mismatch");
 
     crt.setMode(rb26::CrtVisualizerComponent::DisplayMode::LissajousXy);
-    assert(crt.getMode() == rb26::CrtVisualizerComponent::DisplayMode::LissajousXy);
+    RB26_LAF_ASSERT(crt.getMode() == rb26::CrtVisualizerComponent::DisplayMode::LissajousXy, "LissajousXy mode mismatch");
 
     crt.setMode(rb26::CrtVisualizerComponent::DisplayMode::SpectrumAnalyzer);
-    assert(crt.getMode() == rb26::CrtVisualizerComponent::DisplayMode::SpectrumAnalyzer);
+    RB26_LAF_ASSERT(crt.getMode() == rb26::CrtVisualizerComponent::DisplayMode::SpectrumAnalyzer, "SpectrumAnalyzer mode mismatch");
 
     // 5. Verify Telemetry & Audio Buffer Push
     float dummyL[128] = { 0.05f };
     float dummyR[128] = { 0.05f };
     crt.pushAudioBlock(dummyL, dummyR, 128);
     crt.updateTelemetry(0.4f, 0.3f, 0.2f, -18.0f);
+
+    // 6. Verify Off-screen Rendering of UI Widgets (No std::bad_cast or exceptions)
+    std::cout << "[RB-26 LookAndFeel Test] Rendering UI widgets off-screen to verify no std::bad_cast...\n";
+    {
+        juce::Image testImage(juce::Image::ARGB, 400, 400, true);
+        juce::Graphics g(testImage);
+
+        // Test across both light and dark themes
+        for (bool darkTheme : { false, true })
+        {
+            laf.setDarkTheme(darkTheme);
+
+            // 6.1 juce::ToggleButton (regressed in Issue #1 with dynamic_cast<juce::Label&>)
+            {
+                juce::ToggleButton toggle("Bypass");
+                toggle.setLookAndFeel(&laf);
+                toggle.setBounds(0, 0, 150, 30);
+
+                // Draw unchecked state
+                toggle.setToggleState(false, juce::dontSendNotification);
+                try {
+                    toggle.paintEntireComponent(g, true);
+                } catch (const std::bad_cast& e) {
+                    std::cerr << "FAILED: std::bad_cast caught during ToggleButton rendering (unchecked): " << e.what() << "\n";
+                    return 1;
+                } catch (const std::exception& e) {
+                    std::cerr << "FAILED: Exception caught during ToggleButton rendering (unchecked): " << e.what() << "\n";
+                    return 1;
+                }
+
+                // Draw checked state
+                toggle.setToggleState(true, juce::dontSendNotification);
+                try {
+                    toggle.paintEntireComponent(g, true);
+                } catch (const std::bad_cast& e) {
+                    std::cerr << "FAILED: std::bad_cast caught during ToggleButton rendering (checked): " << e.what() << "\n";
+                    return 1;
+                } catch (const std::exception& e) {
+                    std::cerr << "FAILED: Exception caught during ToggleButton rendering (checked): " << e.what() << "\n";
+                    return 1;
+                }
+
+                // Direct LookAndFeel invocation
+                try {
+                    laf.drawToggleButton(g, toggle, false, false);
+                    laf.drawToggleButton(g, toggle, true, true);
+                } catch (const std::bad_cast& e) {
+                    std::cerr << "FAILED: std::bad_cast caught during direct drawToggleButton: " << e.what() << "\n";
+                    return 1;
+                } catch (const std::exception& e) {
+                    std::cerr << "FAILED: Exception caught during direct drawToggleButton: " << e.what() << "\n";
+                    return 1;
+                }
+
+                toggle.setLookAndFeel(nullptr);
+            }
+
+            // 6.2 juce::TextButton
+            {
+                juce::TextButton textButton("Mode");
+                textButton.setLookAndFeel(&laf);
+                textButton.setBounds(0, 0, 100, 32);
+
+                try {
+                    textButton.paintEntireComponent(g, true);
+                    textButton.setToggleState(true, juce::dontSendNotification);
+                    textButton.paintEntireComponent(g, true);
+                    laf.drawButtonBackground(g, textButton, juce::Colours::transparentBlack, false, false);
+                    laf.drawButtonText(g, textButton, false, false);
+                } catch (const std::bad_cast& e) {
+                    std::cerr << "FAILED: std::bad_cast caught during TextButton rendering: " << e.what() << "\n";
+                    return 1;
+                } catch (const std::exception& e) {
+                    std::cerr << "FAILED: Exception caught during TextButton rendering: " << e.what() << "\n";
+                    return 1;
+                }
+
+                textButton.setLookAndFeel(nullptr);
+            }
+
+            // 6.3 juce::ComboBox
+            {
+                juce::ComboBox comboBox;
+                comboBox.setLookAndFeel(&laf);
+                comboBox.setBounds(0, 0, 160, 28);
+                comboBox.addItem("Hall A", 1);
+                comboBox.addItem("Room B", 2);
+                comboBox.setSelectedId(1, juce::dontSendNotification);
+
+                try {
+                    comboBox.paintEntireComponent(g, true);
+                    laf.drawComboBox(g, 160, 28, false, 0, 0, 160, 28, comboBox);
+                } catch (const std::bad_cast& e) {
+                    std::cerr << "FAILED: std::bad_cast caught during ComboBox rendering: " << e.what() << "\n";
+                    return 1;
+                } catch (const std::exception& e) {
+                    std::cerr << "FAILED: Exception caught during ComboBox rendering: " << e.what() << "\n";
+                    return 1;
+                }
+
+                comboBox.setLookAndFeel(nullptr);
+            }
+
+            // 6.4 juce::Slider (Hero 64px, Secondary 52px, Trim 42px)
+            {
+                for (int size : { 64, 52, 42 })
+                {
+                    juce::Slider slider;
+                    slider.setLookAndFeel(&laf);
+                    slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+                    slider.setBounds(0, 0, size, size);
+                    slider.setValue(0.75);
+
+                    try {
+                        slider.paintEntireComponent(g, true);
+                        laf.drawRotarySlider(g, 0, 0, size, size, 0.75f, 0.0f, 6.28f, slider);
+                    } catch (const std::bad_cast& e) {
+                        std::cerr << "FAILED: std::bad_cast caught during Slider (" << size << "px) rendering: " << e.what() << "\n";
+                        return 1;
+                    } catch (const std::exception& e) {
+                        std::cerr << "FAILED: Exception caught during Slider (" << size << "px) rendering: " << e.what() << "\n";
+                        return 1;
+                    }
+
+                    slider.setLookAndFeel(nullptr);
+                }
+            }
+
+            // 6.5 juce::Label (exercising drawLabel and getLabelFont)
+            {
+                juce::Label label("Label", "REVERBERATION");
+                label.setLookAndFeel(&laf);
+                label.setBounds(0, 0, 120, 24);
+
+                try {
+                    label.paintEntireComponent(g, true);
+                    laf.drawLabel(g, label);
+                } catch (const std::bad_cast& e) {
+                    std::cerr << "FAILED: std::bad_cast caught during Label rendering: " << e.what() << "\n";
+                    return 1;
+                } catch (const std::exception& e) {
+                    std::cerr << "FAILED: Exception caught during Label rendering: " << e.what() << "\n";
+                    return 1;
+                }
+
+                label.setLookAndFeel(nullptr);
+            }
+        }
+    }
 
     std::cout << "[RB-26 LookAndFeel Test] ALL NATIVE CHECKS PASSED!\n";
     return 0;

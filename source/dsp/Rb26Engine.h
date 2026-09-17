@@ -146,6 +146,12 @@ private:
     float mLastPitchFbL { 0.0f };
     float mLastPitchFbR { 0.0f };
 
+    // Pitch feedback loop band-limiting filters (150 Hz HPF + 6 kHz LPF)
+    Biquad mPitchFeedbackHpL;
+    Biquad mPitchFeedbackHpR;
+    Biquad mPitchFeedbackLpL;
+    Biquad mPitchFeedbackLpR;
+
     // Lock-Free SPSC Telemetry Queue
     static constexpr size_t kTelemetryQueueCapacity = 16;
     static constexpr size_t kTelemetryQueueMask = kTelemetryQueueCapacity - 1;

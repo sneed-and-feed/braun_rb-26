@@ -236,7 +236,7 @@ void BraunLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& b
     // Button label text
     auto textBounds = bounds.withTrimmedLeft(tickX + tickSize + 8.0f);
     g.setColour(findColour(BraunColours::textPrimaryColourId));
-    g.setFont(getLabelFont(dynamic_cast<juce::Label&>(button)));
+    g.setFont(juce::Font(juce::FontOptions(10.0f, juce::Font::bold)));
     g.drawFittedText(button.getButtonText(), textBounds.toNearestInt(),
                      juce::Justification::centredLeft, 1);
 }

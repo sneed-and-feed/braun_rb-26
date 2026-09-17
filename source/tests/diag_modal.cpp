@@ -423,6 +423,298 @@ int main() {
         std::cout << "  -> PASS: Bypassed pitch diffusion achieves massive CPU reduction!\n";
     }
 
+    // -------------------------------------------------------------------------
+    // TEST 4B: TRANSIENT PUNCH DETECTOR ONSET GATING & MULTI-RATE VERIFICATION
+    // -------------------------------------------------------------------------
+    std::cout << "\n[TEST 4B] TRANSIENT PUNCH DETECTOR ONSET GATING & MULTI-RATE VERIFICATION\n";
+    {
+        for (double rate : { 44100.0, 48000.0, 96000.0, 192000.0 }) {
+            rb26::TransientPunchDetector detector;
+            detector.prepare(rate);
+
+            // 1. Step impulse attack time (< 3 ms)
+            float minGainStep = 1.0f;
+            int attackSamples = 0;
+            const int stepTotalSamples = static_cast<int>(rate * 0.010);
+            for (int i = 0; i < stepTotalSamples; ++i) {
+                float in = (i == 0) ? 1.0f : 0.0f;
+                float g = detector.process(in, in, 1.0f);
+                if (g < minGainStep) {
+                    minGainStep = g;
+                    attackSamples = i;
+                }
+            }
+            double attackMs = static_cast<double>(attackSamples) / rate * 1000.0;
+            DIAG_ASSERT(attackMs <= 3.0, "Step impulse attack time must be <= 3.0 ms");
+
+            // 2. Step input over ~2.5 ms (depth scaling, 2.5 ms > 1 ms attack tau)
+            detector.reset();
+            rb26::TransientPunchDetector detZero;
+            detZero.prepare(rate);
+            float gZero = 1.0f, gFull = 1.0f;
+            const int stepSamples = static_cast<int>(std::round(rate * 0.0025));
+            for (int i = 0; i < stepSamples; ++i) {
+                gZero = detZero.process(1.0f, 1.0f, 0.0f);
+                gFull = detector.process(1.0f, 1.0f, 1.0f);
+            }
+            DIAG_ASSERT(std::abs(gZero - 1.0f) < 1.0e-4f, "Punch ducking depth 0.0 must yield gain 1.0");
+            DIAG_ASSERT(gFull < 0.5f, "Punch ducking depth 1.0 must yield significant gain reduction (< 0.5)");
+
+            // 3. Synthesized kick transient ducking (9-14 dB attenuation at 48kHz)
+            if (std::abs(rate - 48000.0) < 1.0) {
+                detector.reset();
+                const size_t kickLen = 12000;
+                const size_t stepOnset = 1200;
+                std::vector<float> kick(kickLen, 0.0f);
+                for (size_t n = stepOnset; n < kickLen; ++n) {
+                    double t = static_cast<double>(n - stepOnset) / 48000.0;
+                    double freq = 120.0 * std::exp(-t / 0.025) + 50.0;
+                    double env = std::exp(-t / 0.040);
+                    kick[n] = static_cast<float>(env * std::sin(2.0 * 3.14159265358979323846 * freq * t));
+                }
+                kick[stepOnset] = 1.0f;
+                float minKickGain = 1.0f;
+                for (size_t n = 0; n < kickLen; ++n) {
+                    float g = detector.process(kick[n], kick[n], 1.0f);
+                    if (n >= stepOnset && n < stepOnset + 1440) {
+                        if (g < minKickGain) minKickGain = g;
+                    }
+                }
+                double kickDb = 20.0 * std::log10(minKickGain);
+                DIAG_ASSERT(kickDb <= -9.0 && kickDb >= -14.0, "Kick transient must duck modal injection by 9 to 14 dB");
+            }
+
+            // 4. Sustained 30 Hz sine wave (min gain > 0.95)
+            detector.reset();
+            const int warmupSamp = static_cast<int>(rate * 0.20);
+            for (int i = 0; i < warmupSamp; ++i) {
+                float s = 0.8f * std::sin(2.0f * 3.14159265f * 30.0f * static_cast<float>(i) / static_cast<float>(rate));
+                detector.process(s, s, 1.0f);
+            }
+            float minGain30Hz = 1.0f;
+            const int testSamp = static_cast<int>(rate * 0.10);
+            for (int i = 0; i < testSamp; ++i) {
+                float s = 0.8f * std::sin(2.0f * 3.14159265f * 30.0f * static_cast<float>(warmupSamp + i) / static_cast<float>(rate));
+                float g = detector.process(s, s, 1.0f);
+                minGain30Hz = std::min(minGain30Hz, g);
+            }
+            DIAG_ASSERT(minGain30Hz > 0.95f, "Steady continuous 30 Hz sine tone must not trigger ducking");
+
+            // 5. Eno dual drone (5 seconds, beating 32.7 Hz & 33.05 Hz)
+            detector.reset();
+            float minGainDrone = 1.0f;
+            size_t duckSamplesDrone = 0;
+            const double f1 = 32.7, f2 = 33.05;
+            const int droneTotalSamp = static_cast<int>(rate * 5.0);
+            for (int i = 0; i < droneTotalSamp; ++i) {
+                const double t = static_cast<double>(i) / rate;
+                const float s1 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f1 * t);
+                const float s2 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f2 * t);
+                float g = detector.process(s1 + s2, s1 + s2, 0.85f);
+                minGainDrone = std::min(minGainDrone, g);
+                if (g < 0.95f) duckSamplesDrone++;
+            }
+            DIAG_ASSERT(duckSamplesDrone == 0, "TransientPunchDetector must produce zero ducking samples on Eno dual drone");
+            DIAG_ASSERT(minGainDrone >= 0.99f, "TransientPunchDetector duck gain must remain ~ 1.0 on Eno dual drone");
+
+            std::cout << "  Rate " << static_cast<int>(rate) << " Hz: Step Attack " << attackMs 
+                      << " ms, Step100 gFull " << gFull << ", 30Hz MinGain " << minGain30Hz 
+                      << ", Drone Duck Samples: " << duckSamplesDrone << " -> PASS\n";
+        }
+        std::cout << "  -> PASS: TransientPunchDetector onset gating verified across all sample rates!\n";
+    }
+
+    // -------------------------------------------------------------------------
+    // TEST 5: ENO DUAL DRONE INTO SUB_BASS_PRESERVER HEADROOM & DECAY
+    // -------------------------------------------------------------------------
+    std::cout << "\n[TEST 5] ENO DUAL DRONE INTO SUB_BASS_PRESERVER HEADROOM & DECAY\n";
+    {
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(fs, 512);
+
+        auto presets = rb26::Rb26ReverbEngine::getFactoryPresets();
+        bool found = false;
+        for (const auto& p : presets) {
+            if (p.id != nullptr && std::string_view(p.id) == "SUB_BASS_PRESERVER") {
+                engine.setParameters(p.params);
+                found = true;
+                break;
+            }
+        }
+        DIAG_ASSERT(found, "SUB_BASS_PRESERVER preset must exist");
+
+        // Dual drone: 32.7 Hz (C1) and 33.05 Hz (detuned C1 with 0.35 Hz beat frequency)
+        const double f1 = 32.7;
+        const double f2 = 33.05;
+        const int numBlocks = 500; // ~5.33 seconds of continuous drone excitation
+        const int blockSize = 512;
+
+        std::vector<float> inL(blockSize), inR(blockSize);
+        std::vector<float> outL(blockSize), outR(blockSize);
+        const float* inPtrs[2] = { inL.data(), inR.data() };
+        float* outPtrs[2] = { outL.data(), outR.data() };
+
+        float maxPeak = 0.0f;
+        size_t nonFiniteCount = 0;
+        size_t denormalCount = 0;
+        size_t clippedCount = 0;
+
+        // Run 5.3 seconds of continuous dual drone
+        for (int b = 0; b < numBlocks; ++b) {
+            for (int i = 0; i < blockSize; ++i) {
+                const double t = static_cast<double>(b * blockSize + i) / fs;
+                const float s1 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f1 * t);
+                const float s2 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f2 * t);
+                inL[i] = s1 + s2;
+                inR[i] = s1 + s2;
+            }
+            engine.process(inPtrs, outPtrs, 2, blockSize);
+            for (int i = 0; i < blockSize; ++i) {
+                if (!std::isfinite(outL[i]) || !std::isfinite(outR[i])) nonFiniteCount++;
+                if (std::fpclassify(outL[i]) == FP_SUBNORMAL || std::fpclassify(outR[i]) == FP_SUBNORMAL) denormalCount++;
+                const float aL = std::abs(outL[i]);
+                const float aR = std::abs(outR[i]);
+                maxPeak = std::max(maxPeak, std::max(aL, aR));
+                if (aL > 1.0f || aR > 1.0f) clippedCount++;
+            }
+        }
+
+        std::cout << "  Drone Excitation (5.3s) - Max Peak: " << std::fixed << std::setprecision(4) << maxPeak 
+                  << " | Clipped Samples: " << clippedCount
+                  << " | Non-finite: " << nonFiniteCount
+                  << " | Denormals: " << denormalCount << "\n";
+
+        DIAG_ASSERT(nonFiniteCount == 0, "Drone output must have zero NaNs or Infs");
+        DIAG_ASSERT(denormalCount == 0, "Drone output must have zero denormals");
+        DIAG_ASSERT(clippedCount == 0, "Drone output must have zero clipped samples (> 1.0)");
+        DIAG_ASSERT(maxPeak <= 1.0f, "Drone output must remain strictly within headroom");
+
+        // Test decay phase: stop input, run 3.2 seconds of decay
+        std::vector<float> zeroIn(blockSize, 0.0f);
+        const float* zeroPtrs[2] = { zeroIn.data(), zeroIn.data() };
+        float decayEarlyEnergy = 0.0f;
+        float decayLateEnergy = 0.0f;
+        const int decayBlocks = 300;
+
+        for (int b = 0; b < decayBlocks; ++b) {
+            engine.process(zeroPtrs, outPtrs, 2, blockSize);
+            for (int i = 0; i < blockSize; ++i) {
+                const float e = outL[i] * outL[i] + outR[i] * outR[i];
+                if (b < 20) decayEarlyEnergy += e;
+                if (b >= decayBlocks - 20) decayLateEnergy += e;
+                const float aL = std::abs(outL[i]);
+                const float aR = std::abs(outR[i]);
+                maxPeak = std::max(maxPeak, std::max(aL, aR));
+                if (!std::isfinite(outL[i]) || !std::isfinite(outR[i])) nonFiniteCount++;
+            }
+        }
+
+        std::cout << "  Decay Phase - Early Energy: " << decayEarlyEnergy 
+                  << " | Late Energy: " << decayLateEnergy << "\n";
+
+        DIAG_ASSERT(nonFiniteCount == 0, "Decay output must have zero NaNs");
+        DIAG_ASSERT(decayLateEnergy < decayEarlyEnergy, "Decay must smoothly dissipate");
+        std::cout << "  -> PASS: Eno dual drone under SUB_BASS_PRESERVER operates with clean headroom and smooth decay!\n";
+
+        // Direct LowBandModalMatrix isolation
+        rb26::LowBandModalMatrix modal;
+        modal.prepare(fs);
+        rb26::LowBandModalParams mParams;
+        mParams.crossoverHz = 180.0f;
+        mParams.bassRt60Mult = 0.80f;
+        mParams.rt60DecaySec = 4.5f;
+        mParams.punchDucking = 0.85f;
+        mParams.subMonoHz = 150.0f;
+        modal.setParameters(mParams);
+
+        float maxModalPeak = 0.0f;
+        float minModalDuck = 1.0f;
+        size_t duckingCount = 0;
+        int firstDuckSample = -1;
+        int lastDuckSample = -1;
+        for (int i = 0; i < 48000 * 5; ++i) {
+            const double t = static_cast<double>(i) / fs;
+            const float s1 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f1 * t);
+            const float s2 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f2 * t);
+            float lowL = 0.0f, lowR = 0.0f;
+            modal.processModalOnly(s1 + s2, s1 + s2, lowL, lowR);
+            maxModalPeak = std::max(maxModalPeak, std::max(std::abs(lowL), std::abs(lowR)));
+            float dg = modal.getDuckingGain();
+            minModalDuck = std::min(minModalDuck, dg);
+            if (dg < 0.95f) {
+                duckingCount++;
+                if (firstDuckSample < 0) firstDuckSample = i;
+                lastDuckSample = i;
+            }
+        }
+        std::cout << "  LowBandModalMatrix Direct Excitation Max Peak: " << maxModalPeak 
+                  << " | Min Duck Gain: " << minModalDuck 
+                  << " | Ducking Samples (< 0.95): " << duckingCount << " / " << 48000 * 5 
+                  << " | First Duck Sample: " << firstDuckSample << " (" << firstDuckSample / 48.0 << " ms)"
+                  << " | Last Duck Sample: " << lastDuckSample << " (" << lastDuckSample / 48.0 << " ms)\n";
+        DIAG_ASSERT(maxModalPeak < 0.72f, "Modal direct output must remain below 0.72 soft knee limit");
+        DIAG_ASSERT(duckingCount == 0, "Modal direct excitation on dual drone must produce zero ducking samples (no audio-rate gain chopping)");
+        DIAG_ASSERT(minModalDuck >= 0.95f, "Modal direct excitation ducking gain must remain >= 0.95 on Eno dual drone");
+        std::cout << "  -> PASS: LowBandModalMatrix direct excitation maintains clean sub-knee headroom (< 0.72) and zero ducking!\n";
+
+        // Subtest 2.1 sweep reproduction
+        {
+            rb26::LowBandModalMatrix sweepModal;
+            sweepModal.prepare(fs);
+            rb26::LowBandModalParams p;
+            p.crossoverHz = 180.0f;
+            p.bassRt60Mult = 1.0f;
+            p.rt60DecaySec = 3.5f;
+            p.punchDucking = 0.0f;
+            sweepModal.setParameters(p);
+
+            std::vector<double> testFreqs;
+            std::vector<double> rmsOutputs;
+            for (int f = 40; f <= 200; f += 1) testFreqs.push_back(static_cast<double>(f));
+            const size_t testLength = 24000;
+            const size_t steadyStart = 9600;
+            for (double freq : testFreqs) {
+                sweepModal.reset();
+                double sumSq = 0.0;
+                size_t count = 0;
+                for (size_t n = 0; n < testLength; ++n) {
+                    float in = static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * freq * n / fs));
+                    float lowOutL = 0.0f, lowOutR = 0.0f;
+                    sweepModal.processModalOnly(in, in, lowOutL, lowOutR);
+                    if (n >= steadyStart) {
+                        sumSq += 0.5 * (lowOutL * lowOutL + lowOutR * lowOutR);
+                        ++count;
+                    }
+                }
+                rmsOutputs.push_back(std::sqrt(sumSq / count));
+            }
+            double maxNotchDepthDb = 0.0;
+            int notchFreq = 0;
+            for (size_t i = 1; i < rmsOutputs.size() - 1; ++i) {
+                double localMax = std::max(rmsOutputs[i - 1], rmsOutputs[i + 1]);
+                double current = rmsOutputs[i];
+                if (current > 1.0e-8 && localMax > 1.0e-8) {
+                    double dropDb = 20.0 * std::log10(localMax / current);
+                    if (dropDb > maxNotchDepthDb) {
+                        maxNotchDepthDb = dropDb;
+                        notchFreq = static_cast<int>(testFreqs[i]);
+                    }
+                }
+            }
+            std::cout << "  [Sweep 40-200Hz] Max Notch Depth: " << maxNotchDepthDb << " dB at " << notchFreq << " Hz\n";
+            for (size_t i = 1; i < rmsOutputs.size() - 1; ++i) {
+                double localMax = std::max(rmsOutputs[i - 1], rmsOutputs[i + 1]);
+                double current = rmsOutputs[i];
+                if (current > 1.0e-8 && localMax > 1.0e-8) {
+                    double dropDb = 20.0 * std::log10(localMax / current);
+                    if (dropDb > 5.0) {
+                        std::cout << "    Notch at " << testFreqs[i] << " Hz : drop = " << dropDb << " dB\n";
+                    }
+                }
+            }
+        }
+    }
+
     std::cout << "\n=================================================================\n";
     std::cout << "=== ALL VERIFICATIONS PASSED SUCCESSFULLY! ===\n";
     std::cout << "=================================================================\n";

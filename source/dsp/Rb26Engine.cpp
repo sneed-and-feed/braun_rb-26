@@ -12,6 +12,11 @@ Rb26ReverbEngine::Rb26ReverbEngine() noexcept {
     mStereoWidthSmoother.setTimeConstant(0.030f);
     mOutputTrimSmoother.setTimeConstant(0.030f);
 
+    mPitchFeedbackHpL.configure(Biquad::Type::Highpass, 48000.0f, 150.0f, 0.70710678f);
+    mPitchFeedbackHpR.configure(Biquad::Type::Highpass, 48000.0f, 150.0f, 0.70710678f);
+    mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, 48000.0f, 6000.0f, 0.70710678f);
+    mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, 48000.0f, 6000.0f, 0.70710678f);
+
     mPreDelayBufferL.assign(kPreDelayBufferCapacity, 0.0f);
     mPreDelayBufferR.assign(kPreDelayBufferCapacity, 0.0f);
     mPreDelayWriteIndex = 0;
@@ -30,6 +35,12 @@ void Rb26ReverbEngine::prepare(double sampleRate, int maxBlockSize) noexcept {
     mFdnTank.prepare(mSampleRate, 4.0f);
     mPitchShifter.prepare(mSampleRate, mMaxBlockSize);
     mMasterSubMono.prepare(mSampleRate);
+
+    // Band-limit pitch feedback path: 150 Hz HPF + 6 kHz LPF Butterworth filters
+    mPitchFeedbackHpL.configure(Biquad::Type::Highpass, fs, 150.0f, 0.70710678f);
+    mPitchFeedbackHpR.configure(Biquad::Type::Highpass, fs, 150.0f, 0.70710678f);
+    mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, fs, 6000.0f, 0.70710678f);
+    mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, fs, 6000.0f, 0.70710678f);
 
     mInputTrimSmoother.setSampleRate(fs);
     mInputTrimSmoother.reset(dbToGain(mParams.inputTrimDb));
@@ -87,6 +98,11 @@ void Rb26ReverbEngine::reset() noexcept {
 
     mLastPitchFbL = 0.0f;
     mLastPitchFbR = 0.0f;
+
+    mPitchFeedbackHpL.reset();
+    mPitchFeedbackHpR.reset();
+    mPitchFeedbackLpL.reset();
+    mPitchFeedbackLpR.reset();
 
     mInputTrimSmoother.reset(dbToGain(mParams.inputTrimDb));
     mPreDelaySmoother.reset(mParams.preDelayMs);
@@ -318,8 +334,10 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
             const float fb = mPitchFeedbackSmoother.next();
             const float safePitchFb = fb * 0.30f;
-            const float injPitchL = delayedPitchL * safePitchFb;
-            const float injPitchR = delayedPitchR * safePitchFb;
+            const float filteredPitchL = mPitchFeedbackLpL.process(mPitchFeedbackHpL.process(delayedPitchL));
+            const float filteredPitchR = mPitchFeedbackLpR.process(mPitchFeedbackHpR.process(delayedPitchR));
+            const float injPitchL = filteredPitchL * safePitchFb;
+            const float injPitchR = filteredPitchR * safePitchFb;
 
             mFdnTank.processSample(highInL, highInR, injPitchL, injPitchR, lateL, lateR);
 

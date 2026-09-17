@@ -386,8 +386,8 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
             const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s));
             s = (1.0f - freeze) * pf + freeze * s;
         } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
-            // Sitka spruce body formants (A0, T1, Wood fiber) with -3 dB loop trim
-            const float plateFiltered = mSpruceWood[k].process(mSpruceT1[k].process(mSpruceA0[k].process(s))) * 0.70794578f;
+            // Sitka spruce body formants (A0, T1, Wood fiber) with -6 dB loop trim to ensure max loop gain <= 0.95
+            const float plateFiltered = mSpruceWood[k].process(mSpruceT1[k].process(mSpruceA0[k].process(s))) * 0.50f;
             s = (1.0f - freeze) * plateFiltered + freeze * s;
         }
 

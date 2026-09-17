@@ -135,10 +135,11 @@ public:
 
     void prepare(double sampleRate) noexcept {
         mSampleRate = static_cast<float>(sampleRate > 100.0 ? sampleRate : 48000.0);
-        mAlphaFast = std::exp(-1.0f / (mSampleRate * 0.0015f)); // tau = 1.5 ms
-        mAlphaSlow = std::exp(-1.0f / (mSampleRate * 0.0400f)); // tau = 40.0 ms
-        mAlphaAtt  = std::exp(-1.0f / (mSampleRate * 0.0010f)); // tau = 1.0 ms
-        mAlphaRel  = std::exp(-1.0f / (mSampleRate * 0.0300f)); // tau = 30.0 ms
+        mAlphaFast  = std::exp(-1.0f / (mSampleRate * 0.0015f)); // tau = 1.5 ms
+        mAlphaSlow  = std::exp(-1.0f / (mSampleRate * 0.0400f)); // tau = 40.0 ms
+        mAlphaAtt   = std::exp(-1.0f / (mSampleRate * 0.0010f)); // tau = 1.0 ms
+        mAlphaRel   = std::exp(-1.0f / (mSampleRate * 0.0300f)); // tau = 30.0 ms
+        mAlphaOnset = std::exp(-1.0f / (mSampleRate * 0.0250f)); // tau = 25.0 ms onset hold
         reset();
     }
 
@@ -146,6 +147,8 @@ public:
         mFastEnv = 0.0f;
         mSlowEnv = 0.0f;
         mCurrentDuckGain = 1.0f;
+        mPrevX = 0.0f;
+        mOnsetEnv = 0.0f;
         mCachedDepth = -1.0f;
         mCachedFloorGain = 1.0f;
     }
@@ -153,6 +156,14 @@ public:
     // Process sample: returns ducking gain in [0.2512, 1.0]
     inline float process(float xL, float xR, float punchDepth) noexcept {
         const float absX = std::max(std::abs(xL), std::abs(xR));
+        const float normDelta = (absX - mPrevX) * (mSampleRate / 48000.0f);
+        mPrevX = absX;
+
+        if (normDelta > 0.010f) {
+            mOnsetEnv = 1.0f;
+        } else {
+            mOnsetEnv = flushDenormal(mOnsetEnv * mAlphaOnset);
+        }
 
         mFastEnv = flushDenormal((1.0f - mAlphaFast) * absX + mAlphaFast * mFastEnv);
         mSlowEnv = flushDenormal((1.0f - mAlphaSlow) * absX + mAlphaSlow * mSlowEnv);
@@ -161,7 +172,7 @@ public:
         const float depth = std::clamp(punchDepth, 0.0f, 1.0f);
 
         float targetGain = 1.0f;
-        if (TR > 1.8f && depth > 0.001f) {
+        if (TR > 1.8f && depth > 0.001f && mOnsetEnv > 0.01f) {
             if (depth != mCachedDepth) {
                 mCachedDepth = depth;
                 mCachedFloorGain = std::pow(10.0f, -0.62f * std::pow(depth, 0.35f));
@@ -190,8 +201,11 @@ private:
     float mAlphaSlow  { 0.0f };
     float mAlphaAtt   { 0.0f };
     float mAlphaRel   { 0.0f };
+    float mAlphaOnset { 0.0f };
     float mFastEnv    { 0.0f };
     float mSlowEnv    { 0.0f };
+    float mPrevX      { 0.0f };
+    float mOnsetEnv   { 0.0f };
     float mCurrentDuckGain { 1.0f };
     float mCachedDepth { -1.0f };
     float mCachedFloorGain { 1.0f };
@@ -319,13 +333,15 @@ private:
     // 4-Line Modal Matrix Delay Lines
     static constexpr size_t kNumModalLines = 4;
     static constexpr std::array<float, kNumModalLines> kBaseDelayTimes = {
-        0.0710f, 0.0860f, 0.1040f, 0.1261f // 71ms, 86ms, 104ms, 126.1ms
+        0.0710f, 0.0890f, 0.1070f, 0.1260f // 71ms, 89ms, 107ms, 126ms (Web Audio exact)
     };
 
     std::array<size_t, kNumModalLines> mDelayLengths { 0, 0, 0, 0 };
     std::array<size_t, kNumModalLines> mWriteIndices { 0, 0, 0, 0 };
     std::array<std::vector<float>, kNumModalLines> mDelayBuffers;
     std::array<float, kNumModalLines> mDecayCoeffs { 0.8f, 0.8f, 0.8f, 0.8f };
+    std::array<Biquad, kNumModalLines> mDcBlockFilters;
+    std::array<Biquad, kNumModalLines> mDampingFilters;
 
     // Cached parameters
     LowBandModalParams mParams;
