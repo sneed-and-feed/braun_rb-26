@@ -73,6 +73,7 @@ void ManifoldDelayNetwork::prepare(double sampleRate, float maxRoomSize) noexcep
 
         mDispersionStage1[k].reset();
         mDispersionStage2[k].reset();
+        mLoopDiffusers[k].prepare(kLoopDiffuserLengths[k], mSampleRate);
 
         mCausticPeaking[k].reset();
         mUltrasonicLowpass[k].reset();
@@ -102,6 +103,7 @@ void ManifoldDelayNetwork::reset() noexcept {
 
         mDispersionStage1[k].reset();
         mDispersionStage2[k].reset();
+        mLoopDiffusers[k].reset();
 
         mCausticPeaking[k].reset();
         mUltrasonicLowpass[k].reset();
@@ -258,10 +260,12 @@ void ManifoldDelayNetwork::updateFilterCoefficients() noexcept {
 
     mDispCoeff1 = baseA1 * mDiffusionDensity;
     mDispCoeff2 = baseA2 * mDiffusionDensity;
+    const float loopDiffFeedback = 0.65f * mDiffusionDensity;
 
     for (size_t k = 0; k < kNumLines; ++k) {
         mDispersionStage1[k].setCoeff(mDispCoeff1);
         mDispersionStage2[k].setCoeff(mDispCoeff2);
+        mLoopDiffusers[k].setFeedback(loopDiffFeedback);
     }
 
     // 3. Whispering Gallery Caustic Peaking (+3.5 dB at 9.5 kHz, Q = 2.8) + ultrasonic lowpass
@@ -360,7 +364,7 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
         mDampingStates[k] = filtered;
         float s = (1.0f - freeze) * filtered + freeze * rawSample;
 
-        // 4. Dispersion allpasses (Loop decay diffusion across delay lines)
+        // 4. Dispersion allpasses (Waveguide dispersion)
         if (std::abs(mDispCoeff1) > 1.0e-4f) {
             s = mDispersionStage1[k].process(s);
         }
@@ -368,7 +372,10 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
             s = mDispersionStage2[k].process(s);
         }
 
-        // 5. Manifold-specific resonant loop filtering (continuous filter tracking prevents click upon unfreezing)
+        // 5. Loop Decay Diffusers (Temporal echo density multiplication)
+        s = mLoopDiffusers[k].process(s);
+
+        // 6. Manifold-specific resonant loop filtering (continuous filter tracking prevents click upon unfreezing)
         if (mCurrentManifold == ManifoldType::WhisperingGallery) {
             // High-frequency caustic peaking filter (+3.5 dB at 9.5 kHz) + ultrasonic lowpass
             const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s));

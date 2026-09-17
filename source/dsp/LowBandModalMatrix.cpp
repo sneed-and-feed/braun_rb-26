@@ -137,7 +137,9 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
     for (size_t i = 0; i < kNumModalLines; ++i) {
         const float feedback = v[i] * mDecayCoeffs[i];
         const float nextIn = mParams.freezeHold ? feedback : (feedback + injection[i]);
-        const float saturated = applySmoothBoundaryKnee(nextIn, 0.72f);
+        const float saturated = mParams.freezeHold
+            ? std::clamp(nextIn, -1.05f, 1.05f)
+            : applySmoothBoundaryKnee(nextIn, 0.72f);
 
         mDelayBuffers[i][mWriteIndices[i]] = flushDenormal(saturated);
         const size_t nextIdx = mWriteIndices[i] + 1;

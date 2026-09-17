@@ -190,6 +190,15 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             {
                 exciterEngine.releaseVoice(static_cast<float>(note));
             }
+            else if (status == 0xB0 && note == 64)
+            {
+                // MIDI CC 64 Sustain Pedal -> toggle Freeze Hold
+                const bool sustainOn = (vel >= 64);
+                if (auto* freezeParam = apvts.getParameter(rb26::ParamIDs::freezeHold.getParamID()))
+                {
+                    freezeParam->setValueNotifyingHost(sustainOn ? 1.0f : 0.0f);
+                }
+            }
         }
     }
 

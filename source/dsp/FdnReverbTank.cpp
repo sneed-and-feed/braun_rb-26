@@ -21,11 +21,11 @@ void FdnReverbTank::prepare(double sampleRate, float maxRoomSize) noexcept {
     }
 
     mFreezeInputSmoother.setSampleRate(fs);
-    mFreezeInputSmoother.setTimeConstant(0.060f);
+    mFreezeInputSmoother.setTimeConstant(0.008f);
     mFreezeInputSmoother.reset(1.0f);
 
     mFreezeLoopSmoother.setSampleRate(fs);
-    mFreezeLoopSmoother.setTimeConstant(0.060f);
+    mFreezeLoopSmoother.setTimeConstant(0.005f);
     mFreezeLoopSmoother.reset(0.0f);
 
     mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz);

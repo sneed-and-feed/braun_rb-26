@@ -225,9 +225,27 @@ void PitchShifter::setParameters(float shimmerSend,
                                 int dimmerInterval,
                                 float pitchBlend,
                                 float pitchFeedback) noexcept {
-    mShimmerSendSmoother.setTarget(std::clamp(shimmerSend, 0.0f, 1.0f));
-    mDimmerSendSmoother.setTarget(std::clamp(dimmerSend, 0.0f, 1.0f));
-    mPitchBlendSmoother.setTarget(std::clamp(pitchBlend, -1.0f, 1.0f));
+    const float s = std::clamp(shimmerSend, 0.0f, 1.0f);
+    const float d = std::clamp(dimmerSend, 0.0f, 1.0f);
+    const float b = std::clamp(pitchBlend, -1.0f, 1.0f);
+
+    if (s <= 1.0e-4f) {
+        mShimmerSendSmoother.snapTo(0.0f);
+    } else {
+        mShimmerSendSmoother.setTarget(s);
+    }
+
+    if (d <= 1.0e-4f) {
+        mDimmerSendSmoother.snapTo(0.0f);
+    } else {
+        mDimmerSendSmoother.setTarget(d);
+    }
+
+    if (s <= 1.0e-4f && d <= 1.0e-4f) {
+        mPitchBlendSmoother.snapTo(b);
+    } else {
+        mPitchBlendSmoother.setTarget(b);
+    }
     mPitchFeedbackSmoother.setTarget(std::clamp(pitchFeedback, 0.0f, 0.95f));
 
     if (shimmerInterval != mCurrentShimmerInterval) {

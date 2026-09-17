@@ -140,19 +140,29 @@ public:
 
     // Checks whether shimmer or dimmer is actively contributing
     [[nodiscard]] inline bool isActive() const noexcept {
+        const float sTarget = mShimmerSendSmoother.getTarget();
+        const float dTarget = mDimmerSendSmoother.getTarget();
+        const float sCurrent = mShimmerSendSmoother.getCurrent();
+        const float dCurrent = mDimmerSendSmoother.getCurrent();
+
+        // 1. Both sends are zero -> strictly inactive regardless of blend
+        if (sTarget <= 0.001f && dTarget <= 0.001f && sCurrent <= 0.001f && dCurrent <= 0.001f) {
+            return false;
+        }
+
         const float curBlend = mPitchBlendSmoother.getCurrent();
         const float targetBlend = mPitchBlendSmoother.getTarget();
-        const float blendAngleCur = (kPi * 0.25f) * (1.0f - curBlend);
-        const float blendAngleTgt = (kPi * 0.25f) * (1.0f - targetBlend);
-        const float cosCur = FastSinTable::cos(blendAngleCur);
-        const float cosTgt = FastSinTable::cos(blendAngleTgt);
-        const float sinCur = FastSinTable::sin(blendAngleCur);
-        const float sinTgt = FastSinTable::sin(blendAngleTgt);
 
-        const bool shimActive = (mShimmerSendSmoother.getTarget() > 0.001f || mShimmerSendSmoother.getCurrent() > 0.001f) &&
-                                (cosCur > 0.01f || cosTgt > 0.01f);
-        const bool dimActive  = (mDimmerSendSmoother.getTarget() > 0.001f || mDimmerSendSmoother.getCurrent() > 0.001f) &&
-                                (sinCur > 0.01f || sinTgt > 0.01f);
+        // 2. Shimmer is active if shimmer send > 0 AND blend is not hard-panned to Dimmer (-1.0)
+        const bool shimSendActive = (sTarget > 0.001f || sCurrent > 0.001f);
+        const bool shimBlendActive = (curBlend > -0.98f || targetBlend > -0.98f);
+        const bool shimActive = shimSendActive && shimBlendActive;
+
+        // 3. Dimmer is active if dimmer send > 0 AND blend is not hard-panned to Shimmer (+1.0)
+        const bool dimSendActive = (dTarget > 0.001f || dCurrent > 0.001f);
+        const bool dimBlendActive = (curBlend < 0.98f || targetBlend < 0.98f);
+        const bool dimActive = dimSendActive && dimBlendActive;
+
         return shimActive || dimActive;
     }
 

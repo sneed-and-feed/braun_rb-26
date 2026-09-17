@@ -214,6 +214,7 @@ R"html(
 const paramsMeta = [
   { id: 'input_trim_db', webId: 'inputTrimDb', label: 'Input Trim', deck: 'Input & Pre-Delay', min: -18, max: 18, def: 0, unit: 'dB' },
   { id: 'pre_delay_ms', webId: 'preDelayMs', label: 'Pre-Delay', deck: 'Input & Pre-Delay', min: 0, max: 500, def: 20, unit: 'ms' },
+  { id: 'diffusion_density', webId: 'diffusionDensity', label: 'Diffusion', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.75, unit: '%' },
   { id: 'dry_wet_mix', webId: 'dryWetMix', label: 'Dry/Wet', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.35, unit: '%' },
   { id: 'early_late_mix', webId: 'earlyLateMix', label: 'Early/Late', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.50, unit: '%' },
 
@@ -225,7 +226,6 @@ const paramsMeta = [
   { id: 'room_size', webId: 'roomSize', label: 'Room Size', deck: 'FDN Tank', min: 0.1, max: 4.0, def: 0.65, unit: '' },
   { id: 'decay_rt60_sec', webId: 'decayRt60Sec', label: 'Decay Time', deck: 'FDN Tank', min: 0.2, max: 30.0, def: 3.5, unit: 's' },
   { id: 'high_damping_hz', webId: 'highDampingHz', label: 'Damping', deck: 'FDN Tank', min: 1000, max: 20000, def: 6500, unit: 'Hz' },
-  { id: 'diffusion_density', webId: 'diffusionDensity', label: 'Diffusion', deck: 'FDN Tank', min: 0, max: 1, def: 0.75, unit: '%' },
   { id: 'freeze_hold', webId: 'freezeHold', label: 'Freeze', deck: 'FDN Tank', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
   { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.30, unit: '%' },

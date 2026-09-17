@@ -214,11 +214,35 @@ int main() {
                   << " | Difference RMS: " << diffRms
                   << " | Relative Diff: " << (diffRms / (rms0 + 1.0e-9)) * 100.0 << " %\n";
 
+        // Measure echo density in late decay window (samples 9600 to 24000, ~200ms - 500ms)
+        size_t activeCount0 = 0;
+        size_t activeCount1 = 0;
+        // Re-run with clean tanks to measure raw impulse response
+        tank0.prepare(fs);
+        tank1.prepare(fs);
+        tank0.setParameters(1.0f, 4.0f, 8000.0f, 0.0f, false, 0.0f, 0.0f, 85.0f);
+        tank1.setParameters(1.0f, 4.0f, 8000.0f, 1.0f, false, 0.0f, 0.0f, 85.0f);
+
+        tank0.processSample(1.0f, 1.0f, 0.0f, 0.0f, outL0, outR0);
+        tank1.processSample(1.0f, 1.0f, 0.0f, 0.0f, outL1, outR1);
+
+        for (int i = 0; i < 24000; ++i) {
+            tank0.processSample(0.0f, 0.0f, 0.0f, 0.0f, outL0, outR0);
+            tank1.processSample(0.0f, 0.0f, 0.0f, 0.0f, outL1, outR1);
+            if (i >= 9600) {
+                if (std::abs(outL0) > 1.0e-5f) activeCount0++;
+                if (std::abs(outL1) > 1.0e-5f) activeCount1++;
+            }
+        }
+        std::cout << "  Late Decay Echo Count (200-500ms): 0% Diff = " << activeCount0
+                  << " | 100% Diff = " << activeCount1 << "\n";
+        DIAG_ASSERT(activeCount1 > activeCount0, "100% diffusion must produce greater late echo density than 0%");
+
         if (diffRms < 0.001 || (diffRms / (rms0 + 1.0e-9)) < 0.20) {
             std::cerr << "FAIL: Diffusion knob had negligible effect on decay!\n";
             return 1;
         }
-        std::cout << "  -> PASS: Diffusion knob actively and profoundly alters decay dispersion!\n";
+        std::cout << "  -> PASS: Diffusion knob actively and profoundly alters decay dispersion and multiplies echo density!\n";
     }
 
     // -------------------------------------------------------------------------
@@ -265,6 +289,13 @@ int main() {
         }
         std::cout << "  shimmer=0.4, dimmer=0.35, blend=0.0 -> isActive(): " << shifter.isActive() << "\n";
         DIAG_ASSERT(shifter.isActive(), "Non-zero sends must evaluate to active");
+
+        // Case E: Shimmer=0, Dimmer=0, sweeping Shim/Dim blend (-1.0 to +1.0) must remain strictly inactive with zero CPU spikes
+        for (float blendVal : { -1.0f, -0.75f, -0.5f, 0.0f, 0.5f, 0.75f, 1.0f }) {
+            shifter.setParameters(0.0f, 0.0f, 1, 2, blendVal, 0.0f);
+            DIAG_ASSERT(!shifter.isActive(), "Moving pitch blend at 0% sends must never awaken pitch shifter");
+        }
+        std::cout << "  shimmer=0, dimmer=0 with Shim/Dim sweep (-1.0 to +1.0) -> strictly inactive across all blend positions\n";
 
         std::cout << "  -> PASS: PitchShifter::isActive() correctly identifies all inactive states!\n";
     }

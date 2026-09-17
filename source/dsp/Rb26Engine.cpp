@@ -159,10 +159,14 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
     mDryWetSmoother.setTarget(params.dryWetMix);
     mEarlyLateSmoother.setTarget(params.earlyLateMix);
     mStereoWidthSmoother.setTarget(params.stereoWidth);
-    mOutputTrimSmoother.setTarget(dbToGain(params.outputTrimDb));
     mPitchFeedbackSmoother.setTarget(std::clamp(params.pitchFeedback, 0.0f, 0.95f));
     mPitchDelaySmoother.setTarget(std::clamp(params.pitchDelayMs, 20.0f, 500.0f));
     mPitchBlendSmoother.setTarget(std::clamp(params.pitchBlend, -1.0f, 1.0f));
+
+    if (params.shimmerSend <= 1.0e-4f && params.dimmerSend <= 1.0e-4f) {
+        mPitchFeedbackSmoother.snapTo(0.0f);
+        mPitchBlendSmoother.snapTo(std::clamp(params.pitchBlend, -1.0f, 1.0f));
+    }
 }
 
 void Rb26ReverbEngine::process(const float* const* inputChannels,
@@ -239,6 +243,13 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
     }
 
     const float fs = static_cast<float>(mSampleRate);
+    const bool blockPitchActive = mPitchShifter.isActive();
+
+    if (!blockPitchActive) {
+        mPitchDelaySmoother.snapTo(mPitchDelaySmoother.getTarget());
+        mPitchBlendSmoother.snapTo(mPitchBlendSmoother.getTarget());
+        mPitchFeedbackSmoother.snapTo(mPitchFeedbackSmoother.getTarget());
+    }
 
     for (int n = 0; n < numSamples; ++n) {
         const float inTrim = mInputTrimSmoother.next();
@@ -276,7 +287,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mEarlyReflections.processSample(highInL, highInR, earlyL, earlyR);
 
         // 4. Decoupled Pitch Delay & Bidirectional Pitch Shifting Feedback
-        const bool pitchActive = mPitchShifter.isActive();
+        const bool pitchActive = blockPitchActive;
         const float elMix = mEarlyLateSmoother.next();
         const float earlyGain = FastSinTable::cos(elMix * kHalfPi);
         const float lateGain  = FastSinTable::sin(elMix * kHalfPi);
@@ -329,17 +340,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             highReverbL = earlyGain * earlyL + lateGain * (lateL + pitchAddL);
             highReverbR = earlyGain * earlyR + lateGain * (lateR + pitchAddR);
         } else {
-            // Bypass pitch branch: zero pitch injection into FdnTank, pass late reverb straight through to next matrix stage
-            (void)mPitchDelaySmoother.next();
-            (void)mPitchBlendSmoother.next();
-            (void)mPitchFeedbackSmoother.next();
-
+            // Bypass pitch branch: zero pitch injection into FdnTank, pass late reverb straight through
             mFdnTank.processSample(highInL, highInR, 0.0f, 0.0f, lateL, lateR);
-
-            // Naturally clear pitch delay buffer at write head with zero dynamic memset overhead
-            mPitchDelayBufferL[mPitchDelayWriteIndex] = 0.0f;
-            mPitchDelayBufferR[mPitchDelayWriteIndex] = 0.0f;
-            mPitchDelayWriteIndex = (mPitchDelayWriteIndex + 1) & kPitchDelayMask;
 
             mLastPitchFbL = 0.0f;
             mLastPitchFbR = 0.0f;

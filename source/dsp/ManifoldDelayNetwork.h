@@ -41,6 +41,46 @@ private:
 };
 
 /**
+ * SchroederAllpass: Prime-delay allpass filter for decay diffusion in FDN recirculating lines.
+ * H(z) = (-g + z^-D) / (1 - g * z^-D)
+ * Multiplies temporal reflection density across loop recirculations.
+ * When gain is 0, passes input straight through with zero delay and zero coloration.
+ */
+class SchroederAllpass {
+public:
+    void prepare(size_t baseDelay, double sampleRate) noexcept {
+        const double rateScale = (sampleRate > 100.0 ? sampleRate : 48000.0) / 48000.0;
+        mDelay = std::max(size_t{8}, static_cast<size_t>(std::round(static_cast<double>(baseDelay) * rateScale)));
+        mBuffer.assign(mDelay + 16, 0.0f);
+        mWriteIndex = 0;
+    }
+    void reset() noexcept {
+        std::fill(mBuffer.begin(), mBuffer.end(), 0.0f);
+        mWriteIndex = 0;
+    }
+    void setFeedback(float g) noexcept {
+        mGain = std::clamp(g, -0.85f, 0.85f);
+    }
+    [[nodiscard]] inline float process(float x) noexcept {
+        if (mBuffer.empty() || std::abs(mGain) < 1.0e-4f) {
+            return x;
+        }
+        const float delayed = mBuffer[mWriteIndex];
+        const float y = -mGain * x + delayed;
+        mBuffer[mWriteIndex] = flushDenormal(x + mGain * y);
+        if (++mWriteIndex >= mDelay) {
+            mWriteIndex = 0;
+        }
+        return flushDenormal(y);
+    }
+private:
+    size_t mDelay { 128 };
+    size_t mWriteIndex { 0 };
+    float mGain { 0.0f };
+    std::vector<float> mBuffer;
+};
+
+/**
  * ManifoldDelayNetwork:
  * Real-time non-Euclidean spatial delay network for the RB-26 reverb tank.
  * Manages 8 delay lines with geometry-governed delays, per-line dispersion
@@ -159,6 +199,10 @@ private:
     // Per-line Dispersion Allpass Stages (2 stages per line)
     std::array<FirstOrderAllpass, kNumLines> mDispersionStage1;
     std::array<FirstOrderAllpass, kNumLines> mDispersionStage2;
+
+    // Loop Decay Diffusers (Mutually prime Schroeder allpasses for exponential echo density growth)
+    static constexpr std::array<size_t, kNumLines> kLoopDiffuserLengths = {{ 113, 163, 211, 269, 317, 373, 421, 467 }};
+    std::array<SchroederAllpass, kNumLines> mLoopDiffusers;
 
     // Loop Filters
     // 1. One-pole air absorption damping
