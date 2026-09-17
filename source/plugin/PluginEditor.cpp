@@ -783,7 +783,7 @@ void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
     if (webComponent == nullptr || !webComponent->isVisible())
         return;
 
-    constexpr int kSamples = 240;
+    constexpr int kSamples = 512;
     float sL[kSamples];
     float sR[kSamples];
     processorRef.getScopeSamples(sL, sR, kSamples);
@@ -791,7 +791,7 @@ void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
     bool hasSignal = false;
     for (int i = 0; i < kSamples; ++i)
     {
-        if (std::abs(sL[i]) > 0.001f || std::abs(sR[i]) > 0.001f)
+        if (std::abs(sL[i]) > 0.0005f || std::abs(sR[i]) > 0.0005f)
         {
             hasSignal = true;
             break;
@@ -811,16 +811,20 @@ void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
         silentFrameCounter = 0;
     }
 
-    juce::Array<juce::var> sampleArray;
-    sampleArray.ensureStorageAllocated(kSamples);
+    juce::Array<juce::var> leftArray;
+    juce::Array<juce::var> rightArray;
+    leftArray.ensureStorageAllocated(kSamples);
+    rightArray.ensureStorageAllocated(kSamples);
     for (int i = 0; i < kSamples; ++i)
     {
-        const float mono = 0.5f * (sL[i] + sR[i]);
-        sampleArray.add(mono);
+        leftArray.add(sL[i]);
+        rightArray.add(sR[i]);
     }
 
     auto* obj = new juce::DynamicObject();
-    obj->setProperty("samples", juce::var(sampleArray));
+    obj->setProperty("samplesL", juce::var(leftArray));
+    obj->setProperty("samplesR", juce::var(rightArray));
+    obj->setProperty("samples", juce::var(leftArray)); // mono backward compatibility
     webComponent->emitEventIfBrowserIsVisible("scopeFrame", juce::var(obj));
 }
 

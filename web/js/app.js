@@ -487,7 +487,7 @@ export class ReverbComparisonBuffer {
         if (holdBtn) {
           holdBtn.classList.toggle('is-active', snapshot.decay_hold);
           const statusText = holdBtn.querySelector('.braun-status-text');
-          if (statusText) statusText.textContent = snapshot.decay_hold ? 'HOLD ON' : 'FREEZE HOLD';
+          if (statusText) statusText.textContent = snapshot.decay_hold ? 'FREEZE ON' : 'FREEZE OFF';
           if (this.app.engine) this.app.engine.setParam('freezeHold', snapshot.decay_hold);
         }
       }
@@ -809,7 +809,7 @@ export class BraunRb26App {
             if (holdBtn) {
               holdBtn.classList.toggle('is-active', isHeld);
               const statusText = holdBtn.querySelector('.braun-status-text');
-              if (statusText) statusText.textContent = isHeld ? 'HOLD ON' : 'FREEZE HOLD';
+              if (statusText) statusText.textContent = isHeld ? 'FREEZE ON' : 'FREEZE OFF';
             }
             if (this.engine) this.engine.setParam('freezeHold', isHeld);
             return;
@@ -904,15 +904,18 @@ export class BraunRb26App {
           }
         });
 
-        this._scopeBuffer = new Float32Array(512);
+        this._scopeBufferL = new Float32Array(512);
+        this._scopeBufferR = new Float32Array(512);
         backend.addEventListener('scopeFrame', (data) => {
-          if (data && data.samples && this.display) {
-            const arr = data.samples;
-            const len = Math.min(this._scopeBuffer.length, arr.length);
+          if (data && (data.samplesL || data.samples) && this.display) {
+            const arrL = data.samplesL || data.samples;
+            const arrR = data.samplesR || arrL;
+            const len = Math.min(512, arrL.length);
             for (let i = 0; i < len; i++) {
-              this._scopeBuffer[i] = arr[i];
+              this._scopeBufferL[i] = arrL[i] || 0;
+              this._scopeBufferR[i] = (arrR && typeof arrR[i] === 'number') ? arrR[i] : (arrL[i] || 0);
             }
-            this.display.pushAudio(this._scopeBuffer.subarray(0, len), this._scopeBuffer.subarray(0, len));
+            this.display.pushAudio(this._scopeBufferL.subarray(0, len), this._scopeBufferR.subarray(0, len));
           }
         });
 
@@ -1259,10 +1262,10 @@ export class BraunRb26App {
       holdBtn.addEventListener('click', () => {
         const isHeld = holdBtn.classList.toggle('is-active');
         const statusText = holdBtn.querySelector('.braun-status-text');
-        if (statusText) statusText.textContent = isHeld ? 'HOLD ON' : 'FREEZE HOLD';
+        if (statusText) statusText.textContent = isHeld ? 'FREEZE ON' : 'FREEZE OFF';
         this.engine.setParam('freezeHold', isHeld);
-        this._emitJuceParam('freezeHold', isHeld ? 1.0 : 0.0);
-        this._emitJuceParam('freeze_hold', isHeld ? 1.0 : 0.0);
+        this._emitJuceParam('freezeHold', isHeld ? 1.0 : 0.0, true);
+        this._emitJuceParam('freeze_hold', isHeld ? 1.0 : 0.0, true);
       });
     }
 
@@ -1286,7 +1289,7 @@ export class BraunRb26App {
         const interval = parseInt(btn.getAttribute('data-interval'), 10);
         this.engine.setParam('shimmerInterval', interval);
         const choiceIdx = interval === 7 ? 0 : (interval === 24 ? 2 : 1);
-        this._emitJuceParam('shimmerInterval', choiceIdx);
+        this._emitJuceParam('shimmerInterval', choiceIdx, true);
       });
     });
 
@@ -1299,7 +1302,7 @@ export class BraunRb26App {
         const interval = parseInt(btn.getAttribute('data-interval'), 10);
         this.engine.setParam('dimmerInterval', interval);
         const choiceIdx = interval === -2 ? 0 : (interval === -7 ? 1 : 2);
-        this._emitJuceParam('dimmerInterval', choiceIdx);
+        this._emitJuceParam('dimmerInterval', choiceIdx, true);
       });
     });
 
@@ -1597,7 +1600,7 @@ export class BraunRb26App {
         const isHold = Boolean(params.decay_hold);
         holdBtn.classList.toggle('is-active', isHold);
         const statusText = holdBtn.querySelector('.braun-status-text');
-        if (statusText) statusText.textContent = isHold ? 'HOLD ON' : 'FREEZE HOLD';
+        if (statusText) statusText.textContent = isHold ? 'FREEZE ON' : 'FREEZE OFF';
         this.engine.setParam('freezeHold', isHold);
         this._emitJuceParam('freezeHold', isHold ? 1 : 0);
       }
@@ -1664,7 +1667,7 @@ export class BraunRb26App {
       const isHold = Boolean(preset.params.decay_hold);
       holdBtn.classList.toggle('is-active', isHold);
       const statusText = holdBtn.querySelector('.braun-status-text');
-      if (statusText) statusText.textContent = isHold ? 'HOLD ON' : 'FREEZE HOLD';
+      if (statusText) statusText.textContent = isHold ? 'FREEZE ON' : 'FREEZE OFF';
       this.engine.setParam('freezeHold', isHold);
       this._emitJuceParam('freezeHold', isHold ? 1 : 0);
     }
@@ -2887,10 +2890,14 @@ export class BraunRb26App {
         // CC 64: Sustain Pedal -> Freeze Hold
         const isHeld = val >= 64;
         const holdBtn = document.getElementById('btn-decay-hold');
-        if (holdBtn) holdBtn.classList.toggle('is-active', isHeld);
+        if (holdBtn) {
+          holdBtn.classList.toggle('is-active', isHeld);
+          const statusText = holdBtn.querySelector('.braun-status-text');
+          if (statusText) statusText.textContent = isHeld ? 'FREEZE ON' : 'FREEZE OFF';
+        }
         this.engine.setParam('freezeHold', isHeld);
-        this._emitJuceParam('freezeHold', isHeld ? 1.0 : 0.0);
-        this._emitJuceParam('freeze_hold', isHeld ? 1.0 : 0.0);
+        this._emitJuceParam('freezeHold', isHeld ? 1.0 : 0.0, true);
+        this._emitJuceParam('freeze_hold', isHeld ? 1.0 : 0.0, true);
       }
     }
   }

@@ -36,24 +36,38 @@ int main() {
     const double fs = 48000.0;
     const size_t N = 65536;
 
-    std::cout << "--- DIAGNOSTIC: DualTapDelayPitchShifter Spectrum ---\n";
+    std::cout << "=========================================================\n";
+    std::cout << "DIAGNOSTIC: DualTapDelayPitchShifter Dynamic Interval Test\n";
+    std::cout << "=========================================================\n";
 
-    for (int semi : { 12, -12, -24 }) {
-        rb26::DualTapDelayPitchShifter shifter;
-        shifter.prepare(fs);
+    rb26::DualTapDelayPitchShifter shifter;
+    shifter.prepare(fs);
+
+    // Stream initial sine wave at 440 Hz (warmup while running)
+    size_t sampleCounter = 0;
+    for (size_t i = 0; i < 9600; ++i) {
+        float s = static_cast<float>(std::sin(2.0 * kPi * 440.0 * sampleCounter++ / fs));
+        shifter.processSample(s);
+    }
+
+    int failures = 0;
+    const std::vector<int> testIntervals = { 7, 12, 24, -2, -7, -12 };
+
+    for (int semi : testIntervals) {
+        // DYNAMIC SWITCH WHILE STREAMING (mWriteIndex != 0)
         shifter.setInterval(semi);
 
-        double targetFreq = 440.0 * std::pow(2.0, semi / 12.0);
+        const double targetFreq = 440.0 * std::pow(2.0, semi / 12.0);
 
-        // Run warmup
-        for (int i = 0; i < 9600; ++i) {
-            float s = std::sin(2.0 * kPi * 440.0 * i / fs);
+        // Run post-switch slewing transition
+        for (size_t i = 0; i < 4800; ++i) {
+            float s = static_cast<float>(std::sin(2.0 * kPi * 440.0 * sampleCounter++ / fs));
             shifter.processSample(s);
         }
 
         std::vector<std::complex<double>> buf(N);
         for (size_t i = 0; i < N; ++i) {
-            float s = std::sin(2.0 * kPi * 440.0 * (i + 9600) / fs);
+            float s = static_cast<float>(std::sin(2.0 * kPi * 440.0 * sampleCounter++ / fs));
             float y = shifter.processSample(s);
             double win = 0.5 * (1.0 - std::cos(2.0 * kPi * i / (N - 1)));
             buf[i] = y * win;
@@ -71,28 +85,27 @@ int main() {
             }
         }
 
-        double binW = fs / N;
-        double peakF = maxBin * binW;
+        const double binW = fs / N;
+        const double peakF = maxBin * binW;
+        const double errPct = std::abs(peakF - targetFreq) / targetFreq * 100.0;
 
-        std::cout << "Semitones: " << semi 
-                  << " | Target: " << targetFreq << " Hz"
-                  << " | Peak: " << peakF << " Hz"
-                  << " | Error: " << std::abs(peakF - targetFreq) / targetFreq * 100.0 << "%\n";
+        std::cout << "Dynamic Switch -> Semitones: " << std::setw(3) << semi 
+                  << " | Target: " << std::fixed << std::setprecision(2) << std::setw(7) << targetFreq << " Hz"
+                  << " | Peak: " << std::setw(7) << peakF << " Hz"
+                  << " | Error: " << std::setprecision(3) << errPct << " %"
+                  << (errPct < 2.0 ? " [PASS]" : " [FAIL]") << "\n";
 
-        // Print top 5 peaks
-        std::vector<std::pair<double, double>> peaks;
-        for (size_t k = 2; k < N / 2 - 1; ++k) {
-            double m = std::abs(buf[k]);
-            if (m > std::abs(buf[k - 1]) && m > std::abs(buf[k + 1]) && m > maxMag * 0.1) {
-                peaks.push_back({ m, k * binW });
-            }
-        }
-        std::sort(peaks.rbegin(), peaks.rend());
-        std::cout << "  Top peaks:\n";
-        for (size_t p = 0; p < std::min(size_t{5}, peaks.size()); ++p) {
-            std::cout << "    f = " << peaks[p].second << " Hz (mag = " << peaks[p].first << ")\n";
+        if (errPct >= 2.0) {
+            ++failures;
         }
     }
 
-    return 0;
+    std::cout << "---------------------------------------------------------\n";
+    if (failures == 0) {
+        std::cout << "SUCCESS: All dynamic streaming interval switches verified within < 2% error.\n";
+        return 0;
+    } else {
+        std::cerr << "FAILURE: " << failures << " interval switches failed accuracy threshold.\n";
+        return 1;
+    }
 }

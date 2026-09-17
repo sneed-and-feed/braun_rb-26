@@ -46,10 +46,10 @@ void DualTapDelayPitchShifter::setInterval(int semitones) noexcept {
     mTargetWindowSamples = std::max(64.0f, mWindowSec * mSampleRate);
     if (mWriteIndex == 0) {
         mWindowSamples = mTargetWindowSamples;
-        const float slope = 1.0f - mRatio;
-        const float absSlope = std::abs(slope);
-        mPhaseInc = (absSlope > 1.0e-5f && mWindowSamples > 0.0f) ? (absSlope / mWindowSamples) : 0.0f;
     }
+    const float slope = 1.0f - mRatio;
+    const float absSlope = std::abs(slope);
+    mPhaseInc = (absSlope > 1.0e-5f && mWindowSamples > 0.0f) ? (absSlope / mWindowSamples) : 0.0f;
 }
 
 float DualTapDelayPitchShifter::processSample(float input) noexcept {
