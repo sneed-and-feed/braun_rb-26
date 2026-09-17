@@ -3,7 +3,7 @@
 [![Version: 1.3.6](https://img.shields.io/badge/Version-1.3.6-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.6)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
 [![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](#build-macos-universal)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -16,11 +16,12 @@
 
 ---
 
-### [Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-Windows-x64.zip)
-*Direct download: **[`BRAUN_RB26-v1.3.6-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-Windows-x64.zip)** (~9 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-VST3-Windows-x64.zip)** (~3 MB).*
-*Includes `BRAUN_RB26.vst3` for DAWs (Ableton, FL Studio, Reaper, Cubase, Studio One, Bitwig), `BRAUN_RB26.clap`, and `BRAUN_RB26.exe` standalone desktop app. No compiler or CMake required.*
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.6)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.3.6-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.3.6-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.6/BRAUN_RB26-v1.3.6-VST3-Windows-x64.zip)** (~3 MB).
+* Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
-* **macOS (Apple Silicon & Intel)**: Native Audio Unit (AU `.component`), AUv3, VST3, CLAP, and Standalone (`.app`) build with a single command via [CMake](#build-macos-universal).
+* **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
 * **Linux**: Native VST3, CLAP, and Standalone build via [CMake](#build-linux).
 * **Web Audio**: 100% client-side in any modern browser (macOS, Windows, Linux, iOS, Android) via [Quick Start](#web-showcase-zero-install).
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
