@@ -2,12 +2,13 @@
 
 [![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.1)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![VST3 Plugin](https://img.shields.io/badge/VST3-Windows%20x64-blue?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)
-[![CLAP Plugin](https://img.shields.io/badge/CLAP-Windows%20x64-green?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](#build-macos-universal)
+[![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
+[![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-4A4A4A?style=for-the-badge)](https://isocpp.org/)
 [![JUCE 8](https://img.shields.io/badge/JUCE-8.0.6-EE592B?style=for-the-badge)](https://juce.com/)
-[![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 
 > *An authentic Dieter Rams functionalist studio reverberator and acoustic space synthesizer.*
 > *Direct package-deal hardware sibling companion to the [BRAUN AS-42](https://sneed-and-feed.github.io/).*
@@ -18,7 +19,11 @@
 ### [Download Precompiled Windows Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)
 *Direct download: **[`BRAUN_RB26-v1.3.1-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)** (~9 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-VST3-Windows-x64.zip)** (~3 MB).*
 *Includes `BRAUN_RB26.vst3` for DAWs (Ableton, FL Studio, Reaper, Cubase, Studio One, Bitwig), `BRAUN_RB26.clap`, and `BRAUN_RB26.exe` standalone desktop app. No compiler or CMake required.*
-*All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.*
+
+* **macOS (Apple Silicon & Intel)**: Native Audio Unit (AU `.component`), AUv3, VST3, CLAP, and Standalone (`.app`) build with a single command via [CMake](#build-macos-universal).
+* **Linux**: Native VST3, CLAP, and Standalone build via [CMake](#build-linux).
+* **Web Audio**: 100% client-side in any modern browser (macOS, Windows, Linux, iOS, Android) via [Quick Start](#web-showcase-zero-install).
+* All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
 > [!TIP]
 > **What's New in v1.3.1 (Room Expansion, Freeze Sustain, Decay Diffusion & 0% Pitch Bypass)**:
@@ -32,7 +37,7 @@
 
 ## Overview
 
-The RB-26 is a research-grade algorithmic reverberator that extends the Braun functionalist design language into spatial acoustics. It ships as native **VST3**, **CLAP**, **AU/AUv3**, and **Standalone** plugin formats compiled from a single C++20 DSP core, plus a fully-featured **Web Audio** showcase that runs entirely client-side in any modern browser.
+The RB-26 is a research-grade algorithmic reverberator that extends the Braun functionalist design language into spatial acoustics. It ships as native **VST3**, **CLAP**, **AU/AUv3**, and **Standalone** plugin formats for **Windows**, **macOS** (Universal Apple Silicon & Intel), and **Linux**, compiled from a single C++20 DSP core, plus a fully-featured **Web Audio** showcase that runs entirely client-side in any modern browser.
 
 Unlike conventional reverb processors, the RB-26 implements four **non-Euclidean spatial manifold** geometries, **Shepard-Risset continuous pitch spirals**, a **bidirectional pitch-shifted feedback diffusion** network ("Shimmer" + "Dimmer"), a decoupled **4th-order Linkwitz-Riley low-end matrix**, an interactive **Deck 05 Vector Modulation Pad**, and an onboard **playable acoustic exciter engine** with Harold Budd felt-piano physical modeling — all zero-allocation, real-time safe, and verifiable against 388 headless DSP stress tests.
 
@@ -44,8 +49,13 @@ Unlike conventional reverb processors, the RB-26 implements four **non-Euclidean
 
 Launch the local static server:
 
-```cmd
+```bash
+# Windows
 start.bat
+
+# macOS / Linux / cross-platform
+npm start
+# or: node server.js
 ```
 
 Opens `http://localhost:3826/` with the full 19" 2U rackmount interface, 21 rotary knobs, Deck 05 Vector Modulation Pad, 4-mode CRT vector scope, 10 factory presets, and onboard exciter.
@@ -54,32 +64,53 @@ Opens `http://localhost:3826/` with the full 19" 2U rackmount interface, 21 rota
 > The instrument initializes in **Standby** mode (`power = false`) by default to protect studio monitors. Click the orange **POWER** switch or press `P` to engage the audio graph.
 > Browsers enforce CORS restrictions on ES modules loaded via `file://`. Always launch through `start.bat` or `node server.js` to ensure all AudioWorklets and Web Audio graphs instantiate correctly.
 
-### VST3 Plugin (DAW Installation)
+### Plugin Installation (DAW Setup)
 
-1. Download **[`BRAUN_RB26-v1.3.1-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-Windows-x64.zip)** or **[`BRAUN_RB26-v1.3.1-VST3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.1/BRAUN_RB26-v1.3.1-VST3-Windows-x64.zip)**.
-2. Extract the archive and copy the `BRAUN_RB26.vst3` folder into your system VST3 directory:
+#### VST3 Plugin
 
-```powershell
-Copy-Item -Recurse "BRAUN_RB26.vst3" "C:\Program Files\Common Files\VST3\"
+- **Windows**: Copy `BRAUN_RB26.vst3` to `C:\Program Files\Common Files\VST3\`
+  ```powershell
+  Copy-Item -Recurse "BRAUN_RB26.vst3" "C:\Program Files\Common Files\VST3\"
+  ```
+- **macOS**: Copy `BRAUN_RB26.vst3` to `~/Library/Audio/Plug-Ins/VST3/` or `/Library/Audio/Plug-Ins/VST3/`
+  ```bash
+  cp -R "BRAUN_RB26.vst3" ~/Library/Audio/Plug-Ins/VST3/
+  ```
+- **Linux**: Copy `BRAUN_RB26.vst3` to `~/.vst3/`
+  ```bash
+  cp -r "BRAUN_RB26.vst3" ~/.vst3/
+  ```
+
+#### Audio Unit (AU) Plugin (macOS Only)
+
+Copy `BRAUN_RB26.component` to `~/Library/Audio/Plug-Ins/Components/` for Logic Pro, GarageBand, and AU hosts:
+```bash
+cp -R "BRAUN_RB26.component" ~/Library/Audio/Plug-Ins/Components/
 ```
 
-*(Or if compiled locally from source: `Copy-Item -Recurse "build\BRAUN_RB26_artefacts\Release\VST3\BRAUN_RB26.vst3" "C:\Program Files\Common Files\VST3\"`)*
+#### CLAP Plugin
 
-3. Rescan plugins in your DAW (Ableton Live, FL Studio, Reaper, Cubase, Studio One, Bitwig).
-   > [!TIP]
-   > The plugin defaults to **Standby** mode (`power = false`) on initial load to protect studio monitors and prevent startup thumps. Click the orange circular **POWER** button or press `P` to turn the reverb engine on!
+- **Windows**: Copy `BRAUN_RB26.clap` to `C:\Program Files\Common Files\CLAP\`
+  ```powershell
+  Copy-Item "BRAUN_RB26.clap" "C:\Program Files\Common Files\CLAP\"
+  ```
+- **macOS**: Copy `BRAUN_RB26.clap` to `~/Library/Audio/Plug-Ins/CLAP/`
+  ```bash
+  cp -R "BRAUN_RB26.clap" ~/Library/Audio/Plug-Ins/CLAP/
+  ```
+- **Linux**: Copy `BRAUN_RB26.clap` to `~/.clap/`
+  ```bash
+  cp "BRAUN_RB26.clap" ~/.clap/
+  ```
 
-### CLAP Plugin
-
-Copy `BRAUN_RB26.clap` to your system CLAP directory:
-
-```powershell
-Copy-Item "BRAUN_RB26.clap" "C:\Program Files\Common Files\CLAP\"
-```
+> [!TIP]
+> The plugin defaults to **Standby** mode (`power = false`) on initial load to protect studio monitors and prevent startup thumps. Click the orange circular **POWER** button or press `P` to turn the reverb engine on!
 
 ### Standalone Desktop Application
 
-Run `BRAUN_RB26.exe` directly for low-latency ASIO/WASAPI monitoring without needing a DAW.
+- **Windows**: Run `BRAUN_RB26.exe` directly for low-latency ASIO/WASAPI monitoring.
+- **macOS**: Launch `BRAUN_RB26.app` with CoreAudio integration.
+- **Linux**: Run `./BRAUN_RB26` with ALSA/JACK support.
 
 ---
 
