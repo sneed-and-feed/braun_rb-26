@@ -17,7 +17,7 @@
         "mono_bass": 120,
         "rt60_decay": 6.5,
         "room_size": 100,
-        "damping_high": 7500,
+        "damping_high": 1800,
         "decay_hold": false,
         "shimmer_send": 40,
         "dimmer_send": 35,

@@ -110,7 +110,7 @@ inline const std::array<ParameterMetadata, 26>& getParameterMetadataTable() {
         { "sub_mono_hz",        "subMonoHz",        "Sub Mono Freq",         "Hz",   20.0f,   250.0f,   120.0f, false, false },
         { "room_size",          "roomSize",         "Room Size",             "",     0.1f,    4.0f,     1.0f,   false, false },
         { "decay_rt60_sec",     "decayRt60Sec",     "Decay Time (RT60)",     "s",    0.2f,    30.0f,    6.5f,   false, false },
-        { "high_damping_hz",    "highDampingHz",    "High Damping Freq",     "Hz",   1000.0f, 20000.0f, 7500.0f,false, false },
+        { "high_damping_hz",    "highDampingHz",    "High Damping Freq",     "Hz",   1000.0f, 20000.0f, 1800.0f,false, false },
         { "diffusion_density",  "diffusionDensity", "Diffusion Density",     "%",    0.0f,    1.0f,     0.75f,  false, false },
         { "freeze_hold",        "freezeHold",       "Freeze Hold",           "",     0.0f,    1.0f,     0.0f,   true,  false },
         { "shimmer_send",       "shimmerSend",      "Shimmer Send",          "%",    0.0f,    1.0f,     0.40f,  false, false },
@@ -144,7 +144,7 @@ struct alignas(16) Rb26ParameterSnapshot {
     float subMonoHz        { 120.0f };
     float roomSize         { 1.0f };
     float decayRt60Sec     { 6.5f };
-    float highDampingHz    { 7500.0f };
+    float highDampingHz    { 1800.0f };
     float diffusionDensity { 0.75f };
     bool  freezeHold       { false };
     float shimmerSend      { 0.40f };
@@ -378,12 +378,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         6.5f,
         juce::AudioParameterFloatAttributes().withLabel("s")));
 
-    // 10. High Damping Frequency (1000.0 - 20000.0 Hz, default 7500.0 Hz, log skew 0.35)
+    // 10. High Damping Frequency (1000.0 - 20000.0 Hz, default 1800.0 Hz, log skew 0.35)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         ParamIDs::highDampingHz,
         "High Damping Freq",
         juce::NormalisableRange<float>(1000.0f, 20000.0f, 1.0f, 0.35f),
-        7500.0f,
+        1800.0f,
         juce::AudioParameterFloatAttributes().withLabel("Hz")));
 
     // 11. Diffusion Density (0.0 - 1.0, default 0.75)

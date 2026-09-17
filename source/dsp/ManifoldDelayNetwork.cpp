@@ -11,6 +11,11 @@ static constexpr std::array<float, 8> kAiryZeros = {{
     7.94413359f, 9.02265085f, 10.04017434f, 11.00852430f
 }};
 
+// Prime decorrelation offsets for Poincaré Hyperbolic (breaks modal clustering and standing-wave interference at C6 / ~1046.5 Hz)
+static constexpr std::array<size_t, 8> kPoincarePrimeOffsets = {{
+    0, 11, 37, 41, 53, 67, 89, 101
+}};
+
 // Prime decorrelation offsets for Whispering Gallery
 static constexpr std::array<size_t, 8> kWhisperingPrimeOffsets = {{
     0, 13, 29, 43, 61, 79, 97, 113
@@ -162,7 +167,7 @@ void ManifoldDelayNetwork::setManifold(ManifoldType type) noexcept {
 }
 
 void ManifoldDelayNetwork::computePoincareLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
-    // Horocycle delays: L_k = round(L_0 * cosh(xi * k / 7))
+    // Horocycle delays: L_k = round(L_0 * cosh(xi * k / 7)) + primeOffset
     // Nominal L_0 = 1000 at 48 kHz, roomSize = 1.0; xi = 1.760742
     const double rateScale = mSampleRate / 48000.0;
     const double safeRoom = std::clamp(static_cast<double>(mRoomSize), 0.05, static_cast<double>(mMaxRoomSize));
@@ -170,7 +175,7 @@ void ManifoldDelayNetwork::computePoincareLengths(std::array<size_t, kNumLines>&
 
     for (size_t k = 0; k < kNumLines; ++k) {
         const double raw = l0 * kPoincareCosh[k];
-        const size_t len = static_cast<size_t>(std::round(raw));
+        const size_t len = static_cast<size_t>(std::round(raw)) + kPoincarePrimeOffsets[k];
         lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 4096);
     }
 }
@@ -260,7 +265,7 @@ void ManifoldDelayNetwork::updateFilterCoefficients() noexcept {
 
     mDispCoeff1 = baseA1 * mDiffusionDensity;
     mDispCoeff2 = baseA2 * mDiffusionDensity;
-    const float loopDiffFeedback = 0.65f * mDiffusionDensity;
+    const float loopDiffFeedback = 0.50f * mDiffusionDensity;
 
     for (size_t k = 0; k < kNumLines; ++k) {
         mDispersionStage1[k].setCoeff(mDispCoeff1);

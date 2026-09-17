@@ -33,7 +33,7 @@ struct Rb26Parameters {
     // Reverb Tank (FDN)
     float roomSize = 1.0f;          // 0.1 - 4.0 (Expanded Dimensions)
     float decayRt60Sec = 6.5f;      // 0.2 - 30.0 s
-    float highDampingHz = 7500.0f;  // 1000.0 - 20000.0 Hz
+    float highDampingHz = 1800.0f;  // 1000.0 - 20000.0 Hz
     float diffusionDensity = 0.75f; // 0.0 - 1.0
     bool freezeHold = false;        // true/false
     
