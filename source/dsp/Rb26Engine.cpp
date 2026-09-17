@@ -159,6 +159,7 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
     mDryWetSmoother.setTarget(params.dryWetMix);
     mEarlyLateSmoother.setTarget(params.earlyLateMix);
     mStereoWidthSmoother.setTarget(params.stereoWidth);
+    mOutputTrimSmoother.setTarget(dbToGain(params.outputTrimDb));
     mPitchFeedbackSmoother.setTarget(std::clamp(params.pitchFeedback, 0.0f, 0.95f));
     mPitchDelaySmoother.setTarget(std::clamp(params.pitchDelayMs, 20.0f, 500.0f));
     mPitchBlendSmoother.setTarget(std::clamp(params.pitchBlend, -1.0f, 1.0f));

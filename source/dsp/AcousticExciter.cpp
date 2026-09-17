@@ -10,8 +10,9 @@ namespace rb26 {
 // ChimeVoice Implementation
 // ============================================================================
 
-void ChimeVoice::prepare(double sampleRate) noexcept {
+void ChimeVoice::prepare(double sampleRate, uint32_t voiceIndex) noexcept {
     mSampleRate = (sampleRate > 1000.0) ? static_cast<float>(sampleRate) : 48000.0f;
+    mPrng.setSeed(0x12345678ULL + static_cast<uint64_t>(voiceIndex + 1) * 0x9e3779b97f4a7c15ULL);
     reset();
 }
 
@@ -29,12 +30,46 @@ void ChimeVoice::reset() noexcept {
         mAmp[i] = 0.0f;
     }
 
-    mNoiseEnv = 0.0f;
-    mNoiseDecay = 0.99f;
-    mPrng.setSeed(0x12345678ULL);
+    mHammerActive = false;
+    mHammerStep = 0;
+    mHammerAttackSamples = 0;
+    mHammerDecaySamples = 0;
+    mHammerGain = 0.0f;
+    mHammerTargetGain = 0.0f;
+    mHammerDecayCoeff = 0.99f;
+
+    mNoisePole1 = 0.0f;
+    mNoisePole2 = 0.0f;
+
+    mWoodPhase = 0.0f;
+    mWoodPhaseInc = 0.0f;
+    mWoodEnv = 0.0f;
+    mWoodDecayCoeff = 0.99f;
+
+    mHammerFilter.reset();
+
+    mLastVoiceL = 0.0f;
+    mLastVoiceR = 0.0f;
+    mStealSampleL = 0.0f;
+    mStealSampleR = 0.0f;
+    mStealSamplesLeft = 0;
+    mStealSamplesTotal = 0;
 }
 
-void ChimeVoice::trigger(float midiNote, float velocity, float durationSec) noexcept {
+void ChimeVoice::trigger(float midiNote, float velocity, float durationSec, bool isChord) noexcept {
+    // 1. Voice stealing de-click ramp: if this voice was active and producing signal,
+    // crossfade its previous output sample down to zero over 5ms to guarantee C0 continuity
+    if (mActive && (std::abs(mLastVoiceL) > 1.0e-5f || std::abs(mLastVoiceR) > 1.0e-5f)) {
+        mStealSampleL = mLastVoiceL;
+        mStealSampleR = mLastVoiceR;
+        mStealSamplesTotal = std::max(1u, static_cast<uint32_t>(0.005f * mSampleRate));
+        mStealSamplesLeft = mStealSamplesTotal;
+    } else {
+        mStealSamplesLeft = 0;
+        mStealSampleL = 0.0f;
+        mStealSampleR = 0.0f;
+    }
+
     mMidiNote = midiNote;
     mVelocity = std::clamp(velocity, 0.05f, 1.0f);
     mAge = 0;
@@ -61,9 +96,41 @@ void ChimeVoice::trigger(float midiNote, float velocity, float durationSec) noex
         mEnv[i] = 1.0f;
     }
 
-    // Soft felt hammer noise transient burst (20 ms contact decay)
-    mNoiseEnv = mVelocity * 0.20f * 0.22f;
-    mNoiseDecay = std::exp(-6.907755f / (0.020f * mSampleRate));
+    // Register modeling matching AS-42 FeltPianoDsp.h (warm wooden felt transient)
+    const bool isBass = midiNote < 48.0f;
+    const bool isTreble = midiNote >= 72.0f;
+
+    const float hammerCutoff = isBass
+        ? std::min(220.0f, std::max(110.0f, f0 * 1.3f))
+        : (isTreble ? std::min(750.0f, std::max(550.0f, f0 * 0.70f)) : std::min(420.0f, std::max(220.0f, f0 * 1.1f)));
+    const float hammerThumpGainMult = isBass ? 1.10f : (isTreble ? 0.70f : 0.90f);
+    const float thumpDuration = isBass ? 0.032f : (isTreble ? 0.018f : 0.026f);
+    const float chordScale = isChord ? 0.40f : 1.0f;
+
+    // Reset hammer filter state to prevent residual click from prior note, then configure smooth lowpass
+    mHammerFilter.reset();
+    mHammerFilter.configure(Biquad::Type::Lowpass, mSampleRate, hammerCutoff, 0.85f);
+
+    mHammerActive = true;
+    mHammerStep = 0;
+    const float hammerAttackTime = isBass ? 0.0065f : (isTreble ? 0.0045f : 0.0055f);
+    mHammerAttackSamples = std::max(1u, static_cast<uint32_t>(hammerAttackTime * mSampleRate));
+    mHammerDecaySamples = std::max(mHammerAttackSamples + 1u, static_cast<uint32_t>(thumpDuration * mSampleRate));
+    mHammerGain = 0.0f;
+    mHammerTargetGain = mVelocity * 0.06f * hammerThumpGainMult * chordScale;
+    const float decayTime = std::max(0.005f, thumpDuration - hammerAttackTime);
+    mHammerDecayCoeff = std::exp(-4.0f / (decayTime * mSampleRate));
+
+    // Reset Brownian noise poles
+    mNoisePole1 = 0.0f;
+    mNoisePole2 = 0.0f;
+
+    // Wooden modal body resonance (~135 Hz spruce thump)
+    // Decorrelate initial phase during chords so simultaneous voices don't constructively spike
+    mWoodPhase = isChord ? (mPrng.nextFloat01() * kTwoPi) : 0.0f;
+    mWoodPhaseInc = 135.0f * twoPiOverFs;
+    mWoodEnv = 1.0f;
+    mWoodDecayCoeff = std::exp(-1.0f / (0.010f * mSampleRate));
 }
 
 void ChimeVoice::release() noexcept {
@@ -90,6 +157,14 @@ void ChimeVoice::processSample(float& outL, float& outR) noexcept {
     float voiceL = 0.0f;
     float voiceR = 0.0f;
 
+    // Handle voice stealing declick down-ramp
+    if (mStealSamplesLeft > 0) {
+        const float stealFrac = static_cast<float>(mStealSamplesLeft) / static_cast<float>(mStealSamplesTotal);
+        voiceL += mStealSampleL * stealFrac;
+        voiceR += mStealSampleR * stealFrac;
+        --mStealSamplesLeft;
+    }
+
     for (size_t i = 0; i < kNumChimeModes; ++i) {
         const float modeSig = FastSinTable::sin(mPhase[i]) * (mAmp[i] * mEnv[i]);
         voiceL += modeSig * panL[i];
@@ -102,24 +177,61 @@ void ChimeVoice::processSample(float& outL, float& outR) noexcept {
         mEnv[i] = flushDenormal(mEnv[i]);
     }
 
-    // Attack noise transient injection
-    if (mNoiseEnv > 1.0e-5f) {
-        const float white = (mPrng.nextFloat01() * 2.0f) - 1.0f;
-        const float noiseSig = white * mNoiseEnv;
-        voiceL += noiseSig * 0.7071f;
-        voiceR += noiseSig * 0.7071f;
+    // Wooden felt hammer transient synthesis (eliminating typewriter click)
+    if (mHammerActive) {
+        mHammerStep++;
+        if (mHammerStep < mHammerAttackSamples) {
+            const float frac = static_cast<float>(mHammerStep) / static_cast<float>(mHammerAttackSamples);
+            // Smooth raised-cosine (Hann) attack: zero start value and zero initial derivative
+            mHammerGain = mHammerTargetGain * (0.5f * (1.0f - std::cos(kPi * frac)));
+        } else if (mHammerStep < mHammerDecaySamples) {
+            mHammerGain *= mHammerDecayCoeff;
+        } else {
+            const uint32_t fadeSamples = static_cast<uint32_t>(0.004f * mSampleRate);
+            if (mHammerStep < mHammerDecaySamples + fadeSamples) {
+                const float frac = 1.0f - static_cast<float>(mHammerStep - mHammerDecaySamples) / static_cast<float>(fadeSamples);
+                mHammerGain = (mHammerTargetGain * 0.0183f) * std::max(0.0f, frac);
+            } else {
+                mHammerGain = 0.0f;
+                mHammerActive = false;
+            }
+        }
+        mHammerGain = flushDenormal(mHammerGain);
 
-        mNoiseEnv *= mNoiseDecay;
-        mNoiseEnv = flushDenormal(mNoiseEnv);
+        if (mHammerGain > 1.0e-6f) {
+            // 1. Low-passed Brownian felt noise texture (Brownian 2-pole lowpass)
+            const float white = (mPrng.nextFloat01() * 2.0f) - 1.0f;
+            mNoisePole1 = mNoisePole1 * 0.82f + white * 0.18f;
+            mNoisePole2 = mNoisePole2 * 0.82f + mNoisePole1 * 0.18f;
+            const float feltNoise = mNoisePole2;
+
+            // 2. Damped ~135 Hz spruce wood modal thump
+            const float woodThump = FastSinTable::sin(mWoodPhase) * mWoodEnv;
+            mWoodPhase += mWoodPhaseInc;
+            if (mWoodPhase >= kTwoPi) mWoodPhase -= kTwoPi;
+            mWoodEnv *= mWoodDecayCoeff;
+            mWoodEnv = flushDenormal(mWoodEnv);
+
+            // 3. Composite transient: 65% wood knock + 35% low-passed felt
+            const float rawTransient = 0.65f * woodThump + 0.35f * feltNoise;
+            const float filteredTransient = mHammerFilter.process(rawTransient);
+            const float hammerSig = filteredTransient * mHammerGain;
+
+            voiceL += hammerSig * 0.7071f;
+            voiceR += hammerSig * 0.7071f;
+        }
     }
 
-    // Voice termination check (fundamental mode and noise have decayed into silence)
-    if (mEnv[0] < 1.0e-4f && mNoiseEnv < 1.0e-5f) {
+    // Voice termination check (fundamental mode, hammer, and steal fade have decayed into silence)
+    if (mEnv[0] < 1.0e-4f && !mHammerActive && mStealSamplesLeft == 0) {
         mActive = false;
     }
 
-    outL += flushDenormal(voiceL);
-    outR += flushDenormal(voiceR);
+    mLastVoiceL = flushDenormal(voiceL);
+    mLastVoiceR = flushDenormal(voiceR);
+
+    outL += mLastVoiceL;
+    outR += mLastVoiceR;
 }
 
 // ============================================================================
@@ -146,6 +258,10 @@ void LaboratoryImpulseGenerator::reset() noexcept {
     mHammerFreqInc = 0.0f;
     mHammerEnv = 0.0f;
     mHammerDecay = 0.0f;
+    mLastHammerVal = 0.0f;
+    mHammerStealVal = 0.0f;
+    mHammerStealRemaining = 0;
+    mHammerStealTotal = 0;
 }
 
 void LaboratoryImpulseGenerator::triggerDirac(float polarity) noexcept {
@@ -165,6 +281,16 @@ void LaboratoryImpulseGenerator::triggerHammerThud(float hardness) noexcept {
     const float h = std::clamp(hardness, 0.0f, 1.0f);
     // Soundboard fundamental resonance centered at 78 Hz
     const float fBody = 78.0f * (0.90f + 0.20f * h);
+
+    // Crossfade declick if already running to prevent step jump
+    if ((mHammerRemaining > 0 || mHammerStealRemaining > 0) && std::abs(mLastHammerVal) > 1.0e-4f) {
+        mHammerStealVal = mLastHammerVal;
+        mHammerStealTotal = std::max(1, static_cast<int>(0.003f * mSampleRate));
+        mHammerStealRemaining = mHammerStealTotal;
+    } else {
+        mHammerStealRemaining = 0;
+    }
+
     mHammerPhase = 0.0f;
     mHammerFreqInc = fBody * (kTwoPi / mSampleRate);
     mHammerEnv = 1.0f;
@@ -212,26 +338,39 @@ void LaboratoryImpulseGenerator::processSample(float& outL, float& outR) noexcep
         mBurstRemaining--;
     }
 
-    // 3. Acoustic soundboard hammer thud (78 Hz body resonance + 2.5 ms contact click)
-    if (mHammerRemaining > 0) {
-        const float bodySine = FastSinTable::sin(mHammerPhase) * mHammerEnv;
-        mHammerPhase += mHammerFreqInc;
-        if (mHammerPhase >= kTwoPi) mHammerPhase -= kTwoPi;
-        mHammerEnv *= mHammerDecay;
-        mHammerEnv = flushDenormal(mHammerEnv);
+    // 3. Acoustic soundboard hammer thud (78 Hz body resonance with smooth 3ms anti-click attack)
+    if (mHammerRemaining > 0 || mHammerStealRemaining > 0) {
+        float hammerSig = 0.0f;
 
-        const int elapsed = mHammerTotal - mHammerRemaining;
-        const int contactSamples = std::max(1, static_cast<int>(0.0025f * mSampleRate));
-        float click = 0.0f;
-        if (elapsed < contactSamples) {
-            const float tNorm = static_cast<float>(elapsed) / static_cast<float>(contactSamples);
-            click = std::pow(1.0f - tNorm, 3.0f) * 0.60f;
+        if (mHammerRemaining > 0) {
+            const float bodySine = FastSinTable::sin(mHammerPhase) * mHammerEnv;
+            mHammerPhase += mHammerFreqInc;
+            if (mHammerPhase >= kTwoPi) mHammerPhase -= kTwoPi;
+            mHammerEnv *= mHammerDecay;
+            mHammerEnv = flushDenormal(mHammerEnv);
+
+            const int elapsed = mHammerTotal - mHammerRemaining;
+            const int attackSamples = std::max(1, static_cast<int>(0.003f * mSampleRate));
+            float attackGain = 1.0f;
+            if (elapsed < attackSamples) {
+                attackGain = static_cast<float>(elapsed) / static_cast<float>(attackSamples);
+            }
+
+            hammerSig = bodySine * attackGain * 0.85f;
+            mHammerRemaining--;
         }
 
-        const float thudVal = (bodySine * 0.65f + click) * 0.85f;
-        outL += thudVal;
-        outR += thudVal;
-        mHammerRemaining--;
+        if (mHammerStealRemaining > 0) {
+            const float frac = static_cast<float>(mHammerStealRemaining) / static_cast<float>(mHammerStealTotal);
+            hammerSig += mHammerStealVal * frac;
+            --mHammerStealRemaining;
+        }
+
+        mLastHammerVal = hammerSig;
+        outL += hammerSig;
+        outR += hammerSig;
+    } else {
+        mLastHammerVal = 0.0f;
     }
 }
 
@@ -319,8 +458,8 @@ AcousticExciterEngine::AcousticExciterEngine() noexcept {
 void AcousticExciterEngine::prepare(double sampleRate) noexcept {
     mSampleRate = (sampleRate > 1000.0) ? sampleRate : 48000.0;
 
-    for (auto& voice : mVoices) {
-        voice.prepare(mSampleRate);
+    for (size_t i = 0; i < mVoices.size(); ++i) {
+        mVoices[i].prepare(mSampleRate, static_cast<uint32_t>(i));
     }
 
     mLabGen.prepare(mSampleRate);
@@ -429,24 +568,35 @@ bool AcousticExciterEngine::triggerHammerThudAsync(float hardness) noexcept {
     return postTriggerEvent(evt);
 }
 
-void AcousticExciterEngine::triggerVoice(float midiNote, float velocity, float durationSec) noexcept {
-    // 16-Voice Pool: Look for an inactive voice, or steal the oldest voice (LRU)
+void AcousticExciterEngine::triggerVoice(float midiNote, float velocity, float durationSec, bool isChord) noexcept {
+    // 1. Same-pitch re-triggering: if an active voice is already playing this note,
+    // retrigger that voice to simulate physical string re-strike and prevent voice pileup
     ChimeVoice* targetVoice = nullptr;
-    uint32_t maxAge = 0;
-
+    const float roundNote = std::round(midiNote);
     for (auto& voice : mVoices) {
-        if (!voice.isActive()) {
+        if (voice.isActive() && std::abs(std::round(voice.getMidiNote()) - roundNote) < 0.5f) {
             targetVoice = &voice;
             break;
         }
-        if (voice.getAge() > maxAge) {
-            maxAge = voice.getAge();
-            targetVoice = &voice;
+    }
+
+    // 2. 16-Voice Pool: Look for an inactive voice, or steal the oldest voice (LRU)
+    if (targetVoice == nullptr) {
+        uint32_t maxAge = 0;
+        for (auto& voice : mVoices) {
+            if (!voice.isActive()) {
+                targetVoice = &voice;
+                break;
+            }
+            if (voice.getAge() > maxAge) {
+                maxAge = voice.getAge();
+                targetVoice = &voice;
+            }
         }
     }
 
     if (targetVoice != nullptr) {
-        targetVoice->trigger(midiNote, velocity, durationSec);
+        targetVoice->trigger(midiNote, velocity, durationSec, isChord);
     }
 }
 
@@ -483,7 +633,7 @@ void AcousticExciterEngine::triggerChord(int chordIndex, float rootMidi, float v
 
         const int delaySamples = static_cast<int>((delayMs * 0.001f) * static_cast<float>(mSampleRate));
         if (delaySamples <= 0) {
-            triggerVoice(notePitch, velocity, 3.5f);
+            triggerVoice(notePitch, velocity, 3.5f, true);
         } else {
             // Find free slot in fixed scheduled notes pool
             for (auto& sn : mScheduledNotes) {
@@ -493,6 +643,7 @@ void AcousticExciterEngine::triggerChord(int chordIndex, float rootMidi, float v
                     sn.midiNote = notePitch;
                     sn.velocity = velocity;
                     sn.durationSec = 3.5f;
+                    sn.isChord = true;
                     break;
                 }
             }
@@ -597,7 +748,7 @@ void AcousticExciterEngine::process(float* outL, float* outR, int numSamples) no
         for (auto& sn : mScheduledNotes) {
             if (sn.active) {
                 if (--sn.delaySamples <= 0) {
-                    triggerVoice(sn.midiNote, sn.velocity, sn.durationSec);
+                    triggerVoice(sn.midiNote, sn.velocity, sn.durationSec, sn.isChord);
                     sn.active = false;
                 }
             }
@@ -663,7 +814,7 @@ void AcousticExciterEngine::process(float* const* directBus, float* const* rever
         for (auto& sn : mScheduledNotes) {
             if (sn.active) {
                 if (--sn.delaySamples <= 0) {
-                    triggerVoice(sn.midiNote, sn.velocity, sn.durationSec);
+                    triggerVoice(sn.midiNote, sn.velocity, sn.durationSec, sn.isChord);
                     sn.active = false;
                 }
             }
@@ -743,7 +894,7 @@ void AcousticExciterEngine::process(float* const* directBus, float* const* rever
         for (auto& sn : mScheduledNotes) {
             if (sn.active) {
                 if (--sn.delaySamples <= 0) {
-                    triggerVoice(sn.midiNote, sn.velocity, sn.durationSec);
+                    triggerVoice(sn.midiNote, sn.velocity, sn.durationSec, sn.isChord);
                     sn.active = false;
                 }
             }

@@ -228,9 +228,9 @@ class ChimeVoice {
 public:
     ChimeVoice() noexcept = default;
 
-    void prepare(double sampleRate) noexcept;
+    void prepare(double sampleRate, uint32_t voiceIndex = 0) noexcept;
     void reset() noexcept;
-    void trigger(float midiNote, float velocity, float durationSec = 3.5f) noexcept;
+    void trigger(float midiNote, float velocity, float durationSec = 3.5f, bool isChord = false) noexcept;
     void release() noexcept;
 
     [[nodiscard]] bool isActive() const noexcept { return mActive; }
@@ -252,8 +252,36 @@ private:
     std::array<float, kNumChimeModes> mDecayCoeff { 0.0f };
     std::array<float, kNumChimeModes> mAmp { 0.0f };
 
-    float mNoiseEnv { 0.0f };
-    float mNoiseDecay { 0.0f };
+    // Wooden felt hammer transient
+    bool mHammerActive { false };
+    uint32_t mHammerStep { 0 };
+    uint32_t mHammerAttackSamples { 0 };
+    uint32_t mHammerDecaySamples { 0 };
+    float mHammerGain { 0.0f };
+    float mHammerTargetGain { 0.0f };
+    float mHammerDecayCoeff { 0.0f };
+
+    // 2-pole lowpass filter for Brownian felt texture
+    float mNoisePole1 { 0.0f };
+    float mNoisePole2 { 0.0f };
+
+    // Wooden modal body resonance (~135 Hz spruce thump)
+    float mWoodPhase { 0.0f };
+    float mWoodPhaseInc { 0.0f };
+    float mWoodEnv { 0.0f };
+    float mWoodDecayCoeff { 0.0f };
+
+    // Gentle lowpass filter for hammer damping (Q = 0.85)
+    Biquad mHammerFilter;
+
+    // Smooth voice stealing de-click ramp (5ms crossfade)
+    float mLastVoiceL { 0.0f };
+    float mLastVoiceR { 0.0f };
+    float mStealSampleL { 0.0f };
+    float mStealSampleR { 0.0f };
+    uint32_t mStealSamplesLeft { 0 };
+    uint32_t mStealSamplesTotal { 0 };
+
     FastPrng mPrng { 0x12345678ULL };
 };
 
@@ -261,7 +289,7 @@ private:
 // LaboratoryImpulseGenerator: Precision Acoustic Calibration Signals
 // - 1-Sample Dirac Delta Pulse
 // - Broadband Paul Kellet 3-Pole Pink Noise Burst with Tukey Cosine Window
-// - Acoustic Soundboard Hammer Thud (78 Hz body resonance + Hertzian contact click)
+// - Acoustic Soundboard Hammer Thud (78 Hz body resonance with smooth anti-click attack)
 // ============================================================================
 class LaboratoryImpulseGenerator {
 public:
@@ -275,7 +303,7 @@ public:
     void triggerHammerThud(float hardness = 0.7f) noexcept;
 
     [[nodiscard]] bool isBusy() const noexcept {
-        return (mDiracRemaining > 0) || (mBurstRemaining > 0) || (mHammerRemaining > 0);
+        return (mDiracRemaining > 0) || (mBurstRemaining > 0) || (mHammerRemaining > 0) || (mHammerStealRemaining > 0);
     }
 
     void processSample(float& outL, float& outR) noexcept;
@@ -300,6 +328,10 @@ private:
     float mHammerFreqInc { 0.0f };
     float mHammerEnv { 0.0f };
     float mHammerDecay { 0.0f };
+    float mLastHammerVal { 0.0f };
+    float mHammerStealVal { 0.0f };
+    int mHammerStealRemaining { 0 };
+    int mHammerStealTotal { 0 };
 };
 
 // ============================================================================
@@ -346,6 +378,7 @@ struct ScheduledNote {
     float midiNote { 60.0f };
     float velocity { 0.70f };
     float durationSec { 3.5f };
+    bool isChord { false };
 };
 
 // ============================================================================
@@ -419,7 +452,7 @@ public:
     bool triggerHammerThudAsync(float hardness = 0.7f) noexcept;
 
     // Audio thread direct voice control (e.g. from incoming MIDI Note-On / Note-Off)
-    void triggerVoice(float midiNote, float velocity, float durationSec = 3.5f) noexcept;
+    void triggerVoice(float midiNote, float velocity, float durationSec = 3.5f, bool isChord = false) noexcept;
     void releaseVoice(float midiNote) noexcept;
     void releaseAllVoices() noexcept;
     void triggerChord(int chordIndex, float rootMidi, float velocity, StrumSpeed speed = StrumSpeed::Med) noexcept;

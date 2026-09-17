@@ -58,3 +58,9 @@ target_include_directories(rb26_diag_modal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_link_libraries(rb26_diag_modal PRIVATE rb26_dsp_core)
 set_target_properties(rb26_diag_modal PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
+add_executable(rb26_hammer_transient_tests HammerTransientTests.cpp)
+target_include_directories(rb26_hammer_transient_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../dsp)
+target_link_libraries(rb26_hammer_transient_tests PRIVATE rb26_dsp_core)
+set_target_properties(rb26_hammer_transient_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+
+

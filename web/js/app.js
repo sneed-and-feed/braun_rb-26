@@ -619,9 +619,10 @@ export class BraunRb26App {
       }
       // Release any currently held voices
       if (this._activeVoices) {
-        this._activeVoices.forEach((voice) => {
-          if (voice && typeof voice.release === 'function') {
-            try { voice.release(0.01); } catch (_) {}
+        this._activeVoices.forEach((entry) => {
+          const v = entry?.voice || (typeof entry?.release === 'function' ? entry : null);
+          if (v && typeof v.release === 'function') {
+            try { v.release(0.01); } catch (_) {}
           }
         });
         this._activeVoices.clear();
@@ -1706,7 +1707,10 @@ export class BraunRb26App {
         }
         if (this._activeVoices && this._activeVoices.has(hotkey)) {
           const oldKeyVoice = this._activeVoices.get(hotkey);
-          if (oldKeyVoice && typeof oldKeyVoice.release === 'function') oldKeyVoice.release(0.28);
+          const oldVoice = oldKeyVoice?.voice || (typeof oldKeyVoice?.release === 'function' ? oldKeyVoice : null);
+          if (oldVoice && typeof oldVoice.release === 'function') {
+            try { oldVoice.release(0.28); } catch (_) {}
+          }
           this._activeVoices.delete(hotkey);
         }
 
@@ -1851,9 +1855,10 @@ export class BraunRb26App {
     // Safety release: clean up sustained voices and visual states if window loses focus
     window.addEventListener('blur', () => {
       if (this._activeVoices) {
-        this._activeVoices.forEach((voice) => {
-          if (voice && typeof voice.release === 'function') {
-            try { voice.release(0.28); } catch (_) {}
+        this._activeVoices.forEach((entry) => {
+          const v = entry?.voice || (typeof entry?.release === 'function' ? entry : null);
+          if (v && typeof v.release === 'function') {
+            try { v.release(0.28); } catch (_) {}
           }
         });
         this._activeVoices.clear();
@@ -1912,8 +1917,9 @@ export class BraunRb26App {
       const hotkey = keyEl.getAttribute('data-hotkey') || '';
       if (hotkey && this._activeVoices && this._activeVoices.has(hotkey)) {
         const oldKeyVoice = this._activeVoices.get(hotkey);
-        if (oldKeyVoice && typeof oldKeyVoice.release === 'function') {
-          oldKeyVoice.release(0.28);
+        const oldVoice = oldKeyVoice?.voice || (typeof oldKeyVoice?.release === 'function' ? oldKeyVoice : null);
+        if (oldVoice && typeof oldVoice.release === 'function') {
+          try { oldVoice.release(0.28); } catch (_) {}
         }
         this._activeVoices.delete(hotkey);
       }
@@ -2112,12 +2118,12 @@ export class BraunRb26App {
 
   /**
    * Harold Budd Felt Piano / Acoustic Modeling (AS-42 Heritage)
-   * Emulates soft felt hammer impact (280 Hz bandpass, 20ms decay),
+   * Emulates soft felt hammer impact (warm wooden soundboard thump, Brownian lowpass felt texture, 26ms decay),
    * resonant spruce soundboard formant filter (480–610 Hz peaking filter, Q=1.2, +2dB),
    * steep una corda lowpass damping (dual cascaded 24dB/oct biquads decaying in ~0.18s),
    * dual micro-detuned acoustic string pair, and smooth dynamic decay envelope.
    */
-  playChime(midiNote, velocity = 0.70, durationSec = 3.5, isHold = false) {
+  playChime(midiNote, velocity = 0.70, durationSec = 3.5, isHold = false, isChord = false) {
     if (!this.isPowered) return;
 
     if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
@@ -2142,9 +2148,12 @@ export class BraunRb26App {
     const bodyFormantHz = isBass
       ? Math.max(280, Math.min(420, 300 + (midiNote - 24) * 5))
       : (isTreble ? Math.min(950, 680 + (midiNote - 72) * 12) : (480 + (midiNote - 48) * 5.5));
-    const hammerCutoff = isBass ? Math.min(220, Math.max(110, f0 * 1.3)) : (isTreble ? Math.min(1400, Math.max(550, f0 * 0.9)) : 280);
-    const hammerThumpGain = (isBass ? 0.26 : (isTreble ? 0.16 : 0.20)) * velocity;
-    const thumpDuration = isBass ? 0.030 : (isTreble ? 0.016 : 0.022);
+    const hammerCutoff = isBass
+      ? Math.min(220, Math.max(110, f0 * 1.3))
+      : (isTreble ? Math.min(750, Math.max(550, f0 * 0.70)) : Math.min(420, Math.max(220, f0 * 1.1)));
+    const chordScale = isChord ? 0.40 : 1.0;
+    const hammerThumpGain = (isBass ? 0.09 : (isTreble ? 0.055 : 0.07)) * velocity * chordScale;
+    const thumpDuration = isBass ? 0.032 : (isTreble ? 0.018 : 0.026);
     const filterDecayBase = isBass ? 0.26 : (isTreble ? 0.12 : 0.18);
     const maxCutoff = Math.min(7500, Math.max(f0 * 1.8, 420 + 2600 * velocity));
     const restCutoff = Math.min(2200, Math.max(160, f0 * 1.15));
@@ -2235,41 +2244,110 @@ export class BraunRb26App {
     osc3Gain.connect(stringMixer);
     osc3.start(now);
 
-    // Soft Felt Hammer Noise Transient (280 Hz Bandpass, 20ms burst)
-    // Smooth zero-start envelope to eliminate initial click pop
-    const noiseLength = Math.max(128, Math.floor(ctx.sampleRate * thumpDuration));
-    const noiseBuf = ctx.createBuffer(1, noiseLength, ctx.sampleRate);
-    const nd = noiseBuf.getChannelData(0);
-    const attackSamples = Math.min(32, Math.floor(noiseLength * 0.15));
-    for (let i = 0; i < noiseLength; i++) {
-      const attackEnv = i < attackSamples ? (i / attackSamples) : 1.0;
-      nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / noiseLength, 2.5) * attackEnv;
-    }
-    const noiseSrc = ctx.createBufferSource();
-    noiseSrc.buffer = noiseBuf;
+    // Acoustic Felt Hammer Transient (Warm wooden soundboard thump + velvety Brownian low-pass felt texture)
+    // Precomputed 40ms acoustic buffer eliminates typewriter click and per-note buffer allocation
+    const thumpSamples = Math.max(128, Math.floor(ctx.sampleRate * 0.040));
+    if (!BraunRb26App._hammerBuffer || BraunRb26App._hammerBufferSampleRate !== ctx.sampleRate) {
+      const hammerBuf = ctx.createBuffer(1, thumpSamples, ctx.sampleRate);
+      const hd = hammerBuf.getChannelData(0);
 
+      // 1. Generate low-passed velvety felt noise texture (Brownian / 2-pole lowpass)
+      let rngState = 1337;
+      const nextRand = () => {
+        rngState = (rngState * 1664525 + 1013904223) >>> 0;
+        return (rngState / 4294967296) * 2 - 1;
+      };
+
+      const rawNoise = new Float32Array(thumpSamples);
+      let pole1 = 0;
+      for (let i = 0; i < thumpSamples; i++) {
+        pole1 = pole1 * 0.82 + nextRand() * 0.18;
+        rawNoise[i] = pole1;
+      }
+      let pole2 = 0;
+      for (let i = 0; i < thumpSamples; i++) {
+        pole2 = pole2 * 0.82 + rawNoise[i] * 0.18;
+        rawNoise[i] = pole2;
+      }
+
+      // 2. Synthesize warm wooden body modal impulse (damped ~135 Hz soundboard knock)
+      // Blended with low-passed felt compression texture
+      for (let i = 0; i < thumpSamples; i++) {
+        const t = i / ctx.sampleRate;
+        const woodThump = Math.sin(2 * Math.PI * 135 * t) * Math.exp(-t / 0.010);
+        hd[i] = 0.65 * woodThump + 0.35 * rawNoise[i];
+      }
+
+      // 3. Windowed exponential decay with smooth Hann attack & release windows
+      const attackSamples = Math.max(2, Math.floor(ctx.sampleRate * 0.0050));
+      const releaseSamples = Math.max(2, Math.floor(ctx.sampleRate * 0.0060));
+      const releaseStart = thumpSamples - releaseSamples;
+
+      for (let i = 0; i < thumpSamples; i++) {
+        let s = hd[i] * Math.exp(-i / (ctx.sampleRate * 0.0090));
+        if (i < attackSamples) {
+          s *= 0.5 * (1 - Math.cos((Math.PI * i) / attackSamples));
+        } else if (i >= releaseStart) {
+          const relIdx = i - releaseStart;
+          s *= 0.5 * (1 + Math.cos((Math.PI * relIdx) / releaseSamples));
+        }
+        hd[i] = s;
+      }
+
+      // 4. Zero-boundary DC removal using sin^2(pi * i / (N - 1))
+      let sumD = 0;
+      let sumW = 0;
+      const weights = new Float32Array(thumpSamples);
+      for (let i = 0; i < thumpSamples; i++) {
+        sumD += hd[i];
+        const sinVal = Math.sin((Math.PI * i) / (thumpSamples - 1));
+        const w = sinVal * sinVal;
+        weights[i] = w;
+        sumW += w;
+      }
+      const dcOffset = sumW > 0 ? sumD / sumW : 0;
+      for (let i = 0; i < thumpSamples; i++) {
+        hd[i] -= dcOffset * weights[i];
+      }
+      hd[0] = 0.0;
+      hd[thumpSamples - 1] = 0.0;
+
+      BraunRb26App._hammerBuffer = hammerBuf;
+      BraunRb26App._hammerBufferSampleRate = ctx.sampleRate;
+    }
+
+    const noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = BraunRb26App._hammerBuffer;
+
+    // Filter hammer through warm lowpass filter (Q = 0.85) instead of harsh resonant bandpass
     const hammerFilter = ctx.createBiquadFilter();
-    hammerFilter.type = 'bandpass';
+    hammerFilter.type = 'lowpass';
     hammerFilter.frequency.setValueAtTime(hammerCutoff, now);
-    hammerFilter.Q.setValueAtTime(2.0, now);
+    hammerFilter.Q.setValueAtTime(0.85, now);
 
     const hammerGainNode = ctx.createGain();
     hammerGainNode.gain.setValueAtTime(0.0, now);
     hammerGainNode.gain.linearRampToValueAtTime(hammerThumpGain, now + 0.002);
-    hammerGainNode.gain.exponentialRampToValueAtTime(0.0001, now + thumpDuration);
+    const hammerEndGain = Math.max(0.0001, hammerThumpGain * 0.0183);
+    hammerGainNode.gain.exponentialRampToValueAtTime(hammerEndGain, now + thumpDuration);
+    hammerGainNode.gain.linearRampToValueAtTime(0.0, now + thumpDuration + 0.004);
 
     noiseSrc.connect(hammerFilter);
     hammerFilter.connect(hammerGainNode);
-    hammerGainNode.connect(stringMixer);
+    hammerGainNode.connect(bodyFilter);
     noiseSrc.start(now);
+    noiseSrc.stop(now + thumpDuration + 0.008);
 
-    // Voice routing: stringMixer -> saturationShaper -> filter1 -> filter2 -> bodyFilter -> voiceGain -> engine.inputGain
+    // Decoupled physical felt hammer & soundboard routing (AS-42 architecture):
+    // 1. Strings: stringMixer -> saturationShaper -> filter1 -> filter2 -> voiceGain -> bodyFilter
+    // 2. Felt Hammer: noiseSrc -> hammerFilter -> hammerGainNode -> bodyFilter
+    // 3. Resonant Soundboard: bodyFilter -> engine.inputGain
     stringMixer.connect(saturationShaper);
     saturationShaper.connect(filter1);
     filter1.connect(filter2);
-    filter2.connect(bodyFilter);
-    bodyFilter.connect(voiceGain);
-    voiceGain.connect(this.engine.inputGain);
+    filter2.connect(voiceGain);
+    voiceGain.connect(bodyFilter);
+    bodyFilter.connect(this.engine.inputGain);
 
     let isStopped = false;
     const teardownVoice = (tailSec) => {
@@ -2280,9 +2358,20 @@ export class BraunRb26App {
         osc1.stop(stopTime);
         osc2.stop(stopTime);
         osc3.stop(stopTime);
+        try { noiseSrc.stop(stopTime); } catch (_) {}
         setTimeout(() => {
           try {
+            bodyFilter.disconnect();
             voiceGain.disconnect();
+            hammerGainNode.disconnect();
+            hammerFilter.disconnect();
+            filter2.disconnect();
+            filter1.disconnect();
+            saturationShaper.disconnect();
+            stringMixer.disconnect();
+            osc1Gain.disconnect();
+            osc2Gain.disconnect();
+            osc3Gain.disconnect();
           } catch (_) {}
         }, (stopTime - ctx.currentTime + 0.1) * 1000);
       } catch (_) {}
@@ -2319,17 +2408,44 @@ export class BraunRb26App {
           if (!heldOk) {
             try {
               voiceGain.gain.cancelScheduledValues(t);
+              voiceGain.gain.setValueAtTime(curGain, t);
             } catch (_) {}
           }
           voiceGain.gain.setTargetAtTime(0.0, t, Math.max(0.005, releaseSec * 0.25));
 
+          // Fade in-flight hammer smoothly to zero on rapid key release
+          if (hammerGainNode && hammerGainNode.gain) {
+            try {
+              let hHeld = false;
+              if (typeof hammerGainNode.gain.cancelAndHoldAtTime === 'function') {
+                try {
+                  hammerGainNode.gain.cancelAndHoldAtTime(t);
+                  hHeld = true;
+                } catch (_) {}
+              }
+              if (!hHeld) {
+                hammerGainNode.gain.cancelScheduledValues(t);
+                const hammerInFlight = (tElapsed < (thumpDuration + 0.004));
+                const safeHGain = hammerInFlight ? Math.max(0.0001, hammerThumpGain * Math.exp(-tElapsed / 0.008)) : 0.0;
+                hammerGainNode.gain.setValueAtTime(safeHGain, t);
+              }
+              hammerGainNode.gain.setTargetAtTime(0.0, t, 0.004);
+            } catch (_) {}
+          }
+
           // Fade stringMixer smoothly to zero
           if (stringMixer && stringMixer.gain) {
             try {
+              let mHeld = false;
               if (typeof stringMixer.gain.cancelAndHoldAtTime === 'function') {
-                try { stringMixer.gain.cancelAndHoldAtTime(t); } catch (_) {}
+                try {
+                  stringMixer.gain.cancelAndHoldAtTime(t);
+                  mHeld = true;
+                } catch (_) {}
               }
-              stringMixer.gain.cancelScheduledValues(t);
+              if (!mHeld) {
+                stringMixer.gain.cancelScheduledValues(t);
+              }
               stringMixer.gain.setTargetAtTime(0.0, t, tau);
             } catch (_) {}
           }
@@ -2339,10 +2455,16 @@ export class BraunRb26App {
           [filter1, filter2].forEach((f) => {
             if (f && f.frequency) {
               try {
+                let fHeld = false;
                 if (typeof f.frequency.cancelAndHoldAtTime === 'function') {
-                  try { f.frequency.cancelAndHoldAtTime(t); } catch (_) {}
+                  try {
+                    f.frequency.cancelAndHoldAtTime(t);
+                    fHeld = true;
+                  } catch (_) {}
                 }
-                f.frequency.cancelScheduledValues(t);
+                if (!fHeld) {
+                  f.frequency.cancelScheduledValues(t);
+                }
                 f.frequency.setTargetAtTime(dampedCutoff, t, tau);
               } catch (_) {}
             }
@@ -2387,7 +2509,7 @@ export class BraunRb26App {
       const tid = setTimeout(() => {
         if (!this.isPowered || isReleased) return;
         const midi = 69 + 12 * Math.log2(freq / 440);
-        const v = this.playChime(midi, 0.40, 4.2, isHold);
+        const v = this.playChime(midi, 0.40, 4.2, isHold, true);
         if (!v) return;
         if (isReleased) {
           if (typeof v.release === 'function') v.release(releaseSec);
