@@ -16,8 +16,11 @@ void TailModulator::prepare(double sampleRate) noexcept {
     mDepthSmoother.setTimeConstant(0.040f);
     mDepthSmoother.reset(mTargetDepthMs);
 
-    mFastAlpha = std::exp(-1.0f / (fs * 0.0020f)); // 2.0 ms
-    mSlowAlpha = std::exp(-1.0f / (fs * 0.0450f)); // 45.0 ms
+    // Fast tau = 7.0 ms suppresses audio waveform ripple for frequencies down to 30 Hz (e.g. low synth drones),
+    // preventing false-trigger transient ducking and delay read head snapping on steady tones.
+    // Slow tau = 50.0 ms provides stable background energy tracking.
+    mFastAlpha = std::exp(-1.0f / (fs * 0.0070f));
+    mSlowAlpha = std::exp(-1.0f / (fs * 0.0500f));
 
     updateBloomAlpha();
     reset();
@@ -59,8 +62,8 @@ void TailModulator::processSample(float inputTransientLevel,
     mSlowEnv = flushDenormal((1.0f - mSlowAlpha) * absIn + mSlowAlpha * mSlowEnv);
 
     const float tr = mFastEnv / (mSlowEnv + 1.0e-5f);
-    if (tr > 1.75f) {
-        const float excess = std::min(5.0f, tr - 1.75f);
+    if (tr > 1.80f) {
+        const float excess = std::min(5.0f, tr - 1.80f);
         const float duckFactor = 1.0f / (1.0f + 2.0f * excess);
         mBloomEnvelope = std::min(mBloomEnvelope, duckFactor);
     } else {

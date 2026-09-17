@@ -205,8 +205,9 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float phiA = vL.grainPhase;
             const float phiB = (phiA >= 0.5f) ? (phiA - 0.5f) : (phiA + 0.5f);
 
-            const float delayA = mWindowSamples * phiA;
-            const float delayB = mWindowSamples * phiB;
+            constexpr float kMinDelayMargin = 2.0f;
+            const float delayA = kMinDelayMargin + mWindowSamples * phiA;
+            const float delayB = kMinDelayMargin + mWindowSamples * phiB;
 
             const float readPosA = static_cast<float>(mWriteIndex) - delayA;
             const float readPosB = static_cast<float>(mWriteIndex) - delayB;
@@ -214,8 +215,11 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float sA = readHermite(mDelayBufferL, readPosA);
             const float sB = readHermite(mDelayBufferL, readPosB);
 
-            const float wA = FastSinTable::sin(kPi * phiA);
-            const float wB = FastSinTable::sin(kPi * phiB);
+            // Constant-amplitude Hann crossfade windows: wA + wB == sin^2(pi*phi) + cos^2(pi*phi) == 1.0
+            const float sinA = FastSinTable::sin(kPi * phiA);
+            const float sinB = FastSinTable::sin(kPi * phiB);
+            const float wA = sinA * sinA;
+            const float wB = sinB * sinB;
 
             const float voiceOutL = wA * sA + wB * sB;
             sumL += Am * voiceOutL;
@@ -230,8 +234,9 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float phiA = vR.grainPhase;
             const float phiB = (phiA >= 0.5f) ? (phiA - 0.5f) : (phiA + 0.5f);
 
-            const float delayA = mWindowSamples * phiA;
-            const float delayB = mWindowSamples * phiB;
+            constexpr float kMinDelayMargin = 2.0f;
+            const float delayA = kMinDelayMargin + mWindowSamples * phiA;
+            const float delayB = kMinDelayMargin + mWindowSamples * phiB;
 
             const float readPosA = static_cast<float>(mWriteIndex) - delayA;
             const float readPosB = static_cast<float>(mWriteIndex) - delayB;
@@ -239,8 +244,10 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float sA = readHermite(mDelayBufferR, readPosA);
             const float sB = readHermite(mDelayBufferR, readPosB);
 
-            const float wA = FastSinTable::sin(kPi * phiA);
-            const float wB = FastSinTable::sin(kPi * phiB);
+            const float sinA = FastSinTable::sin(kPi * phiA);
+            const float sinB = FastSinTable::sin(kPi * phiB);
+            const float wA = sinA * sinA;
+            const float wB = sinB * sinB;
 
             const float voiceOutR = wA * sA + wB * sB;
             sumR += Am * voiceOutR;

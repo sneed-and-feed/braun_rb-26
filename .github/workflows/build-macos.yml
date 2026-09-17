@@ -65,22 +65,22 @@ jobs:
 
           cp LICENSE README.md package/
           cd package
-          zip -r ../BRAUN_RB26-v1.3.6-macOS-Universal.zip *
+          zip -r ../BRAUN_RB26-v1.3.7-macOS-Universal.zip *
           cd ..
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BRAUN_RB26-v1.3.6-macOS-Universal
-          path: BRAUN_RB26-v1.3.6-macOS-Universal.zip
+          name: BRAUN_RB26-v1.3.7-macOS-Universal
+          path: BRAUN_RB26-v1.3.7-macOS-Universal.zip
 
       - name: Attach to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           for attempt in 1 2 3; do
-            echo "Attempt $attempt: uploading release asset to v1.3.6..."
-            if gh release upload v1.3.6 BRAUN_RB26-v1.3.6-macOS-Universal.zip --repo ${{ github.repository }} --clobber; then
+            echo "Attempt $attempt: uploading release asset to v1.3.7..."
+            if gh release upload v1.3.7 BRAUN_RB26-v1.3.7-macOS-Universal.zip --repo ${{ github.repository }} --clobber; then
               echo "Upload succeeded!"
               exit 0
             fi

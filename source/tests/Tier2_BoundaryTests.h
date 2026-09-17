@@ -227,7 +227,7 @@ inline void registerTier2Tests() {
         shifter.process(inSig.data(), inSig.data(), outL.data(), outR.data(), 2400);
 
         float peak = test_utils::computePeak(outL, 1200, 1200);
-        TEST_ASSERT(peak > 0.3f, "Full shimmer send must inject strong signal");
+        TEST_ASSERT(peak > 0.25f, "Full shimmer send must inject strong signal");
         return test::gCurrentTestAssertFailures == 0;
     });
 

@@ -318,8 +318,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             const float pBlend = mPitchBlendSmoother.next();
             const float delayMult = 1.0f + 0.35f * std::max(0.0f, -pBlend);
             const float effDelayMs = curPitchDelayMs * delayMult;
-            const float delaySamplesL = std::clamp((effDelayMs * 0.001f) * fs, 1.0f, static_cast<float>(kPitchDelayCapacity - 64));
-            const float delaySamplesR = std::clamp((effDelayMs * 0.001f * 1.07f) * fs, 1.0f, static_cast<float>(kPitchDelayCapacity - 64));
+            const float delaySamplesL = std::clamp((effDelayMs * 0.001f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
+            const float delaySamplesR = std::clamp((effDelayMs * 0.001f * 1.07f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
 
             const float delayedPitchL = TailModulator::readHermite(mPitchDelayBufferL.data(),
                                                                   kPitchDelayCapacity,

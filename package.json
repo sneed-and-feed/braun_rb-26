@@ -1,11 +1,13 @@
 {
   "name": "braun-rb-26",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "description": "Dieter Rams / Braun inspired master studio reverberator (FDN reverb / Shepard pitch spiral / CRT display)",
   "type": "module",
   "scripts": {
     "test": "node web/verify.mjs",
     "test:browser": "node web/test-browser.mjs",
+    "verify:checklist": "node web/test-checklist.mjs",
+    "verify:all": "node web/verify.mjs && node web/test-checklist.mjs",
     "start": "node server.js"
   },
   "keywords": [

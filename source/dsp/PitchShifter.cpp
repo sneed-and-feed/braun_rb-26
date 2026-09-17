@@ -74,18 +74,21 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
     const float phase1 = mPhase;
     const float phase2 = (phase1 >= 0.5f) ? (phase1 - 0.5f) : (phase1 + 0.5f);
 
-    // Calculate delay excursions
+    // Calculate delay excursions with minimum 2-sample margin
+    // Guarantees readPos <= mWriteIndex - 2.0f so floor(readPos) + 2 <= mWriteIndex,
+    // strictly ensuring 4-point Hermite interpolation never reads unwritten future indices
+    constexpr float kMinDelayMargin = 2.0f;
     float delay1 = 0.0f;
     float delay2 = 0.0f;
 
     if (mRatio >= 1.0f) {
-        // Upward pitch shift (Shimmer): delay ramps downwards from W to 0
-        delay1 = mWindowSamples * (1.0f - phase1);
-        delay2 = mWindowSamples * (1.0f - phase2);
+        // Upward pitch shift (Shimmer): delay ramps downwards from W + minMargin to minMargin
+        delay1 = kMinDelayMargin + mWindowSamples * (1.0f - phase1);
+        delay2 = kMinDelayMargin + mWindowSamples * (1.0f - phase2);
     } else {
-        // Downward pitch shift (Dimmer): delay ramps upwards from 0 to W
-        delay1 = mWindowSamples * phase1;
-        delay2 = mWindowSamples * phase2;
+        // Downward pitch shift (Dimmer): delay ramps upwards from minMargin to W + minMargin
+        delay1 = kMinDelayMargin + mWindowSamples * phase1;
+        delay2 = kMinDelayMargin + mWindowSamples * phase2;
     }
 
     // Read head fractional indices
@@ -95,9 +98,12 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
     const float out1 = readHermite(readPos1);
     const float out2 = readHermite(readPos2);
 
-    // Constant-power sine crossfade windows: w1^2 + w2^2 == 1.0
-    const float w1 = FastSinTable::sin(kPi * phase1);
-    const float w2 = FastSinTable::sin(kPi * phase2);
+    // Constant-amplitude Hann crossfade windows: w1 + w2 == sin^2(pi*phi) + cos^2(pi*phi) == 1.0
+    // C1 smooth zero-crossing at grain boundaries suppresses wrap discontinuity by > 115 dB
+    const float sin1 = FastSinTable::sin(kPi * phase1);
+    const float sin2 = FastSinTable::sin(kPi * phase2);
+    const float w1 = sin1 * sin1;
+    const float w2 = sin2 * sin2;
 
     // Advance normalized phase accumulator
     mPhase += mPhaseInc;

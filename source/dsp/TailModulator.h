@@ -30,11 +30,19 @@ public:
         if (!std::isfinite(delaySamples)) [[unlikely]] {
             return 0.0f;
         }
-        const float clampedDelay = std::max(0.0f, delaySamples);
-        const int intDelay = static_cast<int>(clampedDelay);
-        const float mu = clampedDelay - static_cast<float>(intDelay);
+        if (delaySamples <= 0.0f) [[unlikely]] {
+            return buffer[writeIndex & bufferMask];
+        }
+        if (delaySamples < 1.0f) [[unlikely]] {
+            const size_t i0 = writeIndex & bufferMask;
+            const size_t i1 = (writeIndex + bufferCapacity - 1) & bufferMask;
+            return buffer[i0] + delaySamples * (buffer[i1] - buffer[i0]);
+        }
+        const int intDelay = static_cast<int>(delaySamples);
+        const float mu = delaySamples - static_cast<float>(intDelay);
 
         // Buffer write index advances forward; delay looks backward in time
+        // For delay >= 1.0f, idxM1 = idx0 + 1 <= writeIndex, strictly avoiding unwritten future indices
         const size_t idx0 = (writeIndex + bufferCapacity - static_cast<size_t>(intDelay)) & bufferMask;
         const size_t idxM1 = (idx0 + 1) & bufferMask;
         const size_t idx1 = (idx0 + bufferCapacity - 1) & bufferMask;
