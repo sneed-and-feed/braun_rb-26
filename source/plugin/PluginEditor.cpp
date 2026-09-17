@@ -225,7 +225,7 @@ const paramsMeta = [
 
   { id: 'room_size', webId: 'roomSize', label: 'Room Size', deck: 'FDN Tank', min: 0.1, max: 4.0, def: 0.65, unit: '' },
   { id: 'decay_rt60_sec', webId: 'decayRt60Sec', label: 'Decay Time', deck: 'FDN Tank', min: 0.2, max: 30.0, def: 3.5, unit: 's' },
-  { id: 'high_damping_hz', webId: 'highDampingHz', label: 'Damping', deck: 'FDN Tank', min: 1000, max: 20000, def: 6500, unit: 'Hz' },
+  { id: 'high_damping_hz', webId: 'highDampingHz', label: 'Damping', deck: 'FDN Tank', min: 1000, max: 20000, def: 1800, unit: 'Hz' },
   { id: 'freeze_hold', webId: 'freezeHold', label: 'Freeze', deck: 'FDN Tank', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
   { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.30, unit: '%' },

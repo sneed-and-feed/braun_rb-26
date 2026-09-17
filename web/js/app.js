@@ -96,7 +96,7 @@ export const FACTORY_PRESETS = {
     params: {
       predelay: 24.0, diffusion: 75, input_trim: 0.0,
       low_crossover: 180, damping_low: 1.0, low_punch: 65, mono_bass: 120,
-      rt60_decay: 6.5, room_size: 100, damping_high: 7500, decay_hold: false,
+      rt60_decay: 6.5, room_size: 100, damping_high: 1800, decay_hold: false,
       shimmer_send: 40, dimmer_send: 35, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 0, pitch_regen: 45,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
@@ -1047,7 +1047,7 @@ export class BraunRb26App {
     });
 
     this.knobs.damping_high = createKnob('knob-damping-high', {
-      label: 'HIGH DAMP', min: 1000, max: 20000, step: 50, unit: 'Hz', value: 7500, size: 'medium', isLog: true,
+      label: 'HIGH DAMP', min: 1000, max: 20000, step: 50, unit: 'Hz', value: 1800, size: 'medium', isLog: true,
       onChange: (v) => { this.engine.setParam('highDampingHz', v); this._emitJuceParam('highDampingHz', v); }
     });
 
