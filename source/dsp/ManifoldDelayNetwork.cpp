@@ -44,8 +44,9 @@ ManifoldDelayNetwork::ManifoldDelayNetwork() noexcept {
     }
 }
 
-void ManifoldDelayNetwork::prepare(double sampleRate, float /*maxRoomSize*/) noexcept {
+void ManifoldDelayNetwork::prepare(double sampleRate, float maxRoomSize) noexcept {
     mSampleRate = sampleRate > 100.0 ? sampleRate : 48000.0;
+    mMaxRoomSize = std::max(1.0f, maxRoomSize);
     const float fs = static_cast<float>(mSampleRate);
 
     // 0.25 Hz circular spatial rotation for Whispering Gallery
@@ -113,21 +114,24 @@ void ManifoldDelayNetwork::reset() noexcept {
     mCausticRotationAngle = 0.0f;
 }
 
-void ManifoldDelayNetwork::setParameters(ManifoldType type, float roomSize, float highDampingHz) noexcept {
-    const float clampedRoom = std::clamp(roomSize, 0.05f, 2.0f);
+void ManifoldDelayNetwork::setParameters(ManifoldType type, float roomSize, float highDampingHz, float diffusionDensity) noexcept {
+    const float clampedRoom = std::clamp(roomSize, 0.05f, mMaxRoomSize);
+    const float clampedDiff = std::clamp(diffusionDensity, 0.0f, 1.0f);
     const bool manifoldChanged = (type != mCurrentManifold);
-    const bool roomChanged = std::abs(clampedRoom - mRoomSize) > 0.005f;
+    const bool roomChanged = std::abs(clampedRoom - mRoomSize) > 0.001f;
     const bool dampChanged = std::abs(highDampingHz - mHighDampingHz) > 5.0f;
+    const bool diffChanged = std::abs(clampedDiff - mDiffusionDensity) > 0.005f;
 
     mCurrentManifold = type;
     mRoomSize = clampedRoom;
     mHighDampingHz = highDampingHz;
+    mDiffusionDensity = clampedDiff;
 
     if (manifoldChanged || roomChanged) {
         updateManifoldGeometry();
         updateSpatialWeights();
     }
-    if (manifoldChanged || dampChanged) {
+    if (manifoldChanged || dampChanged || diffChanged) {
         updateFilterCoefficients();
     }
 
@@ -141,67 +145,64 @@ void ManifoldDelayNetwork::setParameters(ManifoldType type, float roomSize, floa
     }
 }
 
+void ManifoldDelayNetwork::setParameters(ManifoldType type, float roomSize, float highDampingHz) noexcept {
+    setParameters(type, roomSize, highDampingHz, mDiffusionDensity);
+}
+
 void ManifoldDelayNetwork::setManifold(ManifoldType type) noexcept {
-    setParameters(type, mRoomSize, mHighDampingHz);
+    setParameters(type, mRoomSize, mHighDampingHz, mDiffusionDensity);
 }
 
 void ManifoldDelayNetwork::computePoincareLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
     // Horocycle delays: L_k = round(L_0 * cosh(xi * k / 7))
     // Nominal L_0 = 1000 at 48 kHz, roomSize = 1.0; xi = 1.760742
     const double rateScale = mSampleRate / 48000.0;
-    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double safeRoom = std::clamp(static_cast<double>(mRoomSize), 0.05, static_cast<double>(mMaxRoomSize));
     const double l0 = 1000.0 * rateScale * safeRoom;
-    const double xi = 1.760742;
 
     for (size_t k = 0; k < kNumLines; ++k) {
-        const double arg = xi * (static_cast<double>(k) / 7.0);
-        const double raw = l0 * std::cosh(arg);
+        const double raw = l0 * kPoincareCosh[k];
         const size_t len = static_cast<size_t>(std::round(raw));
-        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 2048);
+        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 4096);
     }
 }
 
 void ManifoldDelayNetwork::computeWhisperingLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
     // Airy radial delay modes: L_k = round(L_ring * (1 - a_{k+1} / (2*pi*(k+3)))) + primeOffset
     const double rateScale = mSampleRate / 48000.0;
-    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double safeRoom = std::clamp(static_cast<double>(mRoomSize), 0.05, static_cast<double>(mMaxRoomSize));
     const double lRing = 2800.0 * rateScale * safeRoom;
 
     for (size_t k = 0; k < kNumLines; ++k) {
-        const double denom = kTwoPi * static_cast<double>(k + 3);
-        const double frac = static_cast<double>(kAiryZeros[k]) / denom;
-        const double raw = lRing * (1.0 - frac);
+        const double raw = lRing * kWhisperingRadialFactors[k];
         const size_t len = static_cast<size_t>(std::round(raw)) + kWhisperingPrimeOffsets[k];
-        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 2048);
+        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 4096);
     }
 }
 
 void ManifoldDelayNetwork::computePlateLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
     // Biharmonic plate dispersion modes: L_k = round(L_base / sqrt(m^2 + 0.08 * n^2)) + primeOffset
     const double rateScale = mSampleRate / 48000.0;
-    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double safeRoom = std::clamp(static_cast<double>(mRoomSize), 0.05, static_cast<double>(mMaxRoomSize));
     const double lBase = 3400.0 * rateScale * safeRoom;
 
     for (size_t k = 0; k < kNumLines; ++k) {
-        const double m = static_cast<double>(kPlateModes[k].m);
-        const double n = static_cast<double>(kPlateModes[k].n);
-        const double lambda = std::sqrt(m * m + 0.08 * n * n);
-        const double raw = lBase / lambda;
+        const double raw = lBase * kPlateInvLambda[k];
         const size_t len = static_cast<size_t>(std::round(raw)) + kPlatePrimeOffsets[k];
-        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 2048);
+        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 4096);
     }
 }
 
 void ManifoldDelayNetwork::computeKlangdomLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
     // Spherical dome antipodal focus: L_k = round(L_dome * (1 + delta_k))
     const double rateScale = mSampleRate / 48000.0;
-    const double safeRoom = std::max(0.05, static_cast<double>(mRoomSize));
+    const double safeRoom = std::clamp(static_cast<double>(mRoomSize), 0.05, static_cast<double>(mMaxRoomSize));
     const double lDome = 2400.0 * rateScale * safeRoom;
 
     for (size_t k = 0; k < kNumLines; ++k) {
-        const double raw = lDome * (1.0 + static_cast<double>(kKlangdomDeltas[k]));
+        const double raw = lDome * kKlangdomScaleFactors[k];
         const size_t len = static_cast<size_t>(std::round(raw));
-        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 2048);
+        lengths[k] = std::clamp(len, size_t{64}, kBufferCapacity - 4096);
     }
 }
 
@@ -233,19 +234,28 @@ void ManifoldDelayNetwork::updateFilterCoefficients() noexcept {
     const float fcDamp = std::clamp(mHighDampingHz, 500.0f, fs * 0.49f);
     mDampingAlpha = 1.0f - std::exp(-kTwoPi * (fcDamp / fs));
 
-    // 2. Dispersion Allpass Configuration
-    float a1 = 0.0f, a2 = 0.0f;
+    // 2. Dispersion Allpass Configuration (Loop Decay Diffusion)
+    float baseA1 = 0.0f, baseA2 = 0.0f;
     if (mCurrentManifold == ManifoldType::PoincareHyperbolic) {
-        a1 = -0.32f; // Negative curvature dispersion: low frequencies lead
-        a2 = 0.0f;   // 1 stage active
+        baseA1 = -0.45f; // Negative curvature dispersion: low frequencies lead
+        baseA2 = 0.0f;
     } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
-        a1 = +0.55f; // Plate biharmonic dispersion: high frequencies lead
-        a2 = +0.55f; // 2 cascaded stages
+        baseA1 = +0.55f; // Plate biharmonic dispersion: high frequencies lead
+        baseA2 = +0.55f; // 2 cascaded stages
+    } else if (mCurrentManifold == ManifoldType::StockhausenKlangdom) {
+        baseA1 = +0.40f;
+        baseA2 = -0.30f;
+    } else if (mCurrentManifold == ManifoldType::WhisperingGallery) {
+        baseA1 = +0.35f;
+        baseA2 = 0.0f;
     }
 
+    mDispCoeff1 = baseA1 * mDiffusionDensity;
+    mDispCoeff2 = baseA2 * mDiffusionDensity;
+
     for (size_t k = 0; k < kNumLines; ++k) {
-        mDispersionStage1[k].setCoeff(a1);
-        mDispersionStage2[k].setCoeff(a2);
+        mDispersionStage1[k].setCoeff(mDispCoeff1);
+        mDispersionStage2[k].setCoeff(mDispCoeff2);
     }
 
     // 3. Whispering Gallery Caustic Peaking (+3.5 dB at 9.5 kHz, Q = 2.8) + ultrasonic lowpass
@@ -325,8 +335,13 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
     const float freeze = std::clamp(freezeAmount, 0.0f, 1.0f);
     for (size_t k = 0; k < kNumLines; ++k) {
         // 1. Slewed nominal delay length + dynamic tail modulation excursion
+        // When freeze is engaged, eliminate modulation excursion and snap to integer sample read
+        // to prevent fractional Hermite interpolation lowpass filtering energy dissipation
         const float curLen = mLengthSmoothers[k].next();
-        const float totalDelay = std::clamp(curLen + inExcursions[k], 16.0f, static_cast<float>(kBufferCapacity - 128));
+        const float effExcursion = inExcursions[k] * (1.0f - freeze);
+        const float totalDelay = (freeze >= 0.999f)
+            ? std::round(curLen)
+            : std::clamp(curLen + effExcursion, 16.0f, static_cast<float>(kBufferCapacity - 128));
 
         // 2. Fractional Hermite cubic spline read
         const float rawSample = TailModulator::readHermite(mBuffers[k].data(),
@@ -337,26 +352,32 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
 
         // 3. One-pole air absorption lowpass filter (bypassed when freezeAmount == 1.0f)
         const float filtered = flushDenormal(mDampingStates[k] + mDampingAlpha * (rawSample - mDampingStates[k]));
-        mDampingStates[k] = filtered;
+        mDampingStates[k] = (freeze >= 0.999f) ? rawSample : filtered;
         float s = (1.0f - freeze) * filtered + freeze * rawSample;
 
-        // 4. Manifold-specific loop filtering
-        if (mCurrentManifold == ManifoldType::PoincareHyperbolic) {
-            // Negative curvature dispersion allpass
+        // 4. Dispersion allpasses (Loop decay diffusion across delay lines)
+        if (std::abs(mDispCoeff1) > 1.0e-4f) {
             s = mDispersionStage1[k].process(s);
-        } else if (mCurrentManifold == ManifoldType::WhisperingGallery) {
-            // High-frequency caustic peaking filter (+3.5 dB at 9.5 kHz) + ultrasonic lowpass
-            s = mCausticPeaking[k].process(s);
-            s = mUltrasonicLowpass[k].process(s);
-        } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
-            // Cascaded biharmonic plate dispersion allpasses (2 stages with a_p = +0.55)
-            s = mDispersionStage1[k].process(s);
+        }
+        if (std::abs(mDispCoeff2) > 1.0e-4f) {
             s = mDispersionStage2[k].process(s);
-            // Sitka spruce body formants (A0, T1, Wood fiber) with -3 dB loop trim to prevent runaway
-            s = mSpruceA0[k].process(s);
-            s = mSpruceT1[k].process(s);
-            s = mSpruceWood[k].process(s);
-            s *= 0.70794578f; // -3.0 dB trim factor
+        }
+
+        // 5. Manifold-specific resonant loop filtering
+        if (mCurrentManifold == ManifoldType::WhisperingGallery) {
+            // High-frequency caustic peaking filter (+3.5 dB at 9.5 kHz) + ultrasonic lowpass
+            // Bypassed during freeze hold to prevent runaway caustic resonance
+            if (freeze < 0.999f) {
+                const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s));
+                s = (1.0f - freeze) * pf + freeze * s;
+            }
+        } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
+            // Sitka spruce body formants (A0, T1, Wood fiber) with -3 dB loop trim
+            // Formants and trim are bypassed during freeze hold so held reverb does not decay/mute
+            if (freeze < 0.999f) {
+                const float plateFiltered = mSpruceWood[k].process(mSpruceT1[k].process(mSpruceA0[k].process(s))) * 0.70794578f;
+                s = (1.0f - freeze) * plateFiltered + freeze * s;
+            }
         }
 
         outFiltered[k] = flushDenormal(s);

@@ -6,10 +6,11 @@ namespace rb26 {
 
 void FdnReverbTank::prepare(double sampleRate, float maxRoomSize) noexcept {
     mSampleRate = sampleRate > 100.0 ? sampleRate : 48000.0;
+    mMaxRoomSize = std::max(1.0f, maxRoomSize);
     const float fs = static_cast<float>(mSampleRate);
 
     mTailModulator.prepare(mSampleRate);
-    mManifoldNetwork.prepare(mSampleRate, maxRoomSize);
+    mManifoldNetwork.prepare(mSampleRate, mMaxRoomSize);
 
     // Prepare allpass diffusers
     for (size_t i = 0; i < kNumAllpass; ++i) {
@@ -56,7 +57,7 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
                                  float diffusionDensity, bool freezeHold,
                                  float tailModRateHz, float tailModDepthMs, float tailBloomMs,
                                  ManifoldType manifoldType) noexcept {
-    mRoomSize = std::clamp(roomSize, 0.1f, 2.0f);
+    mRoomSize = std::clamp(roomSize, 0.1f, mMaxRoomSize);
     mDecayRt60 = std::clamp(decayRt60Sec, 0.2f, 30.0f);
     mHighDampingHz = std::clamp(highDampingHz, 500.0f, 20000.0f);
     mDiffusionDensity = std::clamp(diffusionDensity, 0.0f, 1.0f);
@@ -72,7 +73,7 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
     }
 
     mTailModulator.setParameters(tailModRateHz, tailModDepthMs, tailBloomMs);
-    mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz);
+    mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz, mDiffusionDensity);
     updateDecayGains();
 }
 
@@ -87,11 +88,14 @@ void FdnReverbTank::updateDecayGains() noexcept {
     const float safeRt60 = std::max(0.05f, mDecayRt60);
     for (size_t k = 0; k < kNumLines; ++k) {
         const float tSec = static_cast<float>(lengths[k]) / static_cast<float>(mSampleRate);
-        mFeedbackGains[k] = std::exp(-6.907755278982137f * tSec / safeRt60);
+        mFeedbackGains[k] = std::clamp(std::exp(-6.907755278982137f * tSec / safeRt60), 0.0f, 0.999f);
     }
 }
 
 inline float FdnReverbTank::processAllpass(size_t index, float input, float density) noexcept {
+    if (density < 1.0e-4f) {
+        return input;
+    }
     if (index >= kNumAllpass || mAllpassBuffers[index].empty()) [[unlikely]] {
         return 0.0f;
     }
@@ -166,7 +170,9 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
         const float effGain = (1.0f - freezeLoop) * mFeedbackGains[k] + freezeLoop * 1.0f;
         const float feedback = reflected * effGain;
         const float nextIn = feedback + injection[k];
-        saturated[k] = flushDenormal(applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f));
+        saturated[k] = flushDenormal((freezeLoop >= 0.999f)
+            ? std::clamp(nextIn, -1.05f, 1.05f)
+            : applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f));
     }
     mManifoldNetwork.writeFeedback(saturated);
 

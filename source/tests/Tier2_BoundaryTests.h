@@ -1887,6 +1887,136 @@ inline void registerTier2Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    // ========================================================================
+    // F34: Expanded Room Size Dimensions & Buffer Scaling (T2_F34_1 to T2_F34_5)
+    // ========================================================================
+    registerTest("Tier 2", "T2_F34_1", "Expanded Room Dimensions - 4.0x Parameter Clamping and Buffer Headroom", []() {
+        rb26::Rb26Parameters p;
+        p.roomSize = 4.0f;
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(192000.0, 512);
+        engine.setParameters(p);
+
+        const int bs = 512;
+        std::vector<float> inL(bs, 0.0f), inR(bs, 0.0f);
+        std::vector<float> outL(bs, 0.0f), outR(bs, 0.0f);
+        inL[0] = 1.0f; inR[0] = -1.0f;
+        const float* inPtrs[2] = { inL.data(), inR.data() };
+        float* outPtrs[2] = { outL.data(), outR.data() };
+
+        engine.process(inPtrs, outPtrs, 2, bs);
+        for (int i = 0; i < bs; ++i) {
+            TEST_ASSERT(!std::isnan(outL[i]) && !std::isinf(outL[i]), "Output L must be finite at 4.0x room size");
+            TEST_ASSERT(!std::isnan(outR[i]) && !std::isinf(outR[i]), "Output R must be finite at 4.0x room size");
+        }
+
+        // Test over-range clamping (100.0f clamped safely to 4.0f)
+        p.roomSize = 100.0f;
+        engine.setParameters(p);
+        engine.process(inPtrs, outPtrs, 2, bs);
+        TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "4.0x room size clamping must be robust");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_F34_2", "Expanded Room Dimensions - 192 kHz All 4 Manifolds at 4.0x Scale", []() {
+        const double fs = 192000.0;
+        const int bs = 256;
+        std::vector<float> inL(bs, 0.0f), inR(bs, 0.0f);
+        std::vector<float> outL(bs, 0.0f), outR(bs, 0.0f);
+
+        for (int m = 0; m < 4; ++m) {
+            rb26::FdnReverbTank tank;
+            tank.prepare(fs, 4.0f);
+            tank.setParameters(4.0f, 15.0f, 12000.0f, 0.8f, false, 1.0f, 2.0f, 50.0f, static_cast<rb26::ManifoldType>(m));
+
+            for (int b = 0; b < 10; ++b) {
+                for (int i = 0; i < bs; ++i) {
+                    inL[i] = (b == 0 && i == 0) ? 1.0f : 0.0f;
+                    inR[i] = (b == 0 && i == 0) ? -1.0f : 0.0f;
+                }
+                tank.processBlock(inL.data(), inR.data(), nullptr, nullptr, outL.data(), outR.data(), bs);
+                for (int i = 0; i < bs; ++i) {
+                    TEST_ASSERT(!std::isnan(outL[i]) && !std::isinf(outL[i]), "Manifold output must remain finite");
+                    TEST_ASSERT(!std::isnan(outR[i]) && !std::isinf(outR[i]), "Manifold output must remain finite");
+                    TEST_ASSERT(std::abs(outL[i]) <= 2.0f, "Manifold output must remain bounded");
+                }
+            }
+        }
+        TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "All 4 manifolds must be stable at 192 kHz with 4.0x dimensions");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_F34_3", "Expanded Room Dimensions - Early Reflections 549 ms Tap Read Invariance", []() {
+        rb26::EarlyReflections er;
+        er.prepare(192000.0, 4.0f);
+        er.setParameters(4.0f, 0.0f);
+
+        // Tap 11 delay at room size 4.0 is 137.3 ms * 4.0 = 549.2 ms = 105,446 samples
+        const int bs = 1024;
+        std::vector<float> inL(bs, 0.0f), inR(bs, 0.0f);
+        std::vector<float> outL(bs, 0.0f), outR(bs, 0.0f);
+        inL[0] = 1.0f; inR[0] = 1.0f;
+
+        float maxObservedPeak = 0.0f;
+        for (int b = 0; b < 120; ++b) { // 120 * 1024 = 122,880 samples (> 105,446)
+            er.processBlock(inL.data(), inR.data(), outL.data(), outR.data(), bs);
+            if (b == 0) { inL[0] = 0.0f; inR[0] = 0.0f; }
+
+            for (int i = 0; i < bs; ++i) {
+                TEST_ASSERT(!std::isnan(outL[i]) && !std::isinf(outL[i]), "ER output must be finite");
+                maxObservedPeak = std::max(maxObservedPeak, std::abs(outL[i]));
+            }
+        }
+        TEST_ASSERT(maxObservedPeak > 0.01f, "Reflections must be produced across extended buffer");
+        TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "Early reflections 549ms tap read must not overflow circular buffer");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_F34_4", "Precomputed Manifold Geometry Table Numerical Accuracy Oracle", []() {
+        // Verify that precomputed tables match closed-form analytical formulas
+        const double xi = 1.760742;
+        for (size_t k = 0; k < 8; ++k) {
+            double analyticalCosh = std::cosh(xi * (static_cast<double>(k) / 7.0));
+            double precomputedCosh = rb26::ManifoldDelayNetwork::kPoincareCosh[k];
+            double diff = std::abs(analyticalCosh - precomputedCosh);
+            TEST_ASSERT(diff < 1.0e-5, "Precomputed Poincare cosh must match analytical value");
+        }
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_F34_5", "Continuous Dynamic Room Size Modulation Sweep (0.1x to 4.0x)", []() {
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(96000.0, 128);
+        rb26::Rb26Parameters p;
+
+        const int bs = 128;
+        std::vector<float> inL(bs, 0.2f), inR(bs, -0.2f);
+        std::vector<float> outL(bs, 0.0f), outR(bs, 0.0f);
+        const float* inPtrs[2] = { inL.data(), inR.data() };
+        float* outPtrs[2] = { outL.data(), outR.data() };
+
+        float maxJump = 0.0f;
+        float prevSample = 0.0f;
+
+        // Sweep room size up from 0.1 to 4.0 and back down to 0.1
+        for (int step = 0; step < 200; ++step) {
+            float norm = (step < 100) ? (static_cast<float>(step) / 100.0f) : (static_cast<float>(200 - step) / 100.0f);
+            p.roomSize = 0.1f + 3.9f * norm;
+            engine.setParameters(p);
+            engine.process(inPtrs, outPtrs, 2, bs);
+
+            for (int i = 0; i < bs; ++i) {
+                float jump = std::abs(outL[i] - prevSample);
+                maxJump = std::max(maxJump, jump);
+                prevSample = outL[i];
+                TEST_ASSERT(!std::isnan(outL[i]) && !std::isinf(outL[i]), "Output must remain finite during room size sweep");
+            }
+        }
+        TEST_ASSERT(maxJump < 0.35f, "Continuous room size sweep must be click-free with smooth interpolation");
+        TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "Dynamic sweep must execute cleanly without discontinuities");
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
 } // registerTier2Tests
 
 } // namespace test

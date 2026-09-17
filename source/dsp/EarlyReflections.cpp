@@ -4,8 +4,9 @@
 
 namespace rb26 {
 
-void EarlyReflections::prepare(double sampleRate, float /*maxRoomSize*/) noexcept {
+void EarlyReflections::prepare(double sampleRate, float maxRoomSize) noexcept {
     mSampleRate = sampleRate > 100.0 ? sampleRate : 48000.0;
+    mMaxRoomSize = std::max(1.0f, maxRoomSize);
     mBufferL.assign(kBufferCapacity, 0.0f);
     mBufferR.assign(kBufferCapacity, 0.0f);
     mWriteIndex = 0;
@@ -33,8 +34,8 @@ void EarlyReflections::reset() noexcept {
 }
 
 void EarlyReflections::setParameters(float roomSize, float diffusionDensity) noexcept {
-    const float clamped = std::clamp(roomSize, 0.1f, 2.0f);
-    if (std::abs(clamped - mRoomSize) > 0.005f) {
+    const float clamped = std::clamp(roomSize, 0.1f, mMaxRoomSize);
+    if (std::abs(clamped - mRoomSize) > 0.001f) {
         mRoomSize = clamped;
         updateTaps();
     }

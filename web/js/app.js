@@ -561,7 +561,7 @@ export class BraunRb26App {
   }
 
   _updateRoomSize(targetNorm, immediate = false) {
-    this._targetRoomSize = Math.max(0.2, Math.min(2.0, targetNorm));
+    this._targetRoomSize = Math.max(0.1, Math.min(4.0, targetNorm));
     const nowMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
     if (immediate || !this.engine) {
@@ -747,6 +747,52 @@ export class BraunRb26App {
             if (this.isPowered !== nextPower) {
               this.setPower(nextPower);
             }
+            return;
+          }
+
+          if (data.id === 'freeze_hold' || data.id === 'freezeHold' || data.apvtsId === 'freeze_hold') {
+            const isHeld = data.value > 0.5;
+            const holdBtn = document.getElementById('btn-decay-hold');
+            if (holdBtn) {
+              holdBtn.classList.toggle('is-active', isHeld);
+              const statusText = holdBtn.querySelector('.braun-status-text');
+              if (statusText) statusText.textContent = isHeld ? 'HOLD ON' : 'FREEZE HOLD';
+            }
+            if (this.engine) this.engine.setParam('freezeHold', isHeld);
+            return;
+          }
+
+          if (data.id === 'limiter_enable' || data.id === 'limiterEnable' || data.apvtsId === 'limiter_enable') {
+            const isLim = data.value > 0.5;
+            const limBtn = document.getElementById('btn-soft-limiter');
+            if (limBtn) {
+              limBtn.classList.toggle('is-active', isLim);
+            }
+            if (this.engine) this.engine.setParam('limiterEnable', isLim);
+            return;
+          }
+
+          if (data.id === 'shimmer_interval' || data.id === 'shimmerInterval' || data.apvtsId === 'shimmer_interval') {
+            const sIdx = Math.round(data.value);
+            const intervals = [7, 12, 24];
+            const st = intervals[sIdx] ?? 12;
+            const shimBtns = document.querySelectorAll('.shim-interval-btn');
+            shimBtns.forEach((btn) => {
+              btn.classList.toggle('is-active', parseInt(btn.dataset.interval, 10) === st);
+            });
+            if (this.engine) this.engine.setParam('shimmerInterval', st);
+            return;
+          }
+
+          if (data.id === 'dimmer_interval' || data.id === 'dimmerInterval' || data.apvtsId === 'dimmer_interval') {
+            const dIdx = Math.round(data.value);
+            const intervals = [-2, -7, -12];
+            const st = intervals[dIdx] ?? -12;
+            const dimBtns = document.querySelectorAll('.dim-interval-btn');
+            dimBtns.forEach((btn) => {
+              btn.classList.toggle('is-active', parseInt(btn.dataset.interval, 10) === st);
+            });
+            if (this.engine) this.engine.setParam('dimmerInterval', st);
             return;
           }
 
@@ -995,7 +1041,7 @@ export class BraunRb26App {
     });
 
     this.knobs.room_size = createKnob('knob-room-size', {
-      label: 'ROOM SIZE', min: 20, max: 200, step: 1, unit: '%', value: 100, size: 'large',
+      label: 'ROOM SIZE', min: 10, max: 400, step: 1, unit: '%', value: 100, size: 'large',
       onChange: (v) => { this._updateRoomSize(v / 100); this._emitJuceParam('roomSize', v / 100); }
     });
 
@@ -1006,18 +1052,18 @@ export class BraunRb26App {
 
     // Deck 4: PITCH DIFFUSION
     this.knobs.shimmer_send = createKnob('knob-shimmer-send', {
-      label: 'SHIMMER GAIN', min: 5, max: 100, step: 1, unit: '%', value: 40, size: 'medium',
+      label: 'SHIMMER GAIN', min: 0, max: 100, step: 1, unit: '%', value: 40, size: 'medium',
       onChange: (v) => {
-        const val = Math.max(5, v);
+        const val = Math.max(0, v);
         this.engine.setParam('shimmerSend', val / 100);
         this._emitJuceParam('shimmerSend', val / 100);
       }
     });
 
     this.knobs.dimmer_send = createKnob('knob-dimmer-send', {
-      label: 'DIMMER GAIN', min: 5, max: 100, step: 1, unit: '%', value: 35, size: 'medium',
+      label: 'DIMMER GAIN', min: 0, max: 100, step: 1, unit: '%', value: 35, size: 'medium',
       onChange: (v) => {
-        const val = Math.max(5, v);
+        const val = Math.max(0, v);
         this.engine.setParam('dimmerSend', val / 100);
         this._emitJuceParam('dimmerSend', val / 100);
       }
@@ -1149,6 +1195,7 @@ export class BraunRb26App {
         if (statusText) statusText.textContent = isHeld ? 'HOLD ON' : 'FREEZE HOLD';
         this.engine.setParam('freezeHold', isHeld);
         this._emitJuceParam('freezeHold', isHeld ? 1.0 : 0.0);
+        this._emitJuceParam('freeze_hold', isHeld ? 1.0 : 0.0);
       });
     }
 
@@ -1159,6 +1206,7 @@ export class BraunRb26App {
         const isActive = limiterBtn.classList.toggle('is-active');
         this.engine.setParam('limiterEnable', isActive);
         this._emitJuceParam('limiterEnable', isActive ? 1.0 : 0.0);
+        this._emitJuceParam('limiter_enable', isActive ? 1.0 : 0.0);
       });
     }
 
@@ -2614,6 +2662,8 @@ export class BraunRb26App {
         const holdBtn = document.getElementById('btn-decay-hold');
         if (holdBtn) holdBtn.classList.toggle('is-active', isHeld);
         this.engine.setParam('freezeHold', isHeld);
+        this._emitJuceParam('freezeHold', isHeld ? 1.0 : 0.0);
+        this._emitJuceParam('freeze_hold', isHeld ? 1.0 : 0.0);
       }
     }
   }

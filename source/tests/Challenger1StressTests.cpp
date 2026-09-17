@@ -165,7 +165,7 @@ bool test192kHzSustainedStress() {
 
     rb26::Rb26Parameters p;
     p.preDelayMs = 500.0f;          // Maximum pre-delay (96,000 samples at 192 kHz)
-    p.roomSize = 2.0f;              // Maximum room size (scaled by 4.0 at 192 kHz)
+    p.roomSize = 4.0f;              // Expanded maximum room size (scaled by 4.0 at 192 kHz)
     p.decayRt60Sec = 30.0f;         // Maximum RT60
     p.highDampingHz = 20000.0f;     // Maximum damping cutoff
     p.diffusionDensity = 1.0f;      // Maximum diffusion
@@ -386,7 +386,7 @@ bool testConcurrentParameterUpdates() {
     // Thread 2: Rapid Parameter Automation Thread (1000 updates/sec)
     std::thread paramThread([&]() {
         std::mt19937 rng(1337);
-        std::uniform_real_distribution<float> roomDist(0.1f, 2.0f);
+        std::uniform_real_distribution<float> roomDist(0.1f, 4.0f);
         std::uniform_real_distribution<float> decayDist(0.2f, 30.0f);
         std::uniform_real_distribution<float> preDelayDist(0.0f, 500.0f);
         std::uniform_real_distribution<float> blendDist(-1.0f, 1.0f);

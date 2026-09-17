@@ -383,6 +383,7 @@ export class Rb26WebEngine {
     this._activeFdnBank = 'A';
     this.fdnDcBlockers = [];
     this.fdnDampingFilters = [];
+    this.fdnDiffusionFilters = [];
     this.fdnFeedbackGains = [];
     this.fdnInjectionGains = [];
     this.fdnOutGains = [];
@@ -402,8 +403,8 @@ export class Rb26WebEngine {
     this.fdnHouseholderSum.gain.setValueAtTime(-0.25, ctx.currentTime);
 
     for (let i = 0; i < 8; i++) {
-      const delayA = ctx.createDelay(0.5);
-      const delayB = ctx.createDelay(0.5);
+      const delayA = ctx.createDelay(1.0);
+      const delayB = ctx.createDelay(1.0);
       delayA.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, ctx.currentTime);
       delayB.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, ctx.currentTime);
 
@@ -423,6 +424,13 @@ export class Rb26WebEngine {
       damping.type = 'lowpass';
       damping.frequency.setValueAtTime(Math.min(14000, this.params.highDampingHz), ctx.currentTime);
       damping.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
+
+      // Dispersive allpass filter for decay diffusion in FDN recirculating line
+      const diffFilter = ctx.createBiquadFilter();
+      diffFilter.type = 'allpass';
+      const diffFreqs = [880, 1250, 1620, 2100, 720, 1440, 1950, 2480];
+      diffFilter.frequency.setValueAtTime(diffFreqs[i], ctx.currentTime);
+      diffFilter.Q.setValueAtTime(Math.max(0.1, this.params.diffusion * 1.5), ctx.currentTime);
 
       const gain = ctx.createGain();
       const effDelaySec = fdnPrimes[i] * this.params.roomSize;
@@ -457,16 +465,17 @@ export class Rb26WebEngine {
       this.fdnLfos.push(lfo);
       this.fdnLfoGains.push(lfoGain);
 
-      // Signal routing: Delay A/B -> Crossfade A/B -> DC Blocker -> Damping Filter
+      // Signal routing: Delay A/B -> Crossfade A/B -> DC Blocker -> Damping Filter -> Diffusion Allpass
       delayA.connect(xfadeA);
       delayB.connect(xfadeB);
       xfadeA.connect(dcBlock);
       xfadeB.connect(dcBlock);
       dcBlock.connect(damping);
+      damping.connect(diffFilter);
 
       // Orthogonal Householder reflection:
-      damping.connect(gain);
-      damping.connect(this.fdnHouseholderSum);
+      diffFilter.connect(gain);
+      diffFilter.connect(this.fdnHouseholderSum);
       this.fdnHouseholderSum.connect(gain);
 
       gain.connect(delayA); // Strictly contractive unitary loop back
@@ -481,6 +490,7 @@ export class Rb26WebEngine {
       this.fdnXfadeB.push(xfadeB);
       this.fdnDcBlockers.push(dcBlock);
       this.fdnDampingFilters.push(damping);
+      this.fdnDiffusionFilters.push(diffFilter);
       this.fdnFeedbackGains.push(gain);
       this.fdnInjectionGains.push(injGain);
       this.fdnOutGains.push(outGain);
@@ -728,9 +738,9 @@ export class Rb26WebEngine {
     const now = this.ctx.currentTime;
 
     for (let i = 0; i < 4; i++) {
-      // Loop gain at low frequencies strictly < 0.88 to make sub-bass accumulation physically impossible
+      // Loop gain at low frequencies strictly < 0.88 in normal mode to prevent sub-bass accumulation; lossless 1.0 on freeze
       const calculatedFb = Math.exp(-6.907755 * modalTimes[i] / effRt60) * 0.86;
-      const fb = this.params.freezeHold ? 0.875 : Math.min(0.875, calculatedFb);
+      const fb = this.params.freezeHold ? 1.0 : Math.min(0.875, calculatedFb);
       this.modalFeedbackGains[i].gain.value = fb;
       this.modalFeedbackGains[i].gain.setTargetAtTime(fb, now, 0.02);
     }
@@ -756,14 +766,14 @@ export class Rb26WebEngine {
     }
     const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
     const now = this.ctx.currentTime;
-    const maxFeedback = this.params.freezeHold ? 0.985 : 0.96;
+    const maxFeedback = this.params.freezeHold ? 1.0 : 0.96;
 
     for (let i = 0; i < 8; i++) {
       const effDelaySec = fdnPrimes[i] * this.params.roomSize;
       const calculatedFb = Math.pow(0.001, effDelaySec / Math.max(0.1, this.params.decayRt60Sec)) * 0.95;
-      const feedback = this.params.freezeHold ? 0.985 : Math.min(maxFeedback, calculatedFb);
+      const feedback = this.params.freezeHold ? 1.0 : Math.min(maxFeedback, calculatedFb);
       this.fdnFeedbackGains[i].gain.value = feedback;
-      this.fdnFeedbackGains[i].gain.setTargetAtTime(feedback, now, 0.05);
+      this.fdnFeedbackGains[i].gain.setTargetAtTime(feedback, now, 0.02);
     }
   }
 
@@ -792,8 +802,8 @@ export class Rb26WebEngine {
             try { this.fdnFeedbackGains[i].disconnect(); } catch (_) {}
           }
 
-          const newDA = ctx.createDelay(0.5);
-          const newDB = ctx.createDelay(0.5);
+          const newDA = ctx.createDelay(1.0);
+          const newDB = ctx.createDelay(1.0);
           newDA.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, now);
           newDB.delayTime.setValueAtTime(fdnPrimes[i] * this.params.roomSize, now);
 
@@ -1016,6 +1026,11 @@ export class Rb26WebEngine {
         if (this.earlyReflectionsBus) {
           this.earlyReflectionsBus.gain.setTargetAtTime(0.30 + value * 0.40, now, 0.02);
         }
+        if (this.fdnDiffusionFilters) {
+          for (const df of this.fdnDiffusionFilters) {
+            df.Q.setTargetAtTime(Math.max(0.1, value * 1.5), now, 0.02);
+          }
+        }
         break;
       case 'inputTrimDb': {
         const lin = Math.pow(10, value / 20) * 1.0;
@@ -1071,7 +1086,7 @@ export class Rb26WebEngine {
         break;
       }
       case 'roomSize': {
-        const val = Math.max(0.2, Math.min(2.0, Number(value) || 1.0));
+        const val = Math.max(0.1, Math.min(4.0, Number(value) || 1.0));
         this.params.roomSize = val;
 
         if (!this.ctx || !this.fdnDelaysA || !this.fdnDelaysA.length) return;
@@ -1149,8 +1164,14 @@ export class Rb26WebEngine {
       }
       case 'freezeHold': {
         const isFrozen = Boolean(value);
+        this.params.freezeHold = isFrozen;
         if (this.fdnInputBus) {
           this.fdnInputBus.gain.setTargetAtTime(isFrozen ? 0.0 : 1.0, now, 0.02);
+        }
+        if (this.fdnDampingFilters) {
+          for (const f of this.fdnDampingFilters) {
+            f.frequency.setTargetAtTime(isFrozen ? 20000 : this.params.highDampingHz, now, 0.02);
+          }
         }
         this._updateFdnDecayGains();
         this._updateModalDecayGains();
@@ -1158,13 +1179,13 @@ export class Rb26WebEngine {
       }
       case 'shimmerSend':
         if (this.shimmerSendGain) {
-          const clamped = Math.max(0.05, Math.min(1.0, value));
+          const clamped = Math.max(0.0, Math.min(1.0, value));
           this.shimmerSendGain.gain.setTargetAtTime(clamped, now, 0.02);
         }
         break;
       case 'dimmerSend':
         if (this.dimmerSendGain) {
-          const clamped = Math.max(0.05, Math.min(1.0, value));
+          const clamped = Math.max(0.0, Math.min(1.0, value));
           this.dimmerSendGain.gain.setTargetAtTime(clamped, now, 0.02);
         }
         break;

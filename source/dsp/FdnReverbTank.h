@@ -18,7 +18,7 @@ public:
     FdnReverbTank() noexcept { prepare(48000.0); }
     ~FdnReverbTank() noexcept = default;
 
-    void prepare(double sampleRate, float maxRoomSize = 2.0f) noexcept;
+    void prepare(double sampleRate, float maxRoomSize = 4.0f) noexcept;
     void reset() noexcept;
 
     // 8-parameter overload maintaining 100% backward compatibility
@@ -36,6 +36,8 @@ public:
     [[nodiscard]] ManifoldType getActiveManifold() const noexcept { return mManifoldNetwork.getActiveManifold(); }
     [[nodiscard]] ManifoldDelayNetwork& getManifoldNetwork() noexcept { return mManifoldNetwork; }
     [[nodiscard]] const ManifoldDelayNetwork& getManifoldNetwork() const noexcept { return mManifoldNetwork; }
+    [[nodiscard]] float getRoomSize() const noexcept { return mRoomSize; }
+    [[nodiscard]] float getMaxRoomSize() const noexcept { return mMaxRoomSize; }
 
     // Process stereo high-band audio + pitch feedback recirculation
     void processSample(float inL, float inR, float pitchFbL, float pitchFbR,
@@ -49,6 +51,7 @@ public:
 private:
     double mSampleRate { 48000.0 };
     float mRoomSize { 0.65f };
+    float mMaxRoomSize { 4.0f };
     float mDecayRt60 { 3.5f };
     float mHighDampingHz { 6500.0f };
     float mDiffusionDensity { 0.75f };

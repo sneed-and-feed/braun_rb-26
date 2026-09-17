@@ -140,10 +140,20 @@ public:
 
     // Checks whether shimmer or dimmer is actively contributing
     [[nodiscard]] inline bool isActive() const noexcept {
-        return (mShimmerSendSmoother.getTarget() > 0.001f ||
-                mDimmerSendSmoother.getTarget() > 0.001f ||
-                mShimmerSendSmoother.getCurrent() > 0.001f ||
-                mDimmerSendSmoother.getCurrent() > 0.001f);
+        const float curBlend = mPitchBlendSmoother.getCurrent();
+        const float targetBlend = mPitchBlendSmoother.getTarget();
+        const float blendAngleCur = (kPi * 0.25f) * (1.0f - curBlend);
+        const float blendAngleTgt = (kPi * 0.25f) * (1.0f - targetBlend);
+        const float cosCur = FastSinTable::cos(blendAngleCur);
+        const float cosTgt = FastSinTable::cos(blendAngleTgt);
+        const float sinCur = FastSinTable::sin(blendAngleCur);
+        const float sinTgt = FastSinTable::sin(blendAngleTgt);
+
+        const bool shimActive = (mShimmerSendSmoother.getTarget() > 0.001f || mShimmerSendSmoother.getCurrent() > 0.001f) &&
+                                (cosCur > 0.01f || cosTgt > 0.01f);
+        const bool dimActive  = (mDimmerSendSmoother.getTarget() > 0.001f || mDimmerSendSmoother.getCurrent() > 0.001f) &&
+                                (sinCur > 0.01f || sinTgt > 0.01f);
+        return shimActive || dimActive;
     }
 
 private:

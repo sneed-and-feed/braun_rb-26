@@ -14,9 +14,12 @@ public:
     EarlyReflections() noexcept { prepare(48000.0); }
     ~EarlyReflections() noexcept = default;
 
-    void prepare(double sampleRate, float maxRoomSize = 2.0f) noexcept;
+    void prepare(double sampleRate, float maxRoomSize = 4.0f) noexcept;
     void reset() noexcept;
     void setParameters(float roomSize, float diffusionDensity = 0.0f) noexcept;
+
+    [[nodiscard]] float getRoomSize() const noexcept { return mRoomSize; }
+    [[nodiscard]] float getMaxRoomSize() const noexcept { return mMaxRoomSize; }
 
     // Guaranteed 100% time-invariant (0% modulation)
     void processSample(float inL, float inR, float& outL, float& outR) noexcept;
@@ -47,11 +50,15 @@ private:
         { 137.3f, -0.20f,  0.10f }
     }};
 
-    static constexpr size_t kBufferCapacity = 65536;
+    // Sized for 192 kHz with expanded dimensions (up to 4.0x room size):
+    // Maximum tap 137.3 ms * 4.0 = 549.2 ms (~105,446 samples at 192 kHz)
+    // 2^18 = 262,144 samples (~1.365 s at 192 kHz), power-of-two for bitwise masking
+    static constexpr size_t kBufferCapacity = 262144;
     static constexpr size_t kBufferMask = kBufferCapacity - 1;
 
     double mSampleRate { 48000.0 };
     float mRoomSize { 1.0f };
+    float mMaxRoomSize { 4.0f };
 
     std::array<size_t, kNumTaps> mTapDelaysSamples {};
     std::array<float, kNumTaps> mTapGainsL {};

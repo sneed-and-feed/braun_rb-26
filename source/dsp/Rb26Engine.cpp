@@ -26,8 +26,8 @@ void Rb26ReverbEngine::prepare(double sampleRate, int maxBlockSize) noexcept {
     const float fs = static_cast<float>(mSampleRate);
 
     mLowBandMatrix.prepare(mSampleRate);
-    mEarlyReflections.prepare(mSampleRate);
-    mFdnTank.prepare(mSampleRate);
+    mEarlyReflections.prepare(mSampleRate, 4.0f);
+    mFdnTank.prepare(mSampleRate, 4.0f);
     mPitchShifter.prepare(mSampleRate, mMaxBlockSize);
     mMasterSubMono.prepare(mSampleRate);
 

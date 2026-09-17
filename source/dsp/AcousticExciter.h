@@ -478,4 +478,6 @@ private:
     void handleTriggerEvent(const ExciterTriggerEvent& evt) noexcept;
 };
 
+using AcousticExciter = AcousticExciterEngine;
+
 } // namespace rb26
