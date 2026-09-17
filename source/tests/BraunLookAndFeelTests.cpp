@@ -13,6 +13,8 @@ int main()
     // 1. Verify Light Palette
     assert(laf.findColour(rb26::BraunColours::bgAppColourId).getARGB() == rb26::BraunColours::Light_BgApp);
     assert(laf.findColour(rb26::BraunColours::textPrimaryColourId).getARGB() == rb26::BraunColours::Light_TextPrimary);
+    assert(laf.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Light_TextPrimary);
+    assert(laf.findColour(juce::ComboBox::backgroundColourId).getARGB() == rb26::BraunColours::Light_BgPanelInset);
 
     // 2. Verify Dark Palette Toggle
     laf.setDarkTheme(true);
@@ -20,6 +22,9 @@ int main()
     assert(laf.findColour(rb26::BraunColours::bgAppColourId).getARGB() == rb26::BraunColours::Dark_BgApp);
     assert(laf.findColour(rb26::BraunColours::textPrimaryColourId).getARGB() == rb26::BraunColours::Dark_TextPrimary);
     assert(laf.findColour(rb26::BraunColours::knobFillColourId).getARGB() == rb26::BraunColours::Dark_KnobFill);
+    assert(laf.findColour(juce::ComboBox::textColourId).getARGB() == rb26::BraunColours::Dark_TextPrimary);
+    assert(laf.findColour(juce::ComboBox::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanelInset);
+    assert(laf.findColour(juce::PopupMenu::backgroundColourId).getARGB() == rb26::BraunColours::Dark_BgPanel);
 
     // 3. Verify 3-Tier Knob Sizing
     assert(rb26::BraunLookAndFeel::getKnobTierForBounds(64, 64) == rb26::BraunLookAndFeel::KnobTier::Hero);

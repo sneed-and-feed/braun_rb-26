@@ -41,8 +41,13 @@ target_include_directories(rb26_m4_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../plugin
     ${CMAKE_CURRENT_SOURCE_DIR}/../dsp
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.1.0.2849.39/build/native/include
 )
+
+if(WIN32 AND RB26_USE_WEBVIEW AND EXISTS "${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.1.0.2849.39/build/native/include")
+    target_include_directories(rb26_m4_tests PRIVATE
+        ${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.1.0.2849.39/build/native/include
+    )
+endif()
 
 target_link_libraries(rb26_m4_tests PRIVATE
     BRAUN_RB26

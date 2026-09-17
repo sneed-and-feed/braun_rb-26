@@ -122,6 +122,10 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
     font-size: 11px;
     cursor: pointer;
   }
+  select option {
+    background: var(--card-bg);
+    color: var(--text-main);
+  }
   .exciter-bar {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -482,6 +486,7 @@ if (window.__JUCE__ && window.__JUCE__.backend) {
 
 } // namespace
 
+#if JUCE_WEB_BROWSER
 juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOptions(BRAUN_RB26AudioProcessorEditor& editor)
 {
 #if JUCE_WINDOWS
@@ -526,17 +531,28 @@ juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOpti
 
     return options;
 }
+#endif
 
 BRAUN_RB26AudioProcessorEditor::BRAUN_RB26AudioProcessorEditor(BRAUN_RB26AudioProcessor& p)
     : AudioProcessorEditor(&p),
-      processorRef(p),
-      webComponent(createWebOptions(*this))
+      processorRef(p)
 {
     setLookAndFeel(&braunLookAndFeel);
     setOpaque(true);
-    webComponent.setOpaque(true);
 
-    addAndMakeVisible(webComponent);
+    setupNativeControls();
+
+#if JUCE_WEB_BROWSER
+    webComponent = std::make_unique<juce::WebBrowserComponent>(createWebOptions(*this));
+    webComponent->setOpaque(true);
+    addAndMakeVisible(*webComponent);
+    useNativeUI = false;
+    webComponent->goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
+#else
+    useNativeUI = true;
+#endif
+
+    setNativeMode(useNativeUI);
     registerParameterListeners();
 
     // 19" studio rack aspect ratio: 1080x720 default, resizable
@@ -546,8 +562,6 @@ BRAUN_RB26AudioProcessorEditor::BRAUN_RB26AudioProcessorEditor(BRAUN_RB26AudioPr
 
     // 60 Hz telemetry polling timer for smooth phosphor CRT waterfall and goniometer
     startTimerHz(60);
-
-    webComponent.goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
 }
 
 BRAUN_RB26AudioProcessorEditor::~BRAUN_RB26AudioProcessorEditor()
@@ -555,20 +569,36 @@ BRAUN_RB26AudioProcessorEditor::~BRAUN_RB26AudioProcessorEditor()
     setLookAndFeel(nullptr);
     stopTimer();
     unregisterParameterListeners();
+    knobSlots.clear();
+    buttonSlots.clear();
+    comboSlots.clear();
 }
 
 void BRAUN_RB26AudioProcessorEditor::resized()
 {
-    webComponent.setBounds(getLocalBounds());
+#if JUCE_WEB_BROWSER
+    if (webComponent != nullptr && !useNativeUI)
+    {
+        webComponent->setBounds(getLocalBounds());
+    }
+#endif
+
+    if (useNativeUI)
+    {
+        updateNativeControlLayout();
+    }
 }
 
 void BRAUN_RB26AudioProcessorEditor::parentHierarchyChanged()
 {
     AudioProcessorEditor::parentHierarchyChanged();
+#if JUCE_WEB_BROWSER
     hwndStylesConfigured = false;
     ensureHwndStyles();
+#endif
 }
 
+#if JUCE_WEB_BROWSER
 void BRAUN_RB26AudioProcessorEditor::ensureHwndStyles()
 {
 #if JUCE_WINDOWS
@@ -601,9 +631,11 @@ void BRAUN_RB26AudioProcessorEditor::ensureHwndStyles()
     }
 #endif
 }
+#endif
 
 void BRAUN_RB26AudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
 {
+#if JUCE_WEB_BROWSER
     const auto& meta = rb26::getParameterMetadataTable();
     for (size_t i = 0; i < meta.size(); ++i)
     {
@@ -614,15 +646,20 @@ void BRAUN_RB26AudioProcessorEditor::parameterChanged(const juce::String& parame
             break;
         }
     }
+#else
+    juce::ignoreUnused(parameterID, newValue);
+#endif
 }
 
+#if JUCE_WEB_BROWSER
 void BRAUN_RB26AudioProcessorEditor::sendParameterUpdateToWeb(const juce::String& apvtsId, const juce::String& webId, float newValue)
 {
+    if (webComponent == nullptr) return;
     auto* obj = new juce::DynamicObject();
     obj->setProperty("id", webId);
     obj->setProperty("apvtsId", apvtsId);
     obj->setProperty("value", newValue);
-    webComponent.emitEventIfBrowserIsVisible("paramUpdate", juce::var(obj));
+    webComponent->emitEventIfBrowserIsVisible("paramUpdate", juce::var(obj));
 }
 
 void BRAUN_RB26AudioProcessorEditor::syncAllParametersToWeb()
@@ -638,66 +675,75 @@ void BRAUN_RB26AudioProcessorEditor::syncAllParametersToWeb()
     sendParameterUpdateToWeb("power", "power", processorRef.isPower() ? 1.0f : 0.0f);
     sendRecordingStateUpdateToWeb(processorRef.isRecording());
 }
+#endif
 
 void BRAUN_RB26AudioProcessorEditor::timerCallback()
 {
-    // Windows HWND style guard
-    if (!hwndStylesConfigured || ++hwndCheckCounter >= 60)
-    {
-        hwndCheckCounter = 0;
-        ensureHwndStyles();
-    }
-
-    if (processorRef.consumeRecordingSavedDirty())
-    {
-        auto* obj = new juce::DynamicObject();
-        obj->setProperty("path", processorRef.getLastRecordedFile().getFullPathName());
-        webComponent.emitEventIfBrowserIsVisible("recordingSaved", juce::var(obj));
-    }
-
-    // Initial state synchronization on webview ready
-    if (!initialSyncDone && webComponent.isVisible())
-    {
-        syncAllParametersToWeb();
-        initialSyncDone = true;
-    }
-
-    // Coalesced dirty parameter dispatch at 60 Hz
-    const auto& meta = rb26::getParameterMetadataTable();
-    for (size_t i = 0; i < meta.size(); ++i)
-    {
-        if (paramDirty[i].exchange(false, std::memory_order_relaxed))
-        {
-            const float val = pendingParamValues[i].load(std::memory_order_relaxed);
-            sendParameterUpdateToWeb(meta[i].apvtsId, meta[i].webId, val);
-        }
-    }
-
-    // 60 Hz Visualizer Telemetry stream
-    sendTelemetryToWeb();
-    sendScopeDataToWeb();
-
-    // Repaint native presentation layer fallback
-    if (!webComponent.isVisible())
-    {
-        repaint();
-    }
-}
-
-void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
-{
-    if (!webComponent.isVisible())
-        return;
-
+    // Always drain visualizer telemetry from audio thread
     rb26::Rb26ReverbEngine::VisualizerFrame frame;
-    bool hasNewFrame = false;
     while (processorRef.popVisualizerFrame(frame))
     {
         latestTelemetryFrame = frame;
-        hasNewFrame = true;
     }
 
-    if (!hasNewFrame)
+#if JUCE_WEB_BROWSER
+    if (!useNativeUI && webComponent != nullptr)
+    {
+        // Windows HWND style guard
+        if (!hwndStylesConfigured || ++hwndCheckCounter >= 60)
+        {
+            hwndCheckCounter = 0;
+            ensureHwndStyles();
+        }
+
+        if (processorRef.consumeRecordingSavedDirty())
+        {
+            auto* obj = new juce::DynamicObject();
+            obj->setProperty("path", processorRef.getLastRecordedFile().getFullPathName());
+            webComponent->emitEventIfBrowserIsVisible("recordingSaved", juce::var(obj));
+        }
+
+        // Initial state synchronization on webview ready
+        if (!initialSyncDone && webComponent->isVisible())
+        {
+            syncAllParametersToWeb();
+            initialSyncDone = true;
+        }
+
+        // Coalesced dirty parameter dispatch at 60 Hz
+        const auto& meta = rb26::getParameterMetadataTable();
+        for (size_t i = 0; i < meta.size(); ++i)
+        {
+            if (paramDirty[i].exchange(false, std::memory_order_relaxed))
+            {
+                const float val = pendingParamValues[i].load(std::memory_order_relaxed);
+                sendParameterUpdateToWeb(meta[i].apvtsId, meta[i].webId, val);
+            }
+        }
+
+        // 60 Hz Visualizer Telemetry stream
+        sendTelemetryToWeb();
+        sendScopeDataToWeb();
+    }
+    else
+#endif
+    {
+        // Native UI: update header button states
+        powerButton.setButtonText(processorRef.isPower() ? "POWER ON" : "STANDBY");
+        powerButton.setToggleState(processorRef.isPower(), juce::dontSendNotification);
+
+        recordButton.setToggleState(processorRef.isRecording(), juce::dontSendNotification);
+
+        // Repaint CRT scope display
+        auto crtArea = getLocalBounds().withTrimmedTop(56).removeFromTop(130).reduced(16, 8);
+        repaint(crtArea);
+    }
+}
+
+#if JUCE_WEB_BROWSER
+void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
+{
+    if (webComponent == nullptr || !webComponent->isVisible())
         return;
 
     const bool isSilent = (latestTelemetryFrame.inputRmsL < 1.0e-5f &&
@@ -729,12 +775,12 @@ void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
     obj->setProperty("highEnergy", latestTelemetryFrame.highEnergy);
     obj->setProperty("decayEnvelope", latestTelemetryFrame.decayEnvelope);
 
-    webComponent.emitEventIfBrowserIsVisible("telemetryFrame", juce::var(obj));
+    webComponent->emitEventIfBrowserIsVisible("telemetryFrame", juce::var(obj));
 }
 
 void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
 {
-    if (!webComponent.isVisible())
+    if (webComponent == nullptr || !webComponent->isVisible())
         return;
 
     constexpr int kSamples = 240;
@@ -775,7 +821,7 @@ void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
 
     auto* obj = new juce::DynamicObject();
     obj->setProperty("samples", juce::var(sampleArray));
-    webComponent.emitEventIfBrowserIsVisible("scopeFrame", juce::var(obj));
+    webComponent->emitEventIfBrowserIsVisible("scopeFrame", juce::var(obj));
 }
 
 void BRAUN_RB26AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& data)
@@ -793,6 +839,14 @@ void BRAUN_RB26AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
     if (incomingId.equalsIgnoreCase("requestSync") || incomingId.equalsIgnoreCase("requestState"))
     {
         syncAllParametersToWeb();
+        return;
+    }
+
+    if (incomingId.equalsIgnoreCase("toggleNativeUI") || 
+        incomingId.equalsIgnoreCase("nativeUI") || 
+        incomingId.equalsIgnoreCase("switchUI"))
+    {
+        setNativeMode(true);
         return;
     }
 
@@ -909,10 +963,12 @@ void BRAUN_RB26AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
 
 void BRAUN_RB26AudioProcessorEditor::sendRecordingStateUpdateToWeb(bool isRecording)
 {
+    if (webComponent == nullptr)
+        return;
     auto* obj = new juce::DynamicObject();
     obj->setProperty("id", "isRecording");
     obj->setProperty("value", isRecording ? 1.0f : 0.0f);
-    webComponent.emitEventIfBrowserIsVisible("paramUpdate", juce::var(obj));
+    webComponent->emitEventIfBrowserIsVisible("paramUpdate", juce::var(obj));
 }
 
 void BRAUN_RB26AudioProcessorEditor::handleStartRecordingFromWeb()
@@ -1089,6 +1145,7 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
 
     return std::nullopt;
 }
+#endif
 
 void BRAUN_RB26AudioProcessorEditor::registerParameterListeners()
 {
@@ -1119,10 +1176,10 @@ void BRAUN_RB26AudioProcessorEditor::paint(juce::Graphics& g)
 
 void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::Rectangle<int> bounds)
 {
-    // Matte dark anthracite chassis (#141517)
+    // Chassis background
     g.fillAll(braunLookAndFeel.findColour(rb26::BraunColours::bgAppColourId));
 
-    // Outer precision bevel & shadow
+    // Outer precision bevel & border
     g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::borderLineColourId));
     g.drawRect(bounds.toFloat(), 1.5f);
 
@@ -1136,26 +1193,30 @@ void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::R
     // Dieter Rams Functionalist Typography
     g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::textPrimaryColourId));
     g.setFont(juce::FontOptions(18.0f, juce::Font::bold));
-    g.drawText("BRAUN RB-26", headerArea.removeFromLeft(200).reduced(16, 0), juce::Justification::centredLeft);
+    g.drawText("BRAUN RB-26", headerArea.removeFromLeft(180).reduced(16, 0), juce::Justification::centredLeft);
 
     g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::textMutedColourId));
-    g.setFont(juce::FontOptions(11.0f, juce::Font::plain));
-    g.drawText("STUDIO REVERBERATION UNIT — WENIGER, ABER BESSER", headerArea.reduced(16, 0), juce::Justification::centredLeft);
-
-    // Braun Orange Active Indicator Badge
-    auto badgeArea = headerArea.removeFromRight(120).reduced(16, 14);
-    g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::braunOrangeColourId));
-    g.fillRoundedRectangle(badgeArea.toFloat(), 2.0f);
-    g.setColour(juce::Colours::white);
-    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
-    g.drawText("STUDIO FX", badgeArea, juce::Justification::centred);
+    g.setFont(juce::FontOptions(10.0f, juce::Font::plain));
+    g.drawText("STUDIO REVERBERATOR · DIN 1451", headerArea.removeFromLeft(220).reduced(4, 0), juce::Justification::centredLeft);
 
     // Central CRT Phosphor Visualizer Scope
-    auto crtArea = bounds.removeFromTop(130).reduced(16, 8);
+    auto crtArea = bounds.removeFromTop(130).reduced(16, 6);
     drawCrtDisplay(g, crtArea);
 
+    // Audition strip background & label
+    auto auditionArea = bounds.removeFromTop(32).reduced(16, 2);
+    g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::bgPanelColourId));
+    g.fillRoundedRectangle(auditionArea.toFloat(), 3.0f);
+    g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::borderLineColourId));
+    g.drawRoundedRectangle(auditionArea.toFloat(), 3.0f, 1.0f);
+
+    auto auditionLabelArea = auditionArea.removeFromLeft(130);
+    g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::textMutedColourId));
+    g.setFont(juce::FontOptions(9.0f, juce::Font::bold));
+    g.drawText("AUDITION SOURCE:", auditionLabelArea.reduced(8, 0), juce::Justification::centredLeft);
+
     // 6 Signal-Flow Decks Grid
-    auto gridArea = bounds.reduced(16, 8);
+    auto gridArea = bounds.reduced(16, 6);
     const int numCols = 3;
     const int numRows = 2;
     const int colWidth = gridArea.getWidth() / numCols;
@@ -1177,14 +1238,14 @@ void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::R
             const int idx = r * numCols + c;
             auto cell = juce::Rectangle<int>(gridArea.getX() + c * colWidth, gridArea.getY() + r * rowHeight, colWidth, rowHeight).reduced(4);
             
-            g.setColour(juce::Colour(0xff1C1D20));
+            g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::bgPanelColourId));
             g.fillRoundedRectangle(cell.toFloat(), 3.0f);
-            g.setColour(juce::Colour(0xff2E3035));
+            g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::borderLineColourId));
             g.drawRoundedRectangle(cell.toFloat(), 3.0f, 1.0f);
 
             // Deck header
-            auto deckHeader = cell.removeFromTop(24);
-            g.setColour(juce::Colour(0xffEE592B));
+            auto deckHeader = cell.removeFromTop(22);
+            g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::braunOrangeColourId));
             g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
             g.drawText(deckTitles[idx], deckHeader.reduced(8, 0), juce::Justification::centredLeft);
         }
@@ -1194,7 +1255,7 @@ void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::R
 void BRAUN_RB26AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rectangle<int> bounds)
 {
     // CRT Bezel
-    g.setColour(juce::Colour(0xff090B0A));
+    g.setColour(juce::Colour(rb26::BraunColours::Dark_BgBezel));
     g.fillRoundedRectangle(bounds.toFloat(), 4.0f);
     g.setColour(juce::Colour(0xff202622));
     g.drawRoundedRectangle(bounds.toFloat(), 4.0f, 1.5f);
@@ -1226,7 +1287,7 @@ void BRAUN_RB26AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
         else wavePath.lineTo(x, y);
     }
 
-    g.setColour(juce::Colour(0xff24FF6A)); // Phosphor Green
+    g.setColour(juce::Colour(rb26::BraunColours::PhosphorGreen));
     g.strokePath(wavePath, juce::PathStrokeType(1.5f));
 
     // Telemetry Bars
@@ -1244,9 +1305,372 @@ void BRAUN_RB26AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
         g.fillRect(row.removeFromLeft(static_cast<int>(row.getWidth() * pct)));
     };
 
-    drawBar("IN L", latestTelemetryFrame.inputRmsL, juce::Colour(0xff24FF6A), 4);
-    drawBar("IN R", latestTelemetryFrame.inputRmsR, juce::Colour(0xff24FF6A), 22);
-    drawBar("OUT L", latestTelemetryFrame.outputRmsL, juce::Colour(0xff24FF6A), 40);
-    drawBar("OUT R", latestTelemetryFrame.outputRmsR, juce::Colour(0xff24FF6A), 58);
+    drawBar("IN L", latestTelemetryFrame.inputRmsL, juce::Colour(rb26::BraunColours::PhosphorGreen), 4);
+    drawBar("IN R", latestTelemetryFrame.inputRmsR, juce::Colour(rb26::BraunColours::PhosphorGreen), 22);
+    drawBar("OUT L", latestTelemetryFrame.outputRmsL, juce::Colour(rb26::BraunColours::PhosphorGreen), 40);
+    drawBar("OUT R", latestTelemetryFrame.outputRmsR, juce::Colour(rb26::BraunColours::PhosphorGreen), 58);
     drawBar("CORR", 0.5f * (latestTelemetryFrame.correlation + 1.0f), juce::Colour(0xff24B8FF), 76);
 }
+
+void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
+{
+    // Power button
+    powerButton.setButtonText(processorRef.isPower() ? "POWER ON" : "STANDBY");
+    powerButton.setClickingTogglesState(false);
+    powerButton.onClick = [this] {
+        processorRef.setPower(!processorRef.isPower());
+        powerButton.setButtonText(processorRef.isPower() ? "POWER ON" : "STANDBY");
+        powerButton.setToggleState(processorRef.isPower(), juce::dontSendNotification);
+#if JUCE_WEB_BROWSER
+        sendParameterUpdateToWeb("power", "power", processorRef.isPower() ? 1.0f : 0.0f);
+#endif
+    };
+    addChildComponent(powerButton);
+
+    // Theme button
+    themeButton.setButtonText(braunLookAndFeel.isDarkTheme() ? "THEME: DARK" : "THEME: LIGHT");
+    themeButton.onClick = [this] {
+        braunLookAndFeel.setDarkTheme(!braunLookAndFeel.isDarkTheme());
+        themeButton.setButtonText(braunLookAndFeel.isDarkTheme() ? "THEME: DARK" : "THEME: LIGHT");
+        repaint();
+    };
+    addChildComponent(themeButton);
+
+    // Record button
+    recordButton.setButtonText("REC CAPTURE");
+    recordButton.onClick = [this] {
+        if (processorRef.isRecording())
+            processorRef.stopRecording();
+        else
+            processorRef.startRecording();
+        recordButton.setButtonText(processorRef.isRecording() ? "RECORDING..." : "REC CAPTURE");
+        recordButton.setToggleState(processorRef.isRecording(), juce::dontSendNotification);
+#if JUCE_WEB_BROWSER
+        sendRecordingStateUpdateToWeb(processorRef.isRecording());
+#endif
+    };
+    addChildComponent(recordButton);
+
+#if JUCE_WEB_BROWSER
+    // View Mode button (toggle between Native and Web UI)
+    viewModeButton.setButtonText("SWITCH TO WEB UI");
+    viewModeButton.onClick = [this] {
+        setNativeMode(!useNativeUI);
+    };
+    addChildComponent(viewModeButton);
+#endif
+
+    // Audition Exciter trigger buttons
+    impulseTriggerBtn.setButtonText("DIRAC IMPULSE");
+    impulseTriggerBtn.onClick = [this] {
+        if (!processorRef.isPower()) processorRef.setPower(true);
+        processorRef.getExciterEngine().triggerDiracAsync(1.0f);
+    };
+    addChildComponent(impulseTriggerBtn);
+
+    hammerTriggerBtn.setButtonText("HAMMER THUD");
+    hammerTriggerBtn.onClick = [this] {
+        if (!processorRef.isPower()) processorRef.setPower(true);
+        processorRef.getExciterEngine().triggerHammerThudAsync(0.7f);
+    };
+    addChildComponent(hammerTriggerBtn);
+
+    chordTriggerBtn.setButtonText("PIANO CHORD");
+    chordTriggerBtn.onClick = [this] {
+        if (!processorRef.isPower()) processorRef.setPower(true);
+        processorRef.getExciterEngine().triggerChordAsync(3, 60.0f, 0.7f, rb26::StrumSpeed::Slow);
+    };
+    addChildComponent(chordTriggerBtn);
+
+    // 26 Parameters Binding
+    const auto& meta = rb26::getParameterMetadataTable();
+    for (const auto& item : meta)
+    {
+        if (item.isBool)
+        {
+            auto slot = std::make_unique<ButtonSlot>();
+            slot->paramId = item.apvtsId;
+            slot->button.setButtonText(item.name);
+            slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+                processorRef.getAPVTS(), item.apvtsId, slot->button);
+            addChildComponent(slot->button);
+            buttonSlots.push_back(std::move(slot));
+        }
+        else if (item.isChoice)
+        {
+            auto slot = std::make_unique<ComboSlot>();
+            slot->paramId = item.apvtsId;
+            slot->label.setText(item.name, juce::dontSendNotification);
+            slot->label.setJustificationType(juce::Justification::centred);
+            slot->label.setFont(juce::FontOptions(10.0f, juce::Font::plain));
+
+            if (juce::String(item.apvtsId) == rb26::ParamIDs::shimmerInterval.getParamID())
+            {
+                slot->comboBox.addItemList(rb26::getShimmerIntervalChoices(), 1);
+            }
+            else if (juce::String(item.apvtsId) == rb26::ParamIDs::dimmerInterval.getParamID())
+            {
+                slot->comboBox.addItemList(rb26::getDimmerIntervalChoices(), 1);
+            }
+            slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+                processorRef.getAPVTS(), item.apvtsId, slot->comboBox);
+            addChildComponent(slot->label);
+            addChildComponent(slot->comboBox);
+            comboSlots.push_back(std::move(slot));
+        }
+        else
+        {
+            auto slot = std::make_unique<KnobSlot>();
+            slot->paramId = item.apvtsId;
+            slot->slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+            slot->slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 16);
+            if (std::strlen(item.unit) > 0)
+                slot->slider.setTextValueSuffix(juce::String(" ") + item.unit);
+
+            slot->nameLabel.setText(item.name, juce::dontSendNotification);
+            slot->nameLabel.setJustificationType(juce::Justification::centred);
+            slot->nameLabel.setFont(juce::FontOptions(10.0f, juce::Font::plain));
+
+            slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+                processorRef.getAPVTS(), item.apvtsId, slot->slider);
+
+            addChildComponent(slot->slider);
+            addChildComponent(slot->nameLabel);
+            knobSlots.push_back(std::move(slot));
+        }
+    }
+}
+
+void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
+{
+    useNativeUI = native;
+
+#if JUCE_WEB_BROWSER
+    if (webComponent != nullptr)
+    {
+        webComponent->setVisible(!useNativeUI);
+    }
+    viewModeButton.setVisible(useNativeUI);
+    viewModeButton.setButtonText("SWITCH TO WEB UI");
+#endif
+
+    const bool nativeVisible = useNativeUI;
+    powerButton.setVisible(nativeVisible);
+    themeButton.setVisible(nativeVisible);
+    recordButton.setVisible(nativeVisible);
+    impulseTriggerBtn.setVisible(nativeVisible);
+    hammerTriggerBtn.setVisible(nativeVisible);
+    chordTriggerBtn.setVisible(nativeVisible);
+
+    for (auto& slot : knobSlots)
+    {
+        slot->slider.setVisible(nativeVisible);
+        slot->nameLabel.setVisible(nativeVisible);
+    }
+    for (auto& slot : buttonSlots)
+    {
+        slot->button.setVisible(nativeVisible);
+    }
+    for (auto& slot : comboSlots)
+    {
+        slot->comboBox.setVisible(nativeVisible);
+        slot->label.setVisible(nativeVisible);
+    }
+
+    if (useNativeUI)
+    {
+        updateNativeControlLayout();
+    }
+    repaint();
+}
+
+void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
+{
+    auto totalBounds = getLocalBounds();
+    if (totalBounds.isEmpty()) return;
+
+    // Header Controls Layout
+    auto headerArea = totalBounds.removeFromTop(56);
+    auto rightButtons = headerArea.removeFromRight(headerArea.getWidth() - 340).reduced(10, 10);
+
+#if JUCE_WEB_BROWSER
+    viewModeButton.setBounds(rightButtons.removeFromRight(140).reduced(4, 2));
+#endif
+    recordButton.setBounds(rightButtons.removeFromRight(110).reduced(4, 2));
+    themeButton.setBounds(rightButtons.removeFromRight(105).reduced(4, 2));
+    powerButton.setBounds(rightButtons.removeFromRight(95).reduced(4, 2));
+
+    // Skip CRT display area
+    totalBounds.removeFromTop(130);
+
+    // Audition strip
+    auto auditionArea = totalBounds.removeFromTop(32).reduced(16, 2);
+    auditionArea.removeFromLeft(130); // Skip label area
+    impulseTriggerBtn.setBounds(auditionArea.removeFromLeft(125).reduced(4, 2));
+    hammerTriggerBtn.setBounds(auditionArea.removeFromLeft(125).reduced(4, 2));
+    chordTriggerBtn.setBounds(auditionArea.removeFromLeft(125).reduced(4, 2));
+
+    // 6 Signal-Flow Decks Grid
+    auto gridArea = totalBounds.reduced(16, 6);
+    const int numCols = 3;
+    const int numRows = 2;
+    const int colWidth = gridArea.getWidth() / numCols;
+    const int rowHeight = gridArea.getHeight() / numRows;
+
+    auto getCellBounds = [&](int row, int col) {
+        return juce::Rectangle<int>(gridArea.getX() + col * colWidth,
+                                    gridArea.getY() + row * rowHeight,
+                                    colWidth, rowHeight).reduced(4);
+    };
+
+    auto layoutKnob = [](KnobSlot* slot, juce::Rectangle<int> area) {
+        if (slot == nullptr) return;
+        auto labelArea = area.removeFromBottom(16);
+        slot->nameLabel.setBounds(labelArea);
+        slot->slider.setBounds(area);
+    };
+
+    auto layoutCombo = [](ComboSlot* slot, juce::Rectangle<int> area) {
+        if (slot == nullptr) return;
+        auto labelArea = area.removeFromTop(16);
+        slot->label.setBounds(labelArea);
+        slot->comboBox.setBounds(area.reduced(4, 2));
+    };
+
+    // DECK 1: INPUT & PRE-DELAY (Row 0, Col 0)
+    // 4 Knobs: input_trim_db, pre_delay_ms, dry_wet_mix, early_late_mix
+    {
+        auto cell = getCellBounds(0, 0);
+        cell.removeFromTop(22); // Header space
+        auto topRow = cell.removeFromTop(cell.getHeight() / 2);
+        auto bottomRow = cell;
+
+        layoutKnob(findKnob(rb26::ParamIDs::inputTrimDb), topRow.removeFromLeft(topRow.getWidth() / 2).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::preDelayMs), topRow.reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::dryWetMix), bottomRow.removeFromLeft(bottomRow.getWidth() / 2).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::earlyLateMix), bottomRow.reduced(4));
+    }
+
+    // DECK 2: LOW MODAL MATRIX (Row 0, Col 1)
+    // 4 Knobs: low_crossover_hz, bass_rt60_mult, punch_ducking, sub_mono_hz
+    {
+        auto cell = getCellBounds(0, 1);
+        cell.removeFromTop(22);
+        auto topRow = cell.removeFromTop(cell.getHeight() / 2);
+        auto bottomRow = cell;
+
+        layoutKnob(findKnob(rb26::ParamIDs::lowCrossoverHz), topRow.removeFromLeft(topRow.getWidth() / 2).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::bassRt60Mult), topRow.reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::punchDucking), bottomRow.removeFromLeft(bottomRow.getWidth() / 2).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::subMonoHz), bottomRow.reduced(4));
+    }
+
+    // DECK 3: REVERB TANK (FDN) (Row 0, Col 2)
+    // 4 Knobs: room_size, decay_rt60_sec, high_damping_hz, diffusion_density
+    // 1 Toggle: freeze_hold
+    {
+        auto cell = getCellBounds(0, 2);
+        cell.removeFromTop(22);
+        auto btnArea = cell.removeFromBottom(24).reduced(6, 2);
+        if (auto* btn = findButton(rb26::ParamIDs::freezeHold))
+        {
+            btn->button.setBounds(btnArea);
+        }
+
+        auto topRow = cell.removeFromTop(cell.getHeight() / 2);
+        auto bottomRow = cell;
+
+        layoutKnob(findKnob(rb26::ParamIDs::roomSize), topRow.removeFromLeft(topRow.getWidth() / 2).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::decayRt60Sec), topRow.reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::highDampingHz), bottomRow.removeFromLeft(bottomRow.getWidth() / 2).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::diffusionDensity), bottomRow.reduced(4));
+    }
+
+    // DECK 4: PITCH DIFFUSION (Row 1, Col 0)
+    // 5 Knobs: shimmer_send, dimmer_send, pitch_blend, pitch_feedback, pitch_delay_ms
+    // 2 Combos: shimmer_interval, dimmer_interval
+    {
+        auto cell = getCellBounds(1, 0);
+        cell.removeFromTop(22);
+        
+        // Combos row at bottom
+        auto comboRow = cell.removeFromBottom(42);
+        layoutCombo(findCombo(rb26::ParamIDs::shimmerInterval), comboRow.removeFromLeft(comboRow.getWidth() / 2).reduced(2));
+        layoutCombo(findCombo(rb26::ParamIDs::dimmerInterval), comboRow.reduced(2));
+
+        auto topRow = cell.removeFromTop(cell.getHeight() / 2);
+        auto bottomRow = cell;
+
+        const int topW = topRow.getWidth() / 3;
+        layoutKnob(findKnob(rb26::ParamIDs::shimmerSend), topRow.removeFromLeft(topW).reduced(2));
+        layoutKnob(findKnob(rb26::ParamIDs::dimmerSend), topRow.removeFromLeft(topW).reduced(2));
+        layoutKnob(findKnob(rb26::ParamIDs::pitchBlend), topRow.reduced(2));
+
+        const int btmW = bottomRow.getWidth() / 2;
+        layoutKnob(findKnob(rb26::ParamIDs::pitchFeedback), bottomRow.removeFromLeft(btmW).reduced(2));
+        layoutKnob(findKnob(rb26::ParamIDs::pitchDelayMs), bottomRow.reduced(2));
+    }
+
+    // DECK 5: TAIL MODULATION (Row 1, Col 1)
+    // 3 Knobs: tail_mod_rate_hz, tail_mod_depth_ms, tail_bloom_ms
+    {
+        auto cell = getCellBounds(1, 1);
+        cell.removeFromTop(22);
+        const int knobW = cell.getWidth() / 3;
+        layoutKnob(findKnob(rb26::ParamIDs::tailModRateHz), cell.removeFromLeft(knobW).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::tailModDepthMs), cell.removeFromLeft(knobW).reduced(4));
+        layoutKnob(findKnob(rb26::ParamIDs::tailBloomMs), cell.reduced(4));
+    }
+
+    // DECK 6: MASTER BUS (Row 1, Col 2)
+    // 2 Knobs: stereo_width, output_trim_db
+    // 1 Toggle: limiter_enable
+    {
+        auto cell = getCellBounds(1, 2);
+        cell.removeFromTop(22);
+        auto btnArea = cell.removeFromBottom(28).reduced(8, 3);
+        if (auto* btn = findButton(rb26::ParamIDs::limiterEnable))
+        {
+            btn->button.setBounds(btnArea);
+        }
+
+        auto knobArea = cell;
+        const int knobW = knobArea.getWidth() / 2;
+        layoutKnob(findKnob(rb26::ParamIDs::stereoWidth), knobArea.removeFromLeft(knobW).reduced(6));
+        layoutKnob(findKnob(rb26::ParamIDs::outputTrimDb), knobArea.reduced(6));
+    }
+}
+
+BRAUN_RB26AudioProcessorEditor::KnobSlot* BRAUN_RB26AudioProcessorEditor::findKnob(const juce::ParameterID& id)
+{
+    const juce::String target = id.getParamID();
+    for (auto& slot : knobSlots)
+    {
+        if (slot->paramId == target)
+            return slot.get();
+    }
+    return nullptr;
+}
+
+BRAUN_RB26AudioProcessorEditor::ButtonSlot* BRAUN_RB26AudioProcessorEditor::findButton(const juce::ParameterID& id)
+{
+    const juce::String target = id.getParamID();
+    for (auto& slot : buttonSlots)
+    {
+        if (slot->paramId == target)
+            return slot.get();
+    }
+    return nullptr;
+}
+
+BRAUN_RB26AudioProcessorEditor::ComboSlot* BRAUN_RB26AudioProcessorEditor::findCombo(const juce::ParameterID& id)
+{
+    const juce::String target = id.getParamID();
+    for (auto& slot : comboSlots)
+    {
+        if (slot->paramId == target)
+            return slot.get();
+    }
+    return nullptr;
+}
+

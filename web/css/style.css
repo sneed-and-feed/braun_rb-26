@@ -74,6 +74,9 @@ html {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -98,6 +101,9 @@ body {
            max(36px, env(safe-area-inset-bottom))
            max(16px, env(safe-area-inset-left));
   transition: background-color 0.25s ease, color 0.25s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* --- Drag & Drop Patch Overlay --- */
@@ -202,10 +208,34 @@ body {
   font-weight: 600;
   outline: none;
   cursor: pointer;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .braun-select:focus-visible {
   border-color: var(--braun-orange);
+}
+
+.braun-select option,
+.braun-select optgroup {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+[data-theme="dark"] .braun-select option,
+[data-theme="dark"] .braun-select optgroup,
+[data-theme="matte-black"] .braun-select option,
+[data-theme="matte-black"] .braun-select optgroup {
+  background-color: #1E2023;
+  color: #F0F0F0;
+}
+
+[data-theme="light"] .braun-select option,
+[data-theme="light"] .braun-select optgroup {
+  background-color: #E2E0D8;
+  color: #1C1D1E;
 }
 
 /* --- Buttons & Switches --- */

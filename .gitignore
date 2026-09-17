@@ -1,5 +1,5 @@
 # Build artifacts
-build/
+build*/
 *.obj
 *.o
 *.a

@@ -46,6 +46,19 @@ void BraunLookAndFeel::applyThemeColours()
         setColour(juce::TextButton::buttonOnColourId,        juce::Colour(BraunColours::Accent_BraunOrange));
         setColour(juce::TextButton::textColourOffId,         juce::Colour(BraunColours::Dark_TextPrimary));
         setColour(juce::TextButton::textColourOnId,          juce::Colours::white);
+
+        // ComboBox & PopupMenu dark palette
+        setColour(juce::ComboBox::backgroundColourId,        juce::Colour(BraunColours::Dark_BgPanelInset));
+        setColour(juce::ComboBox::textColourId,              juce::Colour(BraunColours::Dark_TextPrimary));
+        setColour(juce::ComboBox::outlineColourId,           juce::Colour(BraunColours::Dark_BorderLine));
+        setColour(juce::ComboBox::arrowColourId,             juce::Colour(BraunColours::Dark_TextSecondary));
+        setColour(juce::ComboBox::focusedOutlineColourId,    juce::Colour(BraunColours::Accent_BraunOrange));
+
+        setColour(juce::PopupMenu::backgroundColourId,            juce::Colour(BraunColours::Dark_BgPanel));
+        setColour(juce::PopupMenu::textColourId,                  juce::Colour(BraunColours::Dark_TextPrimary));
+        setColour(juce::PopupMenu::headerTextColourId,            juce::Colour(BraunColours::Accent_BraunOrange));
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(BraunColours::Dark_BgPanelInset));
+        setColour(juce::PopupMenu::highlightedTextColourId,       juce::Colour(BraunColours::Accent_BraunOrange));
     }
     else
     {
@@ -72,6 +85,19 @@ void BraunLookAndFeel::applyThemeColours()
         setColour(juce::TextButton::buttonOnColourId,        juce::Colour(BraunColours::Accent_BraunOrange));
         setColour(juce::TextButton::textColourOffId,         juce::Colour(BraunColours::Light_TextPrimary));
         setColour(juce::TextButton::textColourOnId,          juce::Colours::white);
+
+        // ComboBox & PopupMenu light palette
+        setColour(juce::ComboBox::backgroundColourId,        juce::Colour(BraunColours::Light_BgPanelInset));
+        setColour(juce::ComboBox::textColourId,              juce::Colour(BraunColours::Light_TextPrimary));
+        setColour(juce::ComboBox::outlineColourId,           juce::Colour(BraunColours::Light_BorderLine));
+        setColour(juce::ComboBox::arrowColourId,             juce::Colour(BraunColours::Light_TextSecondary));
+        setColour(juce::ComboBox::focusedOutlineColourId,    juce::Colour(BraunColours::Accent_BraunOrange));
+
+        setColour(juce::PopupMenu::backgroundColourId,            juce::Colour(BraunColours::Light_BgPanel));
+        setColour(juce::PopupMenu::textColourId,                  juce::Colour(BraunColours::Light_TextPrimary));
+        setColour(juce::PopupMenu::headerTextColourId,            juce::Colour(BraunColours::Accent_BraunOrange));
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(BraunColours::Light_BgPanelInset));
+        setColour(juce::PopupMenu::highlightedTextColourId,       juce::Colour(BraunColours::Accent_BraunOrange));
     }
 
     setColour(BraunColours::braunOrangeColourId,  juce::Colour(BraunColours::Accent_BraunOrange));
@@ -335,6 +361,50 @@ juce::Font BraunLookAndFeel::getTextButtonFont(juce::TextButton&, int buttonHeig
 juce::Font BraunLookAndFeel::getLabelFont(juce::Label&)
 {
     return juce::Font(juce::FontOptions(10.0f, juce::Font::bold));
+}
+
+void BraunLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool isButtonDown,
+                                    int buttonX, int buttonY, int buttonW, int buttonH,
+                                    juce::ComboBox& box)
+{
+    juce::ignoreUnused(buttonX, buttonY, buttonW, buttonH);
+    auto bounds = juce::Rectangle<float>(0, 0, (float)width, (float)height).reduced(1.0f);
+
+    auto bgColour = findColour(juce::ComboBox::backgroundColourId);
+    if (isButtonDown || box.isPopupActive())
+        bgColour = bgColour.brighter(0.08f);
+    g.setColour(bgColour);
+    g.fillRoundedRectangle(bounds, 2.0f);
+
+    auto borderColour = box.hasKeyboardFocus(true) ? findColour(BraunColours::braunOrangeColourId)
+                                                   : findColour(juce::ComboBox::outlineColourId);
+    g.setColour(borderColour);
+    g.drawRoundedRectangle(bounds, 2.0f, 1.0f);
+
+    auto arrowZone = juce::Rectangle<float>((float)width - 18.0f, 0.0f, 14.0f, (float)height);
+    juce::Path arrow;
+    float arrowW = 6.0f;
+    float arrowH = 3.5f;
+    float cx = arrowZone.getCentreX();
+    float cy = arrowZone.getCentreY();
+    arrow.startNewSubPath(cx - arrowW * 0.5f, cy - arrowH * 0.5f);
+    arrow.lineTo(cx, cy + arrowH * 0.5f);
+    arrow.lineTo(cx + arrowW * 0.5f, cy - arrowH * 0.5f);
+
+    g.setColour(findColour(juce::ComboBox::arrowColourId));
+    g.strokePath(arrow, juce::PathStrokeType(1.5f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
+}
+
+juce::Font BraunLookAndFeel::getComboBoxFont(juce::ComboBox&)
+{
+    return juce::Font(juce::FontOptions(10.0f, juce::Font::bold));
+}
+
+void BraunLookAndFeel::drawPopupMenuBackground(juce::Graphics& g, int width, int height)
+{
+    g.fillAll(findColour(juce::PopupMenu::backgroundColourId));
+    g.setColour(findColour(BraunColours::borderLineColourId));
+    g.drawRect(0, 0, width, height, 1);
 }
 
 //==============================================================================

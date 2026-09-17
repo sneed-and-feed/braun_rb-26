@@ -132,6 +132,14 @@ public:
     juce::Font getTextButtonFont(juce::TextButton&, int buttonHeight) override;
     juce::Font getLabelFont(juce::Label&) override;
 
+    void drawComboBox(juce::Graphics& g, int width, int height, bool isButtonDown,
+                      int buttonX, int buttonY, int buttonW, int buttonH,
+                      juce::ComboBox& box) override;
+
+    juce::Font getComboBoxFont(juce::ComboBox& box) override;
+
+    void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override;
+
 private:
     bool darkThemeActive { false };
     void applyThemeColours();

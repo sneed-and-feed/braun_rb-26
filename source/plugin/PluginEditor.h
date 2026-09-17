@@ -8,6 +8,8 @@
 #include <atomic>
 #include <optional>
 #include <array>
+#include <vector>
+#include <memory>
 
 class BRAUN_RB26AudioProcessorEditor : public juce::AudioProcessorEditor,
                                        public juce::AudioProcessorValueTreeState::Listener,
@@ -24,6 +26,11 @@ public:
     // APVTS Listener callback
     void parameterChanged(const juce::String& parameterID, float newValue) override;
 
+    // Native vs WebView GUI switching
+    bool isNativeModeActive() const noexcept { return useNativeUI; }
+    void setNativeMode(bool native);
+
+#if JUCE_WEB_BROWSER
     // Web Integration & Bridge Methods
     void handleParamChangeFromWeb(const juce::var& data);
     void handleExciterTriggerFromWeb(const juce::var& data);
@@ -33,14 +40,18 @@ public:
     void sendRecordingStateUpdateToWeb(bool isRecording);
     void syncAllParametersToWeb();
     std::optional<juce::WebBrowserComponent::Resource> getResource(const juce::String& url);
+#endif
 
 private:
     void timerCallback() override;
-    static juce::WebBrowserComponent::Options createWebOptions(BRAUN_RB26AudioProcessorEditor& editor);
 
     BRAUN_RB26AudioProcessor& processorRef;
     rb26::BraunLookAndFeel braunLookAndFeel;
-    juce::WebBrowserComponent webComponent;
+    bool useNativeUI { false };
+
+#if JUCE_WEB_BROWSER
+    static juce::WebBrowserComponent::Options createWebOptions(BRAUN_RB26AudioProcessorEditor& editor);
+    std::unique_ptr<juce::WebBrowserComponent> webComponent;
     bool initialSyncDone { false };
 
     // Coalescing array for all 26 APVTS parameters (prevents Win32 message loop stalls)
@@ -56,16 +67,64 @@ private:
     // Telemetry & Scope streaming at 60 Hz with idle throttling
     int silentFrameCounter { 0 };
     int silentTelemetryCounter { 0 };
-    rb26::Rb26ReverbEngine::VisualizerFrame latestTelemetryFrame {};
     void sendTelemetryToWeb();
     void sendScopeDataToWeb();
+#endif
+
+    rb26::Rb26ReverbEngine::VisualizerFrame latestTelemetryFrame {};
 
     void registerParameterListeners();
     void unregisterParameterListeners();
 
-    // Secondary / Fallback Presentation Layer: Dieter Rams Vector Graphics
+    // Secondary / Native Presentation Layer: Dieter Rams Vector Graphics
     void drawBraunChassis(juce::Graphics& g, juce::Rectangle<int> bounds);
     void drawCrtDisplay(juce::Graphics& g, juce::Rectangle<int> bounds);
+
+    // Native JUCE UI Components
+    // Header controls
+    juce::TextButton powerButton;
+    juce::TextButton themeButton;
+    juce::TextButton recordButton;
+#if JUCE_WEB_BROWSER
+    juce::TextButton viewModeButton;
+#endif
+
+    // Rotary Sliders & Labels for APVTS parameters
+    struct KnobSlot {
+        juce::String paramId;
+        juce::Slider slider;
+        juce::Label nameLabel;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+    };
+    std::vector<std::unique_ptr<KnobSlot>> knobSlots;
+
+    // Buttons / Toggles
+    struct ButtonSlot {
+        juce::String paramId;
+        juce::ToggleButton button;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
+    };
+    std::vector<std::unique_ptr<ButtonSlot>> buttonSlots;
+
+    // ComboBoxes (for Shimmer and Dimmer intervals)
+    struct ComboSlot {
+        juce::String paramId;
+        juce::Label label;
+        juce::ComboBox comboBox;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> attachment;
+    };
+    std::vector<std::unique_ptr<ComboSlot>> comboSlots;
+
+    // Audition Exciter trigger buttons
+    juce::TextButton impulseTriggerBtn;
+    juce::TextButton hammerTriggerBtn;
+    juce::TextButton chordTriggerBtn;
+
+    void setupNativeControls();
+    void updateNativeControlLayout();
+    KnobSlot* findKnob(const juce::ParameterID& id);
+    ButtonSlot* findButton(const juce::ParameterID& id);
+    ComboSlot* findCombo(const juce::ParameterID& id);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BRAUN_RB26AudioProcessorEditor)
 };

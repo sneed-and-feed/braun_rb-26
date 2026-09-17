@@ -14,7 +14,7 @@ if(APPLE)
     endif()
 endif()
 
-project(BRAUN_RB26_PROJECT VERSION 1.3.3 LANGUAGES C CXX)
+project(BRAUN_RB26_PROJECT VERSION 1.3.4 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -36,12 +36,29 @@ else()
     endif()
 endif()
 
+# ==============================================================================
+# GUI Mode Selection Option: WebView (Default) vs Pure Native JUCE (Linux / Low Overhead)
+# ==============================================================================
+option(RB26_USE_WEBVIEW "Build BRAUN RB-26 with WebView GUI (disable for pure native JUCE UI)" ON)
+if(DEFINED RB26_ENABLE_WEBVIEW)
+    set(RB26_USE_WEBVIEW ${RB26_ENABLE_WEBVIEW})
+endif()
+if(DEFINED USE_WEBVIEW)
+    set(RB26_USE_WEBVIEW ${USE_WEBVIEW})
+endif()
+
+if(RB26_USE_WEBVIEW)
+    message(STATUS "BRAUN RB-26 GUI Mode: Embedded Web Browser (WebView2/WebKit)")
+else()
+    message(STATUS "BRAUN RB-26 GUI Mode: Pure Native JUCE (Dieter Rams LookAndFeel)")
+endif()
+
 include(FetchContent)
 
 # ==============================================================================
-# 1. Provision Microsoft.Web.WebView2 for Windows
+# 1. Provision Microsoft.Web.WebView2 for Windows (Only if WebView enabled)
 # ==============================================================================
-if(WIN32)
+if(WIN32 AND RB26_USE_WEBVIEW)
     set(WEBVIEW2_VERSION "1.0.2849.39")
     set(LOCAL_WEBVIEW2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
     set(BINARY_WEBVIEW2_DIR "${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.${WEBVIEW2_VERSION}")
@@ -145,28 +162,30 @@ target_link_libraries(rb26_dsp_core PUBLIC
 )
 
 # ==============================================================================
-# 5. Packaging Web Assets (Zip Archive & Binary Data if web UI present)
+# 5. Packaging Web Assets (Zip Archive & Binary Data if web UI present and enabled)
 # ==============================================================================
-set(RB26_WEB_DIR "")
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/index.html")
-    set(RB26_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html")
-    set(RB26_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/web")
-endif()
+if(RB26_USE_WEBVIEW)
+    set(RB26_WEB_DIR "")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui/index.html")
+        set(RB26_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html")
+        set(RB26_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/web")
+    endif()
 
-if(RB26_WEB_DIR)
-    set(RB26_WEB_ASSETS_ZIP "${CMAKE_CURRENT_BINARY_DIR}/web_assets_rb26.zip")
-    file(GLOB_RECURSE RB26_WEB_FILES "${RB26_WEB_DIR}/*")
-    add_custom_command(
-        OUTPUT "${RB26_WEB_ASSETS_ZIP}"
-        COMMAND ${CMAKE_COMMAND} -E tar cf "${RB26_WEB_ASSETS_ZIP}" --format=zip .
-        WORKING_DIRECTORY "${RB26_WEB_DIR}"
-        DEPENDS ${RB26_WEB_FILES}
-        COMMENT "Packaging RB-26 web assets into web_assets_rb26.zip"
-    )
-    add_custom_target(PackageRb26WebAssets DEPENDS "${RB26_WEB_ASSETS_ZIP}")
-    juce_add_binary_data(BraunRb26WebAssets SOURCES "${RB26_WEB_ASSETS_ZIP}")
-    add_dependencies(BraunRb26WebAssets PackageRb26WebAssets)
+    if(RB26_WEB_DIR)
+        set(RB26_WEB_ASSETS_ZIP "${CMAKE_CURRENT_BINARY_DIR}/web_assets_rb26.zip")
+        file(GLOB_RECURSE RB26_WEB_FILES "${RB26_WEB_DIR}/*")
+        add_custom_command(
+            OUTPUT "${RB26_WEB_ASSETS_ZIP}"
+            COMMAND ${CMAKE_COMMAND} -E tar cf "${RB26_WEB_ASSETS_ZIP}" --format=zip .
+            WORKING_DIRECTORY "${RB26_WEB_DIR}"
+            DEPENDS ${RB26_WEB_FILES}
+            COMMENT "Packaging RB-26 web assets into web_assets_rb26.zip"
+        )
+        add_custom_target(PackageRb26WebAssets DEPENDS "${RB26_WEB_ASSETS_ZIP}")
+        juce_add_binary_data(BraunRb26WebAssets SOURCES "${RB26_WEB_ASSETS_ZIP}")
+        add_dependencies(BraunRb26WebAssets PackageRb26WebAssets)
+    endif()
 endif()
 
 # ==============================================================================
@@ -181,6 +200,11 @@ if(APPLE)
     endif()
 endif()
 
+set(RB26_EXTRA_PLUGIN_ARGS "")
+if(RB26_USE_WEBVIEW)
+    list(APPEND RB26_EXTRA_PLUGIN_ARGS NEEDS_WEBVIEW2 TRUE)
+endif()
+
 juce_add_plugin(BRAUN_RB26
     COMPANY_NAME "Braun"
     IS_SYNTH FALSE
@@ -193,8 +217,8 @@ juce_add_plugin(BRAUN_RB26
     PLUGIN_CODE Rb26
     FORMATS ${RB26_FORMATS}
     PRODUCT_NAME "BRAUN_RB26"
-    VERSION "1.3.3"
-    NEEDS_WEBVIEW2 TRUE
+    VERSION "1.3.4"
+    ${RB26_EXTRA_PLUGIN_ARGS}
 )
 
 target_sources(BRAUN_RB26 PRIVATE
@@ -214,12 +238,22 @@ target_include_directories(BRAUN_RB26 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
 )
 
-target_compile_definitions(BRAUN_RB26 PUBLIC
-    JUCE_WEB_BROWSER=1
-    JUCE_USE_WIN_WEBVIEW2=1
-    JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
-    JUCE_VST3_CAN_REPLACE_VST2=0
-)
+if(RB26_USE_WEBVIEW)
+    target_compile_definitions(BRAUN_RB26 PUBLIC
+        JUCE_WEB_BROWSER=1
+        RB26_USE_WEBVIEW=1
+        JUCE_USE_WIN_WEBVIEW2=1
+        JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
+        JUCE_VST3_CAN_REPLACE_VST2=0
+    )
+else()
+    target_compile_definitions(BRAUN_RB26 PUBLIC
+        JUCE_WEB_BROWSER=0
+        RB26_USE_WEBVIEW=0
+        JUCE_USE_WIN_WEBVIEW2=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+    )
+endif()
 
 target_link_libraries(BRAUN_RB26 PRIVATE
     rb26_dsp_core
