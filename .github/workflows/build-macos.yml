@@ -35,14 +35,33 @@ jobs:
       - name: Package Distribution Zip
         run: |
           mkdir -p package/VST3 package/CLAP package/AU package/Standalone
-          cp -R build/BRAUN_RB26_artefacts/Release/VST3/BRAUN_RB26.vst3 package/VST3/
-          if [ -d "build/BRAUN_RB26_artefacts/Release/AU/BRAUN_RB26.component" ]; then
-            cp -R build/BRAUN_RB26_artefacts/Release/AU/BRAUN_RB26.component package/AU/
-          fi
-          if [ -f "build/BRAUN_RB26_artefacts/Release/CLAP/BRAUN_RB26.clap" ]; then
-            cp build/BRAUN_RB26_artefacts/Release/CLAP/BRAUN_RB26.clap package/CLAP/
-          fi
-          cp -R build/BRAUN_RB26_artefacts/Release/Standalone/BRAUN_RB26.app package/Standalone/
+          echo "Listing generated build artefacts:"
+          find build -name "*.vst3" -o -name "*.component" -o -name "*.clap" -o -name "*.app" || true
+
+          for d in $(find build -type d -name "BRAUN_RB26.vst3"); do
+            echo "Copying VST3 from $d"
+            cp -R "$d" package/VST3/
+            break
+          done
+
+          for d in $(find build -type d -name "BRAUN_RB26.component"); do
+            echo "Copying AU from $d"
+            cp -R "$d" package/AU/
+            break
+          done
+
+          for f in $(find build -type f -name "BRAUN_RB26.clap"); do
+            echo "Copying CLAP from $f"
+            cp "$f" package/CLAP/
+            break
+          done
+
+          for d in $(find build -type d -name "BRAUN_RB26.app"); do
+            echo "Copying Standalone from $d"
+            cp -R "$d" package/Standalone/
+            break
+          done
+
           cp LICENSE README.md package/
           cd package
           zip -r ../BRAUN_RB26-v1.3.6-macOS-Universal.zip *
@@ -55,7 +74,7 @@ jobs:
           path: BRAUN_RB26-v1.3.6-macOS-Universal.zip
 
       - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.3.6
-          files: BRAUN_RB26-v1.3.6-macOS-Universal.zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload v1.3.6 BRAUN_RB26-v1.3.6-macOS-Universal.zip --clobber
