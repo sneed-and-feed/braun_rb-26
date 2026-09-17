@@ -70,6 +70,13 @@ else()
     )
 endif()
 
+# ==============================================================================
+# System Dependencies (Linux libcurl for JUCE Web / Networking)
+# ==============================================================================
+if(UNIX AND NOT APPLE)
+    find_package(CURL REQUIRED)
+endif()
+
 include(FetchContent)
 
 # ==============================================================================
@@ -270,7 +277,6 @@ if(RB26_USE_WEBVIEW)
         JUCE_VST3_CAN_REPLACE_VST2=0
     )
     if(UNIX AND NOT APPLE)
-        find_package(CURL REQUIRED)
         target_link_libraries(BRAUN_RB26 PRIVATE CURL::libcurl)
     endif()
 else()
@@ -366,6 +372,9 @@ if(RB26_BUILD_TESTS)
             juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags
         )
+        if(UNIX AND NOT APPLE)
+            target_link_libraries(rb26_laf_tests PRIVATE CURL::libcurl)
+        endif()
         add_test(NAME Rb26LookAndFeelTests COMMAND rb26_laf_tests)
     endif()
 
@@ -382,6 +391,9 @@ if(RB26_BUILD_TESTS)
             juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags
         )
+        if(UNIX AND NOT APPLE)
+            target_link_libraries(rb26_web_resource_tests PRIVATE CURL::libcurl)
+        endif()
         add_test(NAME Rb26WebResourceTests COMMAND rb26_web_resource_tests)
     endif()
 

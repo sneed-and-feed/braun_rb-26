@@ -67,6 +67,10 @@ target_link_libraries(rb26_m4_tests PRIVATE
     juce::juce_audio_basics
 )
 
+if(UNIX AND NOT APPLE)
+    target_link_libraries(rb26_m4_tests PRIVATE CURL::libcurl)
+endif()
+
 set_target_properties(rb26_m4_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
 add_executable(rb26_diag_modal diag_modal.cpp)
