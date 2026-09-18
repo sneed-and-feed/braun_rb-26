@@ -957,6 +957,8 @@ body {
 
 .braun-vector-mini-btn.is-active .braun-led {
   background-color: #fff;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.85);
+  border-color: #fff;
 }
 
 .braun-vector-surface-box {

@@ -15,6 +15,74 @@
 
 export const BUTTERWORTH_Q = -3.0103; // Butterworth 2nd-order Q in dB: 20 * log10(1 / sqrt(2)) = -3.0103 dB (maximally flat passband in Web Audio BiquadFilterNode)
 
+/**
+ * Schroeder Allpass Diffuser Stage for Web Audio API.
+ * Implements the canonical single-delay allpass lattice:
+ *   v[n] = x[n] - g * d[n]
+ *   d[n] = v[n - D]
+ *   y[n] = g * v[n] + d[n]
+ * Transfer function: H(z) = (g + z^-D) / (1 + g * z^-D)
+ * Theoretical properties:
+ *   - Strictly unitary |H(e^jw)| == 1.0 at all frequencies (energy conserved)
+ *   - Strictly contractive loop gain |g| < 1.0 (zero blowup, zero limit cycles)
+ *   - Click-free setTargetAtTime parameter modulation
+ */
+export class WebAudioSchroederAllpass {
+  constructor(ctx, delayTimeSec = 0.005, feedback = 0.7) {
+    this.ctx = ctx;
+    this.delayTimeSec = delayTimeSec;
+    this.feedback = feedback;
+
+    this.input = ctx.createGain();
+    this.output = ctx.createGain();
+
+    this.v = ctx.createGain();
+    this.v.gain.value = 1.0;
+
+    this.delay = ctx.createDelay(0.2);
+    this.delay.delayTime.value = delayTimeSec;
+
+    this.fbGain = ctx.createGain();
+    this.fbGain.gain.value = -feedback;
+
+    this.ffGain = ctx.createGain();
+    this.ffGain.gain.value = feedback;
+
+    this.input.connect(this.v);
+    this.v.connect(this.delay);
+    this.delay.connect(this.fbGain);
+    this.fbGain.connect(this.v);
+
+    this.v.connect(this.ffGain);
+    this.ffGain.connect(this.output);
+    this.delay.connect(this.output);
+  }
+
+  setFeedback(g, timeConstant = 0.02) {
+    this.feedback = g;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    try {
+      this.fbGain.gain.setTargetAtTime(-g, now, timeConstant);
+      this.ffGain.gain.setTargetAtTime(g, now, timeConstant);
+    } catch (_) {
+      this.fbGain.gain.value = -g;
+      this.ffGain.gain.value = g;
+    }
+  }
+
+  flush() {
+    try {
+      this.input.disconnect();
+      this.v.disconnect();
+      this.delay.disconnect();
+      this.fbGain.disconnect();
+      this.ffGain.disconnect();
+      this.output.disconnect();
+    } catch (_) {}
+  }
+}
+
 export class WebAudioPitchShifter {
   constructor(ctx, options = {}) {
     this.ctx = ctx;
@@ -197,6 +265,7 @@ export class Rb26WebEngine {
       dimmerInterval: -12,
       pitchBlend: 0.0,
       pitchFeedback: 0.45,
+      pitchBoost: 0.0,
       tailModRateHz: 0.65,
       tailModDepthMs: 1.2,
       tailBloomMs: 85.0,
@@ -220,6 +289,14 @@ export class Rb26WebEngine {
 
     // Telemetry listeners
     this.onTelemetry = null;
+
+    // Allpass Diffuser Stage References
+    this.inputDiffusers = [];
+    this.erDiffusers = [];
+    this.diffuserDryGain = null;
+    this.diffuserWetGain = null;
+    this.erDiffDryGain = null;
+    this.erDiffWetGain = null;
   }
 
   async init() {
@@ -350,7 +427,7 @@ export class Rb26WebEngine {
     this.modalHighPass.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
     this.modalBus.connect(this.modalHighPass);
 
-    // --- Early Reflections (12-Tap Decorrelated Cluster) ---
+    // --- Early Reflections (12-Tap Decorrelated Cluster with Diffusion Post-Processing) ---
     this.earlyReflectionsBus = ctx.createGain();
     this.earlyReflectionsBus.gain.setValueAtTime(0.707, ctx.currentTime);
     const erTimes = [0.007, 0.013, 0.019, 0.023, 0.029, 0.037, 0.043, 0.053, 0.061, 0.071, 0.083, 0.097];
@@ -367,10 +444,54 @@ export class Rb26WebEngine {
       g.connect(this.earlyReflectionsBus);
     }
 
-    // --- 8-Line Householder FDN Late Tank with Golden-Ratio LFO Modulation ---
+    // Perceptual diffusion curve initialization
+    const effDiff = Math.sqrt(Math.max(0.0, Math.min(1.0, this.params.diffusion)));
+    const initG = 0.74 * effDiff;
+    const initDry = Math.cos(effDiff * 0.5 * Math.PI);
+    const initWet = Math.sin(effDiff * 0.5 * Math.PI);
+
+    // Early Reflections diffusion crossfade and allpass stages
+    this.erDiffusers = [];
+    this.erDiffDryGain = ctx.createGain();
+    this.erDiffWetGain = ctx.createGain();
+    this.erDiffDryGain.gain.setValueAtTime(initDry, ctx.currentTime);
+    this.erDiffWetGain.gain.setValueAtTime(initWet, ctx.currentTime);
+
+    this.earlyReflectionsBus.connect(this.erDiffDryGain);
+    this.earlyReflectionsBus.connect(this.erDiffWetGain);
+
+    const erDiffDelays = [0.004729, 0.007021];
+    let prevErNode = this.erDiffWetGain;
+    for (const dSec of erDiffDelays) {
+      const ap = new WebAudioSchroederAllpass(ctx, dSec, initG);
+      this.erDiffusers.push(ap);
+      prevErNode.connect(ap.input);
+      prevErNode = ap.output;
+    }
+
+    // --- 8-Line Householder FDN Late Tank with Cascaded Schroeder Allpass Input Diffusers ---
     this.fdnInputBus = ctx.createGain();
     this.fdnInputBus.gain.setValueAtTime(1.0, ctx.currentTime);
-    this.highPass2.connect(this.fdnInputBus);
+
+    this.inputDiffusers = [];
+    this.diffuserDryGain = ctx.createGain();
+    this.diffuserWetGain = ctx.createGain();
+    this.diffuserDryGain.gain.setValueAtTime(initDry, ctx.currentTime);
+    this.diffuserWetGain.gain.setValueAtTime(initWet, ctx.currentTime);
+
+    this.highPass2.connect(this.diffuserDryGain);
+    this.diffuserDryGain.connect(this.fdnInputBus);
+
+    this.highPass2.connect(this.diffuserWetGain);
+    const fdnDiffDelays = [0.004729, 0.007021, 0.009354, 0.011729];
+    let prevDiffNode = this.diffuserWetGain;
+    for (const dSec of fdnDiffDelays) {
+      const ap = new WebAudioSchroederAllpass(ctx, dSec, initG);
+      this.inputDiffusers.push(ap);
+      prevDiffNode.connect(ap.input);
+      prevDiffNode = ap.output;
+    }
+    prevDiffNode.connect(this.fdnInputBus);
 
     this.fdnSumBus = ctx.createGain();
     this.fdnSumBus.gain.setValueAtTime(0.85, ctx.currentTime); // Bound diffuse sum below unity loop gain
@@ -598,9 +719,26 @@ export class Rb26WebEngine {
     this.earlyMixGain.gain.setValueAtTime(earlyGain, ctx.currentTime);
     this.lateMixGain.gain.setValueAtTime(lateGain, ctx.currentTime);
 
-    this.earlyReflectionsBus.connect(this.earlyMixGain);
+    this.erDiffDryGain.connect(this.earlyMixGain);
+    if (this.erDiffusers && this.erDiffusers.length > 0) {
+      this.erDiffusers[this.erDiffusers.length - 1].output.connect(this.earlyMixGain);
+    } else {
+      this.earlyReflectionsBus.connect(this.earlyMixGain);
+    }
     this.hermiteSaturator.connect(this.lateMixGain);
-    this.pitchReturnBus.connect(this.lateMixGain);
+
+    // Pitch Booster Drive with Hermite Soft Saturation before Late Mix
+    this.pitchBoostGain = ctx.createGain();
+    const boostLinear = Math.pow(10, (this.params.pitchBoost || 0.0) / 20);
+    this.pitchBoostGain.gain.setValueAtTime(boostLinear, ctx.currentTime);
+
+    this.pitchHermiteSaturator = ctx.createWaveShaper();
+    this.pitchHermiteSaturator.curve = this._generateHermiteCurve();
+    this.pitchHermiteSaturator.oversample = '2x';
+
+    this.pitchReturnBus.connect(this.pitchBoostGain);
+    this.pitchBoostGain.connect(this.pitchHermiteSaturator);
+    this.pitchHermiteSaturator.connect(this.lateMixGain);
 
     this.wetSumBus = ctx.createGain();
     this.wetSumBus.gain.setValueAtTime(0.707, ctx.currentTime); // -3dB summing headroom
@@ -970,6 +1108,11 @@ export class Rb26WebEngine {
         this.pitchFeedbackGain.gain.value = 0.0;
         try { this.pitchFeedbackGain.gain.setValueAtTime(0.0, now); } catch (_) {}
       }
+      if (this.pitchBoostGain) {
+        try { if (this.pitchBoostGain.gain.cancelScheduledValues) this.pitchBoostGain.gain.cancelScheduledValues(0); } catch (_) {}
+        this.pitchBoostGain.gain.value = 0.0;
+        try { this.pitchBoostGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
 
       // Flush and replace all delay lines so trapped audio is 100% eliminated
       this.flushDelayLines();
@@ -1010,6 +1153,11 @@ export class Rb26WebEngine {
         this.pitchFeedbackGain.gain.value = pFb;
         try { this.pitchFeedbackGain.gain.setValueAtTime(pFb, now); } catch (_) {}
       }
+      if (this.pitchBoostGain) {
+        const boostLinear = Math.pow(10, (this.params.pitchBoost || 0.0) / 20);
+        this.pitchBoostGain.gain.value = boostLinear;
+        try { this.pitchBoostGain.gain.setValueAtTime(boostLinear, now); } catch (_) {}
+      }
     }
   }
 
@@ -1022,16 +1170,50 @@ export class Rb26WebEngine {
       case 'preDelayMs':
         this.preDelayNode.delayTime.setTargetAtTime(value / 1000, now, 0.02);
         break;
-      case 'diffusion':
-        if (this.earlyReflectionsBus) {
-          this.earlyReflectionsBus.gain.setTargetAtTime(0.30 + value * 0.40, now, 0.02);
+      case 'diffusion': {
+        const clampedVal = Math.max(0.0, Math.min(1.0, value));
+        const effDiff = Math.sqrt(clampedVal);
+        const g = 0.74 * effDiff;
+        const dryG = Math.cos(effDiff * 0.5 * Math.PI);
+        const diffG = Math.sin(effDiff * 0.5 * Math.PI);
+
+        // Modulate FDN input diffusion stages
+        if (this.diffuserDryGain) {
+          this.diffuserDryGain.gain.setTargetAtTime(dryG, now, 0.02);
         }
+        if (this.diffuserWetGain) {
+          this.diffuserWetGain.gain.setTargetAtTime(diffG, now, 0.02);
+        }
+        if (this.inputDiffusers) {
+          for (const ap of this.inputDiffusers) {
+            ap.setFeedback(g, 0.02);
+          }
+        }
+
+        // Modulate Early Reflections diffusion stages
+        if (this.erDiffDryGain) {
+          this.erDiffDryGain.gain.setTargetAtTime(dryG, now, 0.02);
+        }
+        if (this.erDiffWetGain) {
+          this.erDiffWetGain.gain.setTargetAtTime(diffG, now, 0.02);
+        }
+        if (this.erDiffusers) {
+          for (const ap of this.erDiffusers) {
+            ap.setFeedback(g, 0.02);
+          }
+        }
+
+        // Modulate recirculating FDN loop allpass filters for enhanced decay smear
         if (this.fdnDiffusionFilters) {
-          for (const df of this.fdnDiffusionFilters) {
-            df.Q.setTargetAtTime(Math.max(0.1, value * 1.5), now, 0.02);
+          const baseFreqs = [880, 1250, 1620, 2100, 720, 1440, 1950, 2480];
+          for (let i = 0; i < this.fdnDiffusionFilters.length; i++) {
+            const df = this.fdnDiffusionFilters[i];
+            df.frequency.setTargetAtTime(baseFreqs[i] * (0.6 + effDiff * 0.8), now, 0.02);
+            df.Q.setTargetAtTime(Math.max(0.1, effDiff * 2.5), now, 0.02);
           }
         }
         break;
+      }
       case 'inputTrimDb': {
         const lin = Math.pow(10, value / 20) * 1.0;
         this.inputGain.gain.setTargetAtTime(lin, now, 0.02);
@@ -1201,6 +1383,12 @@ export class Rb26WebEngine {
       case 'pitchFeedback':
         if (this.pitchFeedbackGain) {
           this.pitchFeedbackGain.gain.setTargetAtTime(value * 0.30, now, 0.02);
+        }
+        break;
+      case 'pitchBoost':
+        if (this.pitchBoostGain) {
+          const gainLin = Math.pow(10, value / 20);
+          this.pitchBoostGain.gain.setTargetAtTime(gainLin, now, 0.02);
         }
         break;
       case 'tailModRateHz': {

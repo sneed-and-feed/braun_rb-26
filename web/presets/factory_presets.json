@@ -32,7 +32,8 @@
         "early_late_mix": 50,
         "dry_wet_mix": 40,
         "output_trim": 0,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -65,7 +66,8 @@
         "early_late_mix": 70,
         "dry_wet_mix": 55,
         "output_trim": 0,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -98,7 +100,8 @@
         "early_late_mix": 55,
         "dry_wet_mix": 45,
         "output_trim": 0,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -131,7 +134,8 @@
         "early_late_mix": 45,
         "dry_wet_mix": 38,
         "output_trim": 0,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -164,7 +168,8 @@
         "early_late_mix": 40,
         "dry_wet_mix": 35,
         "output_trim": 0,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -197,7 +202,8 @@
         "early_late_mix": 80,
         "dry_wet_mix": 65,
         "output_trim": -2,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -230,7 +236,8 @@
         "early_late_mix": 60,
         "dry_wet_mix": 50,
         "output_trim": 0,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -263,7 +270,8 @@
         "early_late_mix": 75,
         "dry_wet_mix": 60,
         "output_trim": -1,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -296,7 +304,8 @@
         "early_late_mix": 70,
         "dry_wet_mix": 55,
         "output_trim": -1,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     },
     {
@@ -329,7 +338,8 @@
         "early_late_mix": 45,
         "dry_wet_mix": 35,
         "output_trim": 0,
-        "soft_limiter": true
+        "soft_limiter": true,
+        "pitch_boost": 0
       }
     }
   ]

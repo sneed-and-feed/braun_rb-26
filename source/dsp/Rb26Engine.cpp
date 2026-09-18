@@ -11,6 +11,7 @@ Rb26ReverbEngine::Rb26ReverbEngine() noexcept {
     mEarlyLateSmoother.setTimeConstant(0.030f);
     mStereoWidthSmoother.setTimeConstant(0.030f);
     mOutputTrimSmoother.setTimeConstant(0.030f);
+    mPitchBoostSmoother.setTimeConstant(0.020f);
 
     mPitchFeedbackHpL.configure(Biquad::Type::Highpass, 48000.0f, 150.0f, 0.70710678f);
     mPitchFeedbackHpR.configure(Biquad::Type::Highpass, 48000.0f, 150.0f, 0.70710678f);
@@ -71,6 +72,10 @@ void Rb26ReverbEngine::prepare(double sampleRate, int maxBlockSize) noexcept {
     mPitchBlendSmoother.setTimeConstant(0.020f);
     mPitchBlendSmoother.reset(mParams.pitchBlend);
 
+    mPitchBoostSmoother.setSampleRate(fs);
+    mPitchBoostSmoother.setTimeConstant(0.020f);
+    mPitchBoostSmoother.reset(mParams.pitchBoostDb);
+
     mPreDelayBufferL.assign(kPreDelayBufferCapacity, 0.0f);
     mPreDelayBufferR.assign(kPreDelayBufferCapacity, 0.0f);
     mPreDelayWriteIndex = 0;
@@ -114,6 +119,7 @@ void Rb26ReverbEngine::reset() noexcept {
     mPitchFeedbackSmoother.reset(mParams.pitchFeedback);
     mPitchDelaySmoother.reset(mParams.pitchDelayMs);
     mPitchBlendSmoother.reset(mParams.pitchBlend);
+    mPitchBoostSmoother.reset(mParams.pitchBoostDb);
 
     mMasterSubMono.reset();
     mLowBandMatrix.reset();
@@ -179,10 +185,12 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
     mPitchFeedbackSmoother.setTarget(std::clamp(params.pitchFeedback, 0.0f, 0.95f));
     mPitchDelaySmoother.setTarget(std::clamp(params.pitchDelayMs, 20.0f, 500.0f));
     mPitchBlendSmoother.setTarget(std::clamp(params.pitchBlend, -1.0f, 1.0f));
+    mPitchBoostSmoother.setTarget(std::clamp(params.pitchBoostDb, 0.0f, 18.0f));
 
     if (params.shimmerSend <= 1.0e-4f && params.dimmerSend <= 1.0e-4f) {
         mPitchFeedbackSmoother.snapTo(0.0f);
         mPitchBlendSmoother.snapTo(std::clamp(params.pitchBlend, -1.0f, 1.0f));
+        mPitchBoostSmoother.snapTo(std::clamp(params.pitchBoostDb, 0.0f, 18.0f));
     }
 }
 
@@ -242,6 +250,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             mPitchFeedbackSmoother.snapTo(mPitchFeedbackSmoother.getTarget());
             mPitchDelaySmoother.snapTo(mPitchDelaySmoother.getTarget());
             mPitchBlendSmoother.snapTo(mPitchBlendSmoother.getTarget());
+            mPitchBoostSmoother.snapTo(mPitchBoostSmoother.getTarget());
 
             // Decimate telemetry
             mTelemetryDecimator += numSamples;
@@ -266,6 +275,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mPitchDelaySmoother.snapTo(mPitchDelaySmoother.getTarget());
         mPitchBlendSmoother.snapTo(mPitchBlendSmoother.getTarget());
         mPitchFeedbackSmoother.snapTo(mPitchFeedbackSmoother.getTarget());
+        mPitchBoostSmoother.snapTo(mPitchBoostSmoother.getTarget());
     }
 
     for (int n = 0; n < numSamples; ++n) {
@@ -353,9 +363,14 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             mLastPitchFbL = shiftedL;
             mLastPitchFbR = shiftedR;
 
-            // 5. Early / Late Mix (Equal-power trigonometric balance)
-            const float pitchAddL = delayedPitchL * 0.85f;
-            const float pitchAddR = delayedPitchR * 0.85f;
+            const float boostDb = mPitchBoostSmoother.next();
+            const float boostGain = dbToGain(boostDb);
+
+            // 5. Early / Late Mix (Equal-power trigonometric balance with Hermite bounded booster saturation)
+            const float rawPitchL = delayedPitchL * 0.85f * boostGain;
+            const float rawPitchR = delayedPitchR * 0.85f * boostGain;
+            const float pitchAddL = applySmoothBoundaryKnee(rawPitchL, 0.72f, 1.05f);
+            const float pitchAddR = applySmoothBoundaryKnee(rawPitchR, 0.72f, 1.05f);
             highReverbL = earlyGain * earlyL + lateGain * (lateL + pitchAddL);
             highReverbR = earlyGain * earlyR + lateGain * (lateR + pitchAddR);
         } else {

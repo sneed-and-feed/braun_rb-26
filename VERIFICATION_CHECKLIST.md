@@ -63,7 +63,7 @@ npm run test:browser
 
 The RB-26 DSP core and Web Audio engine are rigorously verified across all standard professional studio sample rates:
 
-$$\mathcal{F}_s \in \{44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\ 96.0\text{ kHz},\ 176.4\text{ kHz},\ 192.0\text{ kHz}\}$$
+$$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\ 96.0\text{ kHz},\ 176.4\text{ kHz},\ 192.0\text{ kHz}\rbrace$$
 
 ### Verified Behaviors Across Multi-Rate:
 1. **Filter Coefficient Normalization**:
@@ -145,9 +145,9 @@ $$\mathcal{F}_s \in \{44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\ 96.0
     - $\tau = 2\text{ ms}$: Volume and mute ramping (eliminates note-on clicks).
     - $\tau = 20\text{ ms} - 25\text{ ms}$: Rotary knob continuous adjustments (pre-delay, decay time, wet/dry mix, tone).
     - $\tau = 80\text{ ms}$: Tail bloom envelope detector release time.
-  - Ramp continuity test verifies **zero discrete sample jumps $> 0.05$** under extreme step parameter changes.
+  - Ramp continuity test verifies zero discrete sample jumps $> 0.05$ under extreme step parameter changes.
 - **Dual-Bank Tap Crossfading**:
-  - Reverb tank room size scrubbing switches between Delay Bank A and Delay Bank B using an S-curve smoothstep crossfade ($S(t) = 3t^2 - 2t^3$).
+  - Reverb tank room size scrubbing switches between Delay Bank A and Delay Bank B using an S-curve smoothstep crossfade $(S(t) = 3t^2 - 2t^3)$.
   - Energy conservation law:
     $$S(t) + (1 - S(t)) \equiv 1.00000$$
   - Eliminates pitch doppler zipper noise, buffer scrubbing pop, and clicks during live parameter automation.
@@ -221,8 +221,8 @@ $$\mathcal{F}_s \in \{44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\ 96.0
                     BRAUN RB-26 VERIFICATION AUDIT COMPLETE                     
 ================================================================================
   Verification Status           : 100% UNANIMOUS PASS
-  Headless DSP Tests            : 381 / 381 (100%)
-  Web Unit Tests                : 32 / 32 (100%)
+  Headless DSP Tests            : 389 / 389 (100%)
+  Web Unit Tests                : 36 / 36 (100%)
   Checklist Automated Tests     : 20 / 20 (100%)
   Total Assertions Evaluated    : > 1,180,000
   Memory Leaks                  : 0
@@ -231,5 +231,5 @@ $$\mathcal{F}_s \in \{44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\ 96.0
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.3.9)
+VERDICT: CERTIFIED PRODUCTION READY (v1.4.0)
 ```

@@ -23,6 +23,7 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     void parentHierarchyChanged() override;
+    void mouseDown(const juce::MouseEvent& e) override;
 
     // APVTS Listener callback
     void parameterChanged(const juce::String& parameterID, float newValue) override;
@@ -33,6 +34,32 @@ public:
     static juce::File getSettingsFile();
     static bool loadPersistedNativeUIPreference();
     static void savePersistedNativeUIPreference(bool native);
+
+    // Slot structs for Native controls
+    struct KnobSlot {
+        juce::String paramId;
+        juce::Slider slider;
+        juce::Label nameLabel;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+    };
+
+    struct ButtonSlot {
+        juce::String paramId;
+        juce::ToggleButton button;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
+    };
+
+    struct ComboSlot {
+        juce::String paramId;
+        juce::Label label;
+        juce::ComboBox comboBox;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> attachment;
+    };
+
+    KnobSlot* findKnob(const juce::ParameterID& id);
+    KnobSlot* findKnob(const juce::String& paramId);
+    ButtonSlot* findButton(const juce::ParameterID& id);
+    ComboSlot* findCombo(const juce::ParameterID& id);
 
 #if JUCE_WEB_BROWSER
     // Web Integration & Bridge Methods
@@ -58,8 +85,8 @@ private:
     std::unique_ptr<juce::WebBrowserComponent> webComponent;
     bool initialSyncDone { false };
 
-    // Coalescing array for all 26 APVTS parameters (prevents Win32 message loop stalls)
-    static constexpr size_t kNumParams = 26;
+    // Coalescing array for all 27 APVTS parameters (prevents Win32 message loop stalls)
+    static constexpr size_t kNumParams = 27;
     std::atomic<float> pendingParamValues[kNumParams] {};
     std::atomic<bool> paramDirty[kNumParams] {};
 
@@ -100,29 +127,8 @@ private:
     juce::TextButton nextPresetBtn;
 
     // Rotary Sliders & Labels for APVTS parameters
-    struct KnobSlot {
-        juce::String paramId;
-        juce::Slider slider;
-        juce::Label nameLabel;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-    };
     std::vector<std::unique_ptr<KnobSlot>> knobSlots;
-
-    // Buttons / Toggles
-    struct ButtonSlot {
-        juce::String paramId;
-        juce::ToggleButton button;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
-    };
     std::vector<std::unique_ptr<ButtonSlot>> buttonSlots;
-
-    // ComboBoxes (for Shimmer and Dimmer intervals)
-    struct ComboSlot {
-        juce::String paramId;
-        juce::Label label;
-        juce::ComboBox comboBox;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> attachment;
-    };
     std::vector<std::unique_ptr<ComboSlot>> comboSlots;
 
     // Audition Exciter trigger buttons
@@ -132,9 +138,8 @@ private:
 
     void setupNativeControls();
     void updateNativeControlLayout();
-    KnobSlot* findKnob(const juce::ParameterID& id);
-    ButtonSlot* findButton(const juce::ParameterID& id);
-    ComboSlot* findCombo(const juce::ParameterID& id);
+    void showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos);
+    void setChildHwndsVisible(bool visible);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BRAUN_RB26AudioProcessorEditor)
 };
