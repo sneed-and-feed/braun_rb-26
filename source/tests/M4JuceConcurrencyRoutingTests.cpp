@@ -173,6 +173,7 @@ void runTest2_AcousticExciterPoissonThreadSafety() {
         std::fill(outReverbR, outReverbR + kBlockSize, 0.0f);
 
         exciter.process(directBus, reverbBus, kBlockSize);
+        std::this_thread::yield();
 
         for (int i = 0; i < kBlockSize; ++i) {
             RB26_TEST_ASSERT(std::isfinite(outDirectL[i]));

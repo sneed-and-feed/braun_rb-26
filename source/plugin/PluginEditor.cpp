@@ -665,6 +665,19 @@ void BRAUN_RB26AudioProcessorEditor::parentHierarchyChanged()
     {
         ensureHwndStyles();
     }
+    else
+    {
+#if JUCE_WINDOWS
+        if (auto* peer = getPeer())
+        {
+            if (HWND hwnd = static_cast<HWND>(peer->getNativeHandle()))
+            {
+                LONG_PTR style = ::GetWindowLongPtr(hwnd, GWL_STYLE);
+                ::SetWindowLongPtr(hwnd, GWL_STYLE, style & ~WS_CLIPCHILDREN);
+            }
+        }
+#endif
+    }
 #endif
 }
 
@@ -1395,6 +1408,8 @@ void BRAUN_RB26AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
 
 void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
 {
+    addMouseListener(this, true);
+
     // Power button
     powerButton.setButtonText("STANDBY");
     powerButton.setToggleState(false, juce::dontSendNotification);
@@ -1562,8 +1577,8 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
             slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
                 processorRef.getAPVTS(), item.apvtsId, slot->slider);
 
-            slot->slider.addMouseListener(this, true);
-            slot->nameLabel.addMouseListener(this, true);
+            slot->slider.addMouseListener(this, false);
+            slot->nameLabel.addMouseListener(this, false);
 
             addChildComponent(slot->slider);
             addChildComponent(slot->nameLabel);
@@ -1582,17 +1597,68 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
     {
         if (useNativeUI)
         {
-            removeChildComponent(webComponent.get());
-            webComponent->setVisible(false);
             webComponent->setBounds(0, 0, 0, 0);
+            webComponent->setVisible(false);
+
+#if JUCE_WINDOWS
+            if (auto* peer = getPeer())
+            {
+                if (HWND hwnd = static_cast<HWND>(peer->getNativeHandle()))
+                {
+                    ::EnumChildWindows(hwnd, [](HWND child, LPARAM lParam) -> BOOL {
+                        HWND parentHwnd = reinterpret_cast<HWND>(lParam);
+                        if (child != parentHwnd)
+                        {
+                            char className[256] = { 0 };
+                            ::GetClassNameA(child, className, sizeof(className));
+                            juce::String cName(className);
+                            if (cName.containsIgnoreCase("Chrome") || cName.containsIgnoreCase("Intermediate"))
+                            {
+                                ::ShowWindow(child, SW_HIDE);
+                                ::SetWindowPos(child, nullptr, 0, 0, 0, 0,
+                                               SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+                            }
+                        }
+                        return TRUE;
+                    }, reinterpret_cast<LPARAM>(hwnd));
+
+                    LONG_PTR style = ::GetWindowLongPtr(hwnd, GWL_STYLE);
+                    ::SetWindowLongPtr(hwnd, GWL_STYLE, style & ~WS_CLIPCHILDREN);
+                }
+            }
+#endif
+            removeChildComponent(webComponent.get());
         }
         else
         {
-            addAndMakeVisible(*webComponent);
-            webComponent->setVisible(true);
-            webComponent->setBounds(getLocalBounds());
-            webComponent->toFront(false);
             ensureHwndStyles();
+
+#if JUCE_WINDOWS
+            if (auto* peer = getPeer())
+            {
+                if (HWND hwnd = static_cast<HWND>(peer->getNativeHandle()))
+                {
+                    ::EnumChildWindows(hwnd, [](HWND child, LPARAM lParam) -> BOOL {
+                        HWND parentHwnd = reinterpret_cast<HWND>(lParam);
+                        if (child != parentHwnd)
+                        {
+                            char className[256] = { 0 };
+                            ::GetClassNameA(child, className, sizeof(className));
+                            juce::String cName(className);
+                            if (cName.containsIgnoreCase("Chrome") || cName.containsIgnoreCase("Intermediate"))
+                            {
+                                ::ShowWindow(child, SW_SHOW);
+                            }
+                        }
+                        return TRUE;
+                    }, reinterpret_cast<LPARAM>(hwnd));
+                }
+            }
+#endif
+            addAndMakeVisible(*webComponent);
+            webComponent->setBounds(getLocalBounds());
+            webComponent->setVisible(true);
+            webComponent->toFront(false);
         }
     }
     viewModeButton.setVisible(useNativeUI);
@@ -1913,6 +1979,18 @@ void BRAUN_RB26AudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
             if (e.eventComponent == &slot->slider || slot->slider.isParentOf(e.eventComponent)
                 || e.eventComponent == &slot->nameLabel || slot->nameLabel.isParentOf(e.eventComponent))
             {
+                for (int i = 0; i < slot->slider.getNumChildComponents(); ++i)
+                {
+                    auto* child = slot->slider.getChildComponent(i);
+                    if (dynamic_cast<juce::TextEditor*>(child) != nullptr)
+                        return;
+                    if (auto* lbl = dynamic_cast<juce::Label*>(child))
+                    {
+                        if (lbl->isBeingEdited())
+                            return;
+                    }
+                }
+
                 showKnobContextMenu(*slot, e.getScreenPosition());
                 return;
             }
@@ -1927,8 +2005,8 @@ void BRAUN_RB26AudioProcessorEditor::showKnobContextMenu(KnobSlot& slot, juce::P
     {
         if (auto hostMenu = hContext->getContextMenuForParameter(param))
         {
-            auto menu = hostMenu->getEquivalentPopupMenu();
-            menu.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea(juce::Rectangle<int>(screenPos.x, screenPos.y, 1, 1)).withParentComponent(this));
+            auto localPos = getLocalPoint(nullptr, screenPos);
+            hostMenu->showNativeMenu(localPos);
             return;
         }
     }
