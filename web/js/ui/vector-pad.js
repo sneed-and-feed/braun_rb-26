@@ -13,7 +13,6 @@ export class BraunVectorPad {
    * @param {Object} [options={}]
    */
   constructor(container, options = {}) {
-    if (!container) return;
     this.container = container;
     this.onEngage = options.onEngage || null;
     this.onChange = options.onChange || null;
@@ -23,7 +22,7 @@ export class BraunVectorPad {
     this.x = this.defaultX;
     this.y = this.defaultY;
 
-    this.mode = options.mode || 'momentary'; // 'momentary' | 'latch'
+    this.mode = options.mode || 'latch'; // 'latch' | 'momentary'
     this.isEngaged = false;
     this._animId = null;
 
@@ -31,10 +30,12 @@ export class BraunVectorPad {
     this.width = 340;
     this.height = 120;
 
-    this._render();
-    this._attachEvents();
-    this._applyModulation(false);
-    this.draw();
+    if (this.container && typeof document !== 'undefined') {
+      this._render();
+      this._attachEvents();
+      this._applyModulation(false);
+      this.draw();
+    }
   }
 
   _render() {
@@ -47,6 +48,8 @@ export class BraunVectorPad {
     this.wrapper.setAttribute('role', 'region');
     this.wrapper.setAttribute('aria-label', 'Braun RB-26 Vector Modulation Touchpad');
 
+    const isLatch = this.mode === 'latch';
+
     this.wrapper.innerHTML = `
       <div class="braun-vector-header">
         <div class="braun-vector-title-group">
@@ -54,9 +57,9 @@ export class BraunVectorPad {
           <span class="braun-vector-axis-meta">X: RATE &middot; Y: DEPTH &amp; BLOOM</span>
         </div>
         <div class="braun-vector-controls">
-          <button class="braun-vector-mini-btn" id="btn-vector-mode" title="Toggle Momentary Spring / Latch Lock">
-            <span class="braun-led"></span>
-            <span id="vector-mode-label">MOMENTARY</span>
+          <button class="braun-vector-mini-btn${isLatch ? ' is-active' : ''}" id="btn-vector-mode" title="Toggle Momentary Spring / Latch Lock">
+            <span class="braun-led${isLatch ? ' is-active' : ''}"></span>
+            <span id="vector-mode-label">${isLatch ? 'LATCHED' : 'MOMENTARY'}</span>
           </button>
           <button class="braun-vector-mini-btn" id="btn-vector-reset" title="Reset Coordinates to Center Origin">
             RESET [&middot;]
@@ -87,17 +90,17 @@ export class BraunVectorPad {
 
     this.container.appendChild(this.wrapper);
 
-    this.surfaceBox = this.wrapper.querySelector('#vector-surface');
-    this.canvas = this.wrapper.querySelector('.braun-vector-canvas');
+    this.surfaceBox = this.wrapper.querySelector ? this.wrapper.querySelector('#vector-surface') : null;
+    this.canvas = this.wrapper.querySelector ? this.wrapper.querySelector('.braun-vector-canvas') : null;
     this.ctx = this.canvas && this.canvas.getContext ? this.canvas.getContext('2d') : null;
 
-    this.modeBtn = this.wrapper.querySelector('#btn-vector-mode');
-    this.modeLabel = this.wrapper.querySelector('#vector-mode-label');
-    this.resetBtn = this.wrapper.querySelector('#btn-vector-reset');
-    this.readoutX = this.wrapper.querySelector('#readout-x');
-    this.readoutY = this.wrapper.querySelector('#readout-y');
-    this.statusLed = this.wrapper.querySelector('#vector-status-led');
-    this.statusText = this.wrapper.querySelector('#vector-status-text');
+    this.modeBtn = this.wrapper.querySelector ? this.wrapper.querySelector('#btn-vector-mode') : null;
+    this.modeLabel = this.wrapper.querySelector ? this.wrapper.querySelector('#vector-mode-label') : null;
+    this.resetBtn = this.wrapper.querySelector ? this.wrapper.querySelector('#btn-vector-reset') : null;
+    this.readoutX = this.wrapper.querySelector ? this.wrapper.querySelector('#readout-x') : null;
+    this.readoutY = this.wrapper.querySelector ? this.wrapper.querySelector('#readout-y') : null;
+    this.statusLed = this.wrapper.querySelector ? this.wrapper.querySelector('#vector-status-led') : null;
+    this.statusText = this.wrapper.querySelector ? this.wrapper.querySelector('#vector-status-text') : null;
 
     this._resize();
   }
@@ -120,10 +123,17 @@ export class BraunVectorPad {
 
   _attachEvents() {
     if (typeof window !== 'undefined') {
-      window.addEventListener('resize', () => {
+      this._onWindowResize = () => {
         this._resize();
         this.draw();
-      });
+      };
+      window.addEventListener('resize', this._onWindowResize);
+      this._onWindowBlur = () => {
+        if (this.isEngaged) {
+          handlePointerUp();
+        }
+      };
+      window.addEventListener('blur', this._onWindowBlur);
     }
 
     if (typeof ResizeObserver !== 'undefined' && this.surfaceBox) {
@@ -144,20 +154,20 @@ export class BraunVectorPad {
     if (this.resetBtn) {
       this.resetBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.resetToCenter();
+        this.resetToCenter(true, true);
       });
     }
 
     const handlePointerMove = (e) => {
       if (!this.isEngaged) return;
-      if (e.cancelable && typeof e.preventDefault === 'function') {
+      if (e && e.cancelable && typeof e.preventDefault === 'function') {
         e.preventDefault();
       }
-      const rect = this._cachedRect || this.surfaceBox.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
+      const rect = this._cachedRect || (this.surfaceBox && this.surfaceBox.getBoundingClientRect ? this.surfaceBox.getBoundingClientRect() : null);
+      if (!rect || !rect.width || !rect.height) return;
 
-      const clX = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
-      const clY = e.clientY ?? (e.touches && e.touches[0].clientY) ?? 0;
+      const clX = (e && e.clientX !== undefined) ? e.clientX : (e && e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      const clY = (e && e.clientY !== undefined) ? e.clientY : (e && e.touches && e.touches[0] ? e.touches[0].clientY : 0);
 
       const normX = Math.max(0, Math.min(1, (clX - rect.left) / rect.width));
       const normY = Math.max(0, Math.min(1, 1.0 - (clY - rect.top) / rect.height));
@@ -170,7 +180,7 @@ export class BraunVectorPad {
       this.isEngaged = false;
       this._updateStatusUi();
 
-      if (this.surfaceBox.releasePointerCapture && e.pointerId !== undefined) {
+      if (this.surfaceBox && this.surfaceBox.releasePointerCapture && e && e.pointerId !== undefined) {
         try {
           if (!this.surfaceBox.hasPointerCapture || this.surfaceBox.hasPointerCapture(e.pointerId)) {
             this.surfaceBox.releasePointerCapture(e.pointerId);
@@ -186,18 +196,17 @@ export class BraunVectorPad {
     };
 
     this.surfaceBox.addEventListener('pointerdown', async (e) => {
-      e.preventDefault();
-      this._cachedRect = this.surfaceBox.getBoundingClientRect();
-      if (this.surfaceBox.setPointerCapture && e.pointerId !== undefined) {
+      if (e && typeof e.preventDefault === 'function') {
+        e.preventDefault();
+      }
+      this._cachedRect = this.surfaceBox.getBoundingClientRect ? this.surfaceBox.getBoundingClientRect() : { left: 0, top: 0, width: 340, height: 120 };
+      if (this.surfaceBox && this.surfaceBox.setPointerCapture && e && e.pointerId !== undefined) {
         try {
           this.surfaceBox.setPointerCapture(e.pointerId);
         } catch (err) {}
       }
 
-      if (this._animId) {
-        cancelAnimationFrame(this._animId);
-        this._animId = null;
-      }
+      this._cancelAnim();
 
       this.isEngaged = true;
       this._updateStatusUi();
@@ -207,10 +216,10 @@ export class BraunVectorPad {
       }
 
       const rect = this._cachedRect;
-      const clX = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
-      const clY = e.clientY ?? (e.touches && e.touches[0].clientY) ?? 0;
-      const normX = Math.max(0, Math.min(1, (clX - rect.left) / rect.width));
-      const normY = Math.max(0, Math.min(1, 1.0 - (clY - rect.top) / rect.height));
+      const clX = (e && e.clientX !== undefined) ? e.clientX : (e && e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      const clY = (e && e.clientY !== undefined) ? e.clientY : (e && e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+      const normX = (rect && rect.width) ? Math.max(0, Math.min(1, (clX - rect.left) / rect.width)) : 0.5;
+      const normY = (rect && rect.height) ? Math.max(0, Math.min(1, 1.0 - (clY - rect.top) / rect.height)) : 0.5;
 
       this.setCoordinates(normX, normY, true);
     });
@@ -218,6 +227,7 @@ export class BraunVectorPad {
     this.surfaceBox.addEventListener('pointermove', handlePointerMove);
     this.surfaceBox.addEventListener('pointerup', handlePointerUp);
     this.surfaceBox.addEventListener('pointercancel', handlePointerUp);
+    this.surfaceBox.addEventListener('lostpointercapture', handlePointerUp);
 
     this.surfaceBox.addEventListener('dblclick', () => {
       this.resetToCenter();
@@ -251,37 +261,71 @@ export class BraunVectorPad {
     });
   }
 
+  _cancelAnim() {
+    if (this._animId) {
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(this._animId);
+      } else {
+        clearTimeout(this._animId);
+      }
+      this._animId = null;
+    }
+  }
+
+  destroy() {
+    this._cancelAnim();
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    if (this._onWindowResize && typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('resize', this._onWindowResize);
+      this._onWindowResize = null;
+    }
+    if (this._onWindowBlur && typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('blur', this._onWindowBlur);
+      this._onWindowBlur = null;
+    }
+  }
+
   toggleMode() {
     this.mode = this.mode === 'momentary' ? 'latch' : 'momentary';
+    const isLatch = this.mode === 'latch';
     if (this.modeBtn) {
-      this.modeBtn.classList.toggle('is-active', this.mode === 'latch');
+      this.modeBtn.classList.toggle('is-active', isLatch);
+      const led = this.modeBtn.querySelector ? this.modeBtn.querySelector('.braun-led') : null;
+      if (led && led.classList) {
+        led.classList.toggle('is-active', isLatch);
+      }
     }
     if (this.modeLabel) {
-      this.modeLabel.textContent = this.mode.toUpperCase();
+      this.modeLabel.textContent = isLatch ? 'LATCHED' : 'MOMENTARY';
     }
-    if (this.mode === 'momentary' && !this.isEngaged) {
+    if (this.mode === 'latch') {
+      this._cancelAnim();
+    } else if (this.mode === 'momentary' && !this.isEngaged) {
       this._springReturn();
     }
   }
 
+  setMode(mode) {
+    if (mode !== 'latch' && mode !== 'momentary') return;
+    if (this.mode === mode) return;
+    this.toggleMode();
+  }
+
   setDefaults(defaultX, defaultY) {
-    if (this._animId) {
-      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._animId);
-      else clearTimeout(this._animId);
-      this._animId = null;
-    }
+    this._cancelAnim();
     this.isEngaged = false;
     this._updateStatusUi();
     this.defaultX = Math.max(0, Math.min(1.0, defaultX));
     this.defaultY = Math.max(0, Math.min(1.0, defaultY));
   }
 
-  resetToCenter(update = true, animate = false, duration = 250) {
-    if (this._animId) {
-      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._animId);
-      else clearTimeout(this._animId);
-      this._animId = null;
-    }
+  resetToCenter(update = true, animate = true, duration = 250) {
+    this._cancelAnim();
+    this.isEngaged = false;
+    this._updateStatusUi();
     if (animate && duration > 0) {
       this.animateTo(this.defaultX, this.defaultY, duration, update);
     } else {
@@ -289,12 +333,8 @@ export class BraunVectorPad {
     }
   }
 
-  animateTo(targetX, targetY, duration = 250, update = false) {
-    if (this._animId) {
-      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._animId);
-      else clearTimeout(this._animId);
-      this._animId = null;
-    }
+  animateTo(targetX, targetY, duration = 250, update = true) {
+    this._cancelAnim();
 
     const startX = this.x;
     const startY = this.y;
@@ -356,7 +396,9 @@ export class BraunVectorPad {
     }
     if (this.statusText) {
       this.statusText.textContent = this.isEngaged ? 'ENGAGED' : 'STANDBY';
-      this.statusText.style.color = this.isEngaged ? 'var(--braun-orange)' : 'var(--text-secondary)';
+      if (this.statusText.style) {
+        this.statusText.style.color = this.isEngaged ? 'var(--braun-orange)' : 'var(--text-secondary)';
+      }
     }
     if (this.surfaceBox) {
       this.surfaceBox.classList.toggle('is-active', this.isEngaged);
@@ -400,20 +442,18 @@ export class BraunVectorPad {
   }
 
   _springReturn() {
-    if (this._animId) {
-      cancelAnimationFrame(this._animId);
-      this._animId = null;
-    }
+    this._cancelAnim();
 
     const startX = this.x;
     const startY = this.y;
     const targetX = this.defaultX;
     const targetY = this.defaultY;
     const duration = 220;
-    const startTime = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
 
     const step = (currentTime) => {
-      const elapsed = currentTime - startTime;
+      const now = (typeof currentTime === 'number' && currentTime > 0) ? currentTime : ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+      const elapsed = Math.max(0, now - startTime);
       const progress = Math.min(1.0, elapsed / duration);
       const ease = 1.0 - Math.pow(1.0 - progress, 4);
 
@@ -423,14 +463,22 @@ export class BraunVectorPad {
       this.setCoordinates(curX, curY, true);
 
       if (progress < 1.0) {
-        this._animId = requestAnimationFrame(step);
+        if (typeof requestAnimationFrame === 'function') {
+          this._animId = requestAnimationFrame(step);
+        } else {
+          this._animId = setTimeout(() => step(Date.now()), 16);
+        }
       } else {
         this.setCoordinates(targetX, targetY, true);
         this._animId = null;
       }
     };
 
-    this._animId = requestAnimationFrame(step);
+    if (typeof requestAnimationFrame === 'function') {
+      this._animId = requestAnimationFrame(step);
+    } else {
+      this._animId = setTimeout(() => step(Date.now()), 16);
+    }
   }
 
   draw() {
@@ -448,7 +496,9 @@ export class BraunVectorPad {
     }
 
     ctx.save();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (typeof ctx.setTransform === 'function') {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
 
     // Dark technical bezel background
     ctx.fillStyle = '#121414';

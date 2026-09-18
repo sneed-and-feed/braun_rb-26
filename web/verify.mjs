@@ -106,6 +106,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.ok(html.includes('id="select-preset"'), 'Preset selector must exist');
       assert.ok(html.includes('id="select-theme"'), 'Theme selector must exist');
       assert.ok(html.includes('id="btn-power"'), 'Power button must exist');
+      assert.ok(html.includes('id="vector-pad-container"'), 'Vector pad container must exist in Deck 05');
     });
 
     it('verifies zero-install audition sound buttons in index.html', () => {
@@ -364,6 +365,213 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       // Simulate right-click context menu reset
       knob.setValue(knob.defaultValue, true);
       assert.strictEqual(knob.value, 50, 'Right click must cleanly reset knob value to default');
+    });
+
+    it('verifies BraunVectorPad initializes in latch mode with active LED, LATCHED label, toggle mechanics, and smooth reset', async () => {
+      const { BraunVectorPad } = await import('./js/ui/vector-pad.js');
+
+      // 1. Headless default mode check
+      const headlessPad = new BraunVectorPad(null);
+      assert.strictEqual(headlessPad.mode, 'latch', 'Vector Pad must default to latch mode');
+
+      // 2. Mock DOM container validation
+      const origDoc = globalThis.document;
+      const origWin = globalThis.window;
+
+      try {
+        const createMockEl = (tag) => {
+          const classes = new Set();
+          const listeners = {};
+          const el = {
+            tagName: tag.toUpperCase(),
+            attributes: {},
+            children: [],
+            appendChild(c) { this.children.push(c); return c; },
+            removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); return c; },
+            style: {},
+            textContent: '',
+            classList: {
+              add(c) { classes.add(c); },
+              remove(c) { classes.delete(c); },
+              toggle(c, force) {
+                if (force !== undefined) {
+                  force ? classes.add(c) : classes.delete(c);
+                  return force;
+                }
+                if (classes.has(c)) { classes.delete(c); return false; }
+                classes.add(c); return true;
+              },
+              contains(c) { return classes.has(c); }
+            },
+            getAttribute(name) { return el.attributes[name] ?? null; },
+            setAttribute(name, val) { el.attributes[name] = String(val); },
+            addEventListener(evt, fn) { (listeners[evt] = listeners[evt] || []).push(fn); },
+            dispatchEvent(evt) {
+              const fns = listeners[evt.type || evt] || [];
+              for (const fn of fns) fn(evt);
+            },
+            click() {
+              el.dispatchEvent({ type: 'click', stopPropagation() {}, preventDefault() {} });
+            },
+            getContext() {
+              return new Proxy({}, {
+                get(target, prop) {
+                  if (prop === 'createLinearGradient') return () => ({ addColorStop() {} });
+                  return () => {};
+                }
+              });
+            },
+            getBoundingClientRect() {
+              return { left: 0, top: 0, width: 340, height: 120, right: 340, bottom: 120 };
+            }
+          };
+          return el;
+        };
+
+        const setupMockEnvironment = () => {
+          const container = createMockEl('div');
+          globalThis.document = {
+            createElement(tag) {
+              const el = createMockEl(tag);
+              if (tag === 'div') {
+                Object.defineProperty(el, 'innerHTML', {
+                  set(html) {
+                    this._html = html;
+                    const isLatchRendered = html.includes('id="btn-vector-mode"') && html.includes('is-active');
+                    const hasLatchLabel = html.includes('id="vector-mode-label">LATCHED</span>');
+
+                    const modeBtn = createMockEl('button');
+                    modeBtn.setAttribute('id', 'btn-vector-mode');
+                    modeBtn.classList.add('braun-vector-mini-btn');
+                    if (isLatchRendered) modeBtn.classList.add('is-active');
+
+                    const led = createMockEl('span');
+                    led.classList.add('braun-led');
+                    if (isLatchRendered) led.classList.add('is-active');
+
+                    const modeLabel = createMockEl('span');
+                    modeLabel.setAttribute('id', 'vector-mode-label');
+                    modeLabel.textContent = hasLatchLabel ? 'LATCHED' : 'MOMENTARY';
+
+                    modeBtn.children.push(led, modeLabel);
+                    modeBtn.querySelector = (sel) => {
+                      if (sel === '.braun-led') return led;
+                      if (sel === '#vector-mode-label') return modeLabel;
+                      return null;
+                    };
+
+                    const resetBtn = createMockEl('button');
+                    resetBtn.setAttribute('id', 'btn-vector-reset');
+                    const surface = createMockEl('div');
+                    surface.setAttribute('id', 'vector-surface');
+                    const canvas = createMockEl('canvas');
+                    canvas.classList.add('braun-vector-canvas');
+                    const readoutX = createMockEl('span');
+                    readoutX.setAttribute('id', 'readout-x');
+                    const readoutY = createMockEl('span');
+                    readoutY.setAttribute('id', 'readout-y');
+                    const statusLed = createMockEl('span');
+                    statusLed.setAttribute('id', 'vector-status-led');
+                    const statusText = createMockEl('span');
+                    statusText.setAttribute('id', 'vector-status-text');
+
+                    this._registry = {
+                      '#vector-surface': surface,
+                      '.braun-vector-canvas': canvas,
+                      '#btn-vector-mode': modeBtn,
+                      '#vector-mode-label': modeLabel,
+                      '#btn-vector-reset': resetBtn,
+                      '#readout-x': readoutX,
+                      '#readout-y': readoutY,
+                      '#vector-status-led': statusLed,
+                      '#vector-status-text': statusText,
+                      '.braun-led': led
+                    };
+                  },
+                  get() {
+                    return this._html || '';
+                  }
+                });
+                el.querySelector = (sel) => el._registry ? el._registry[sel] : null;
+              }
+              return el;
+            }
+          };
+          globalThis.window = {
+            devicePixelRatio: 1,
+            addEventListener() {},
+            removeEventListener() {}
+          };
+          return container;
+        };
+
+        const container = setupMockEnvironment();
+        const pad = new BraunVectorPad(container);
+
+        // Verification of Default State
+        assert.strictEqual(pad.mode, 'latch', 'Vector Pad must initialize in latch mode');
+        assert.ok(pad.modeBtn.classList.contains('is-active'), '#btn-vector-mode must have .is-active class on init');
+        const led = pad.modeBtn.querySelector('.braun-led');
+        assert.ok(led, 'LED must exist within mode button');
+        assert.ok(led.classList.contains('is-active'), 'LED indicator must have .is-active class on init');
+        assert.strictEqual(pad.modeLabel.textContent, 'LATCHED', '#vector-mode-label must display LATCHED on init');
+
+        // Verification of Toggle Mechanics (LATCHED -> MOMENTARY)
+        pad.modeBtn.click();
+        assert.strictEqual(pad.mode, 'momentary', 'Clicking mode button must toggle mode to momentary');
+        assert.strictEqual(pad.modeBtn.classList.contains('is-active'), false, '#btn-vector-mode must deactivate in momentary mode');
+        assert.strictEqual(led.classList.contains('is-active'), false, 'LED indicator must deactivate in momentary mode');
+        assert.strictEqual(pad.modeLabel.textContent, 'MOMENTARY', '#vector-mode-label must display MOMENTARY');
+
+        // Verification of Toggle Mechanics (MOMENTARY -> LATCHED)
+        pad.modeBtn.click();
+        assert.strictEqual(pad.mode, 'latch', 'Clicking mode button again must toggle mode back to latch');
+        assert.ok(pad.modeBtn.classList.contains('is-active'), '#btn-vector-mode must reactivate in latch mode');
+        assert.ok(led.classList.contains('is-active'), 'LED indicator must reactivate in latch mode');
+        assert.strictEqual(pad.modeLabel.textContent, 'LATCHED', '#vector-mode-label must display LATCHED');
+
+        // Verification of Latched Coordinate Retention on Drag Release
+        pad.setCoordinates(0.82, 0.73);
+        pad.isEngaged = true;
+        pad.surfaceBox.dispatchEvent({ type: 'pointerup' });
+        assert.strictEqual(pad.isEngaged, false, 'Engagement state must disengage upon pointerup');
+        assert.strictEqual(pad.x, 0.82, 'In latch mode, X coordinate must be retained without spring-back');
+        assert.strictEqual(pad.y, 0.73, 'In latch mode, Y coordinate must be retained without spring-back');
+        assert.strictEqual(pad._animId, null, 'No spring-return animation frame should be queued in latch mode');
+
+        // Verification of Smooth Reset to Center
+        pad.setCoordinates(0.95, 0.15);
+        pad.resetToCenter(true, false); // Instant snap test
+        assert.strictEqual(pad.x, pad.defaultX, 'resetToCenter must reset X coordinate to center default');
+        assert.strictEqual(pad.y, pad.defaultY, 'resetToCenter must reset Y coordinate to center default');
+
+        // Verification of Explicit Momentary Initialization Option
+        const containerMom = setupMockEnvironment();
+        const padMom = new BraunVectorPad(containerMom, { mode: 'momentary' });
+        assert.strictEqual(padMom.mode, 'momentary', 'Explicit momentary mode option must be honored');
+        assert.strictEqual(padMom.modeBtn.classList.contains('is-active'), false);
+        assert.strictEqual(padMom.modeLabel.textContent, 'MOMENTARY');
+
+        // Verification of Programmatic setMode API
+        padMom.setMode('latch');
+        assert.strictEqual(padMom.mode, 'latch', 'setMode must transition mode to latch');
+        assert.ok(padMom.modeBtn.classList.contains('is-active'));
+        padMom.setMode('momentary');
+        assert.strictEqual(padMom.mode, 'momentary', 'setMode must transition mode to momentary');
+
+        // Verification of Pointerdown and Lifecycle Teardown
+        padMom._animId = 999;
+        padMom.surfaceBox.dispatchEvent({ type: 'pointerdown' });
+        assert.strictEqual(padMom._animId, null, 'pointerdown must cancel active animation');
+
+        // Verification of Memory Leak Protection and destroy() Teardown
+        padMom.destroy();
+        assert.strictEqual(padMom._animId, null, 'destroy() must cleanly cancel animation references');
+        pad.destroy();
+      } finally {
+        globalThis.document = origDoc;
+        globalThis.window = origWin;
+      }
     });
   });
 
