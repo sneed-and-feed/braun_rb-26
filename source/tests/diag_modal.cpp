@@ -214,9 +214,8 @@ int main() {
                   << " | Difference RMS: " << diffRms
                   << " | Relative Diff: " << (diffRms / (rms0 + 1.0e-9)) * 100.0 << " %\n";
 
-        // Measure echo density in late decay window (samples 9600 to 24000, ~200ms - 500ms)
-        size_t activeCount0 = 0;
-        size_t activeCount1 = 0;
+        // Measure echo density in onset/early-diffusion window (samples 480 to 9600, ~10ms - 200ms)
+        // and late reflection cluster window (samples 9600 to 24000, ~200ms - 500ms)
         // Re-run with clean tanks to measure raw impulse response
         tank0.prepare(fs);
         tank1.prepare(fs);
@@ -226,17 +225,27 @@ int main() {
         tank0.processSample(1.0f, 1.0f, 0.0f, 0.0f, outL0, outR0);
         tank1.processSample(1.0f, 1.0f, 0.0f, 0.0f, outL1, outR1);
 
+        size_t onsetCount0 = 0, onsetCount1 = 0;
+        size_t lateCount0 = 0, lateCount1 = 0;
+
         for (int i = 0; i < 24000; ++i) {
             tank0.processSample(0.0f, 0.0f, 0.0f, 0.0f, outL0, outR0);
             tank1.processSample(0.0f, 0.0f, 0.0f, 0.0f, outL1, outR1);
+            if (i >= 480 && i < 9600) {
+                if (std::abs(outL0) > 1.0e-4f) onsetCount0++;
+                if (std::abs(outL1) > 1.0e-4f) onsetCount1++;
+            }
             if (i >= 9600) {
-                if (std::abs(outL0) > 1.0e-5f) activeCount0++;
-                if (std::abs(outL1) > 1.0e-5f) activeCount1++;
+                if (std::abs(outL0) > 1.0e-3f) lateCount0++;
+                if (std::abs(outL1) > 1.0e-3f) lateCount1++;
             }
         }
-        std::cout << "  Late Decay Echo Count (200-500ms): 0% Diff = " << activeCount0
-                  << " | 100% Diff = " << activeCount1 << "\n";
-        DIAG_ASSERT(activeCount1 > activeCount0, "100% diffusion must produce greater late echo density than 0%");
+        std::cout << "  Onset Echo Count (10-200ms, >1e-4): 0% Diff = " << onsetCount0
+                  << " | 100% Diff = " << onsetCount1 << "\n";
+        std::cout << "  Late Echo Cluster Count (200-500ms, >1e-3): 0% Diff = " << lateCount0
+                  << " | 100% Diff = " << lateCount1 << "\n";
+        DIAG_ASSERT(onsetCount1 > onsetCount0, "100% diffusion must produce greater onset/early echo density than 0%");
+        DIAG_ASSERT(lateCount1 > lateCount0, "100% diffusion must produce greater late reflection density than 0%");
 
         if (diffRms < 0.001 || (diffRms / (rms0 + 1.0e-9)) < 0.20) {
             std::cerr << "FAIL: Diffusion knob had negligible effect on decay!\n";

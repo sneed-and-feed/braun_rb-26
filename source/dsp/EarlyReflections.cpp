@@ -75,7 +75,10 @@ inline float EarlyReflections::processAllpass(size_t index, float input, float d
     const size_t writeIdx = mAllpassWriteIndices[index];
     const float delayed = mAllpassBuffers[index][writeIdx];
 
-    const float g = 0.70f * density;
+    // Perceptual curve mapping and expanded feedback depth (up to 0.74f)
+    // Guarantees contractive stability (|g| < 1.0) with audible transient smearing
+    const float effDensity = std::sqrt(std::clamp(density, 0.0f, 1.0f));
+    const float g = 0.74f * effDensity;
     const float output = -g * input + delayed;
     mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
 

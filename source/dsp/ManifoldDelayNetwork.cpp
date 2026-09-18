@@ -274,9 +274,12 @@ void ManifoldDelayNetwork::updateFilterCoefficients() noexcept {
         baseA2 = 0.0f;
     }
 
-    mDispCoeff1 = baseA1 * mDiffusionDensity;
-    mDispCoeff2 = baseA2 * mDiffusionDensity;
-    const float loopDiffFeedback = 0.50f * mDiffusionDensity;
+    // Perceptual curve mapping and expanded loop feedback depth (up to 0.65f)
+    // Guarantees contractive unitary stability with rapid late-echo smear multiplication
+    const float effDiff = std::sqrt(std::clamp(mDiffusionDensity, 0.0f, 1.0f));
+    mDispCoeff1 = baseA1 * effDiff;
+    mDispCoeff2 = baseA2 * effDiff;
+    const float loopDiffFeedback = 0.65f * effDiff;
 
     for (size_t k = 0; k < kNumLines; ++k) {
         mDispersionStage1[k].setCoeff(mDispCoeff1);
@@ -393,8 +396,8 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
 
         // 6. Manifold-specific resonant loop filtering (continuous filter tracking prevents click upon unfreezing)
         if (mCurrentManifold == ManifoldType::WhisperingGallery) {
-            // High-frequency caustic peaking filter (+3.5 dB at 9.5 kHz) + ultrasonic lowpass
-            const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s));
+            // High-frequency caustic peaking filter (+3.5 dB at 9.5 kHz) + ultrasonic lowpass with -0.9 dB trim to bound loop gain <= 1.0
+            const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s)) * 0.90f;
             s = (1.0f - freeze) * pf + freeze * s;
         } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
             // Sitka spruce body formants (A0, T1, Wood fiber) with -6 dB loop trim to ensure max loop gain <= 0.95

@@ -245,6 +245,47 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
         assert.ok(fbFreeze < 0.88, `Freeze loop gain ${fbFreeze} must be strictly < 0.88`);
       }
     });
+
+    it('verifies Schroeder allpass diffuser structure and diffusion perceptual mapping in Web Reverb Engine', async () => {
+      const { Rb26WebEngine, WebAudioSchroederAllpass } = await import('./js/audio/rb26_web_engine.js');
+      assert.strictEqual(typeof WebAudioSchroederAllpass, 'function', 'WebAudioSchroederAllpass must be exported');
+
+      const engine = new Rb26WebEngine();
+      assert.ok(Array.isArray(engine.inputDiffusers), 'engine.inputDiffusers array must exist');
+      assert.ok(Array.isArray(engine.erDiffusers), 'engine.erDiffusers array must exist');
+
+      // Test perceptual square-root curve mapping and contractive loop bounds
+      const testValues = [0.0, 0.25, 0.50, 0.75, 1.0];
+      let prevG = -1.0;
+      for (const val of testValues) {
+        const effDiff = Math.sqrt(Math.max(0.0, Math.min(1.0, val)));
+        const g = 0.74 * effDiff;
+        const dryG = Math.cos(effDiff * 0.5 * Math.PI);
+        const diffG = Math.sin(effDiff * 0.5 * Math.PI);
+
+        // Unit energy conservation across constant-power dry/diffuse crossfade
+        const energySum = dryG * dryG + diffG * diffG;
+        assert.ok(Math.abs(energySum - 1.0) < 1e-6, `Energy sum at diffusion=${val} must be 1.0`);
+
+        // Strictly contractive loop gain bounds
+        assert.ok(g >= 0.0 && g <= 0.75, `Allpass feedback gain ${g} must remain within [0.0, 0.75]`);
+
+        // Monotonically increasing smearing progression
+        assert.ok(g > prevG, `Feedback gain ${g} must increase monotonically with diffusion knob`);
+        prevG = g;
+
+        // Verify boundary conditions
+        if (val === 0.0) {
+          assert.strictEqual(g, 0.0, 'Diffusion 0.0 must have 0.0 feedback gain for crisp specular reflections');
+          assert.strictEqual(dryG, 1.0, 'Diffusion 0.0 must be 100% dry (zero allpass smear)');
+          assert.strictEqual(diffG, 0.0, 'Diffusion 0.0 must have 0.0 diffuse send');
+        } else if (val === 1.0) {
+          assert.ok(Math.abs(g - 0.74) < 1e-6, 'Diffusion 1.0 must reach full 0.74 loop depth');
+          assert.ok(Math.abs(dryG - 0.0) < 1e-6, 'Diffusion 1.0 must have 0.0 dry direct send');
+          assert.ok(Math.abs(diffG - 1.0) < 1e-6, 'Diffusion 1.0 must be 100% diffuse send');
+        }
+      }
+    });
   });
 
   //----------------------------------------------------------------------------

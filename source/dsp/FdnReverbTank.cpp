@@ -118,7 +118,10 @@ inline float FdnReverbTank::processAllpass(size_t index, float input, float dens
     }
     const float delayed = mAllpassBuffers[index][writeIdx];
 
-    const float g = 0.70f * density;
+    // Perceptual curve mapping and expanded feedback depth (up to 0.74f)
+    // Guarantees contractive stability (|g| < 1.0) with audible transient smearing
+    const float effDensity = std::sqrt(std::clamp(density, 0.0f, 1.0f));
+    const float g = 0.74f * effDensity;
     const float output = -g * input + delayed;
     mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
 
@@ -190,8 +193,10 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     }
     mManifoldNetwork.writeFeedback(saturated);
 
-    // 6. Balanced stereo output extraction according to active manifold geometry
+    // 6. Balanced stereo output extraction according to active manifold geometry with guaranteed <= 1.05f bounds
     mManifoldNetwork.extractStereo(y, outLateL, outLateR);
+    outLateL = applySmoothBoundaryKnee(outLateL, 0.95f, 1.05f);
+    outLateR = applySmoothBoundaryKnee(outLateR, 0.95f, 1.05f);
 }
 
 void FdnReverbTank::processBlock(const float* inL, const float* inR,
