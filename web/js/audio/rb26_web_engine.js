@@ -265,6 +265,7 @@ export class Rb26WebEngine {
       dimmerInterval: -12,
       pitchBlend: 0.0,
       pitchFeedback: 0.45,
+      pitchBoost: 0.0,
       tailModRateHz: 0.65,
       tailModDepthMs: 1.2,
       tailBloomMs: 85.0,
@@ -725,7 +726,19 @@ export class Rb26WebEngine {
       this.earlyReflectionsBus.connect(this.earlyMixGain);
     }
     this.hermiteSaturator.connect(this.lateMixGain);
-    this.pitchReturnBus.connect(this.lateMixGain);
+
+    // Pitch Booster Drive with Hermite Soft Saturation before Late Mix
+    this.pitchBoostGain = ctx.createGain();
+    const boostLinear = Math.pow(10, (this.params.pitchBoost || 0.0) / 20);
+    this.pitchBoostGain.gain.setValueAtTime(boostLinear, ctx.currentTime);
+
+    this.pitchHermiteSaturator = ctx.createWaveShaper();
+    this.pitchHermiteSaturator.curve = this._generateHermiteCurve();
+    this.pitchHermiteSaturator.oversample = '2x';
+
+    this.pitchReturnBus.connect(this.pitchBoostGain);
+    this.pitchBoostGain.connect(this.pitchHermiteSaturator);
+    this.pitchHermiteSaturator.connect(this.lateMixGain);
 
     this.wetSumBus = ctx.createGain();
     this.wetSumBus.gain.setValueAtTime(0.707, ctx.currentTime); // -3dB summing headroom
@@ -1095,6 +1108,11 @@ export class Rb26WebEngine {
         this.pitchFeedbackGain.gain.value = 0.0;
         try { this.pitchFeedbackGain.gain.setValueAtTime(0.0, now); } catch (_) {}
       }
+      if (this.pitchBoostGain) {
+        try { if (this.pitchBoostGain.gain.cancelScheduledValues) this.pitchBoostGain.gain.cancelScheduledValues(0); } catch (_) {}
+        this.pitchBoostGain.gain.value = 0.0;
+        try { this.pitchBoostGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
 
       // Flush and replace all delay lines so trapped audio is 100% eliminated
       this.flushDelayLines();
@@ -1134,6 +1152,11 @@ export class Rb26WebEngine {
         const pFb = this.params.pitchFeedback * 0.30;
         this.pitchFeedbackGain.gain.value = pFb;
         try { this.pitchFeedbackGain.gain.setValueAtTime(pFb, now); } catch (_) {}
+      }
+      if (this.pitchBoostGain) {
+        const boostLinear = Math.pow(10, (this.params.pitchBoost || 0.0) / 20);
+        this.pitchBoostGain.gain.value = boostLinear;
+        try { this.pitchBoostGain.gain.setValueAtTime(boostLinear, now); } catch (_) {}
       }
     }
   }
@@ -1360,6 +1383,12 @@ export class Rb26WebEngine {
       case 'pitchFeedback':
         if (this.pitchFeedbackGain) {
           this.pitchFeedbackGain.gain.setTargetAtTime(value * 0.30, now, 0.02);
+        }
+        break;
+      case 'pitchBoost':
+        if (this.pitchBoostGain) {
+          const gainLin = Math.pow(10, value / 20);
+          this.pitchBoostGain.gain.setTargetAtTime(gainLin, now, 0.02);
         }
         break;
       case 'tailModRateHz': {

@@ -104,6 +104,7 @@ void BRAUN_RB26AudioProcessor::setCurrentProgram(int index)
     setParamFloat(rb26::ParamIDs::stereoWidth, p.stereoWidth);
     setParamFloat(rb26::ParamIDs::outputTrimDb, p.outputTrimDb);
     setParamBool(rb26::ParamIDs::limiterEnable, p.limiterEnable);
+    setParamFloat(rb26::ParamIDs::pitchBoost, p.pitchBoostDb);
 }
 
 const juce::String BRAUN_RB26AudioProcessor::getProgramName(int index)

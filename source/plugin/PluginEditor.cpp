@@ -1787,7 +1787,7 @@ void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
     }
 
     // DECK 4: PITCH DIFFUSION (Row 1, Col 0)
-    // 5 Knobs: shimmer_send, dimmer_send, pitch_blend, pitch_feedback, pitch_delay_ms
+    // 6 Knobs: shimmer_send, dimmer_send, pitch_blend, pitch_feedback, pitch_delay_ms, pitch_boost
     // 2 Combos: shimmer_interval, dimmer_interval
     {
         auto cell = getCellBounds(1, 0);
@@ -1806,9 +1806,10 @@ void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
         layoutKnob(findKnob(rb26::ParamIDs::dimmerSend), topRow.removeFromLeft(topW).reduced(2));
         layoutKnob(findKnob(rb26::ParamIDs::pitchBlend), topRow.reduced(2));
 
-        const int btmW = bottomRow.getWidth() / 2;
+        const int btmW = bottomRow.getWidth() / 3;
         layoutKnob(findKnob(rb26::ParamIDs::pitchFeedback), bottomRow.removeFromLeft(btmW).reduced(2));
-        layoutKnob(findKnob(rb26::ParamIDs::pitchDelayMs), bottomRow.reduced(2));
+        layoutKnob(findKnob(rb26::ParamIDs::pitchDelayMs), bottomRow.removeFromLeft(btmW).reduced(2));
+        layoutKnob(findKnob(rb26::ParamIDs::pitchBoost), bottomRow.reduced(2));
     }
 
     // DECK 5: TAIL MODULATION (Row 1, Col 1)

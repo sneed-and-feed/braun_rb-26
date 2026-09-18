@@ -105,7 +105,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 180, damping_low: 1.0, low_punch: 65, mono_bass: 120,
       rt60_decay: 6.5, room_size: 100, damping_high: 1800, decay_hold: false,
       shimmer_send: 40, dimmer_send: 35, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 0, pitch_regen: 45,
+      shimmer_dimmer_blend: 0, pitch_regen: 45, pitch_boost: 0.0,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
       stereo_width: 100, early_late_mix: 50, dry_wet_mix: 40, output_trim: 0.0,
       soft_limiter: true
@@ -118,7 +118,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 200, damping_low: 0.85, low_punch: 50, mono_bass: 140,
       rt60_decay: 9.5, room_size: 130, damping_high: 9500, decay_hold: false,
       shimmer_send: 48, dimmer_send: 5, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 100, pitch_regen: 42,
+      shimmer_dimmer_blend: 100, pitch_regen: 42, pitch_boost: 0.0,
       tail_mod_rate: 0.40, tail_mod_depth: 28, tail_bloom: 110,
       stereo_width: 140, early_late_mix: 70, dry_wet_mix: 55, output_trim: 0.0,
       soft_limiter: true
@@ -131,7 +131,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 180, damping_low: 1.0, low_punch: 60, mono_bass: 120,
       rt60_decay: 8.5, room_size: 115, damping_high: 6800, decay_hold: false,
       shimmer_send: 45, dimmer_send: 25, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 40, pitch_regen: 50,
+      shimmer_dimmer_blend: 40, pitch_regen: 50, pitch_boost: 0.0,
       tail_mod_rate: 0.65, tail_mod_depth: 40, tail_bloom: 85,
       stereo_width: 120, early_late_mix: 55, dry_wet_mix: 45, output_trim: 0.0,
       soft_limiter: true
@@ -144,7 +144,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 160, damping_low: 0.95, low_punch: 55, mono_bass: 110,
       rt60_decay: 4.8, room_size: 90, damping_high: 5600, decay_hold: false,
       shimmer_send: 15, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 20, pitch_regen: 25,
+      shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_boost: 0.0,
       tail_mod_rate: 0.45, tail_mod_depth: 25, tail_bloom: 70,
       stereo_width: 110, early_late_mix: 45, dry_wet_mix: 38, output_trim: 0.0,
       soft_limiter: true
@@ -157,7 +157,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 220, damping_low: 0.8, low_punch: 70, mono_bass: 130,
       rt60_decay: 3.8, room_size: 85, damping_high: 8500, decay_hold: false,
       shimmer_send: 20, dimmer_send: 5, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 100, pitch_regen: 20,
+      shimmer_dimmer_blend: 100, pitch_regen: 20, pitch_boost: 0.0,
       tail_mod_rate: 0.80, tail_mod_depth: 20, tail_bloom: 45,
       stereo_width: 130, early_late_mix: 40, dry_wet_mix: 35, output_trim: 0.0,
       soft_limiter: true
@@ -170,7 +170,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 180, damping_low: 0.9, low_punch: 45, mono_bass: 120,
       rt60_decay: 18.0, room_size: 175, damping_high: 10000, decay_hold: false,
       shimmer_send: 65, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 75, pitch_regen: 55,
+      shimmer_dimmer_blend: 75, pitch_regen: 55, pitch_boost: 0.0,
       tail_mod_rate: 0.50, tail_mod_depth: 45, tail_bloom: 140,
       stereo_width: 160, early_late_mix: 80, dry_wet_mix: 65, output_trim: -2.0,
       soft_limiter: true
@@ -183,7 +183,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 160, damping_low: 0.9, low_punch: 50, mono_bass: 100,
       rt60_decay: 10.5, room_size: 120, damping_high: 8500, decay_hold: false,
       shimmer_send: 55, dimmer_send: 40, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 25, pitch_regen: 45,
+      shimmer_dimmer_blend: 25, pitch_regen: 45, pitch_boost: 0.0,
       tail_mod_rate: 0.70, tail_mod_depth: 45, tail_bloom: 90,
       stereo_width: 140, early_late_mix: 60, dry_wet_mix: 50, output_trim: 0.0,
       soft_limiter: true
@@ -196,7 +196,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 190, damping_low: 0.85, low_punch: 45, mono_bass: 130,
       rt60_decay: 14.0, room_size: 150, damping_high: 9000, decay_hold: false,
       shimmer_send: 60, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 80, pitch_regen: 50,
+      shimmer_dimmer_blend: 80, pitch_regen: 50, pitch_boost: 0.0,
       tail_mod_rate: 0.55, tail_mod_depth: 50, tail_bloom: 160,
       stereo_width: 150, early_late_mix: 75, dry_wet_mix: 60, output_trim: -1.0,
       soft_limiter: true
@@ -209,7 +209,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 180, damping_low: 1.0, low_punch: 50, mono_bass: 120,
       rt60_decay: 30.0, room_size: 120, damping_high: 8000, decay_hold: true,
       shimmer_send: 45, dimmer_send: 30, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 20, pitch_regen: 50,
+      shimmer_dimmer_blend: 20, pitch_regen: 50, pitch_boost: 0.0,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
       stereo_width: 130, early_late_mix: 70, dry_wet_mix: 55, output_trim: -1.0,
       soft_limiter: true
@@ -222,7 +222,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 180, damping_low: 0.8, low_punch: 85, mono_bass: 150,
       rt60_decay: 4.5, room_size: 80, damping_high: 6500, decay_hold: false,
       shimmer_send: 25, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 10, pitch_regen: 35,
+      shimmer_dimmer_blend: 10, pitch_regen: 35, pitch_boost: 0.0,
       tail_mod_rate: 0.40, tail_mod_depth: 30, tail_bloom: 60,
       stereo_width: 100, early_late_mix: 45, dry_wet_mix: 35, output_trim: 0.0,
       soft_limiter: true
@@ -923,6 +923,8 @@ export class BraunRb26App {
             pitchBlend: { key: 'shimmer_dimmer_blend', scale: 100 },
             pitch_feedback: { key: 'pitch_regen', scale: 100 },
             pitchFeedback: { key: 'pitch_regen', scale: 100 },
+            pitch_boost: { key: 'pitch_boost', scale: 1 },
+            pitchBoost: { key: 'pitch_boost', scale: 1 },
             tail_mod_rate_hz: { key: 'tail_mod_rate', scale: 1 },
             tailModRateHz: { key: 'tail_mod_rate', scale: 1 },
             tail_mod_depth_ms: { key: 'tail_mod_depth', scale: 100 / 3.0 },
@@ -1195,6 +1197,11 @@ export class BraunRb26App {
     this.knobs.pitch_regen = createKnob('knob-pitch-regen', {
       label: 'PITCH REGEN', min: 0, max: 95, step: 1, unit: '%', value: 45, size: 'medium',
       onChange: (v) => { this.engine.setParam('pitchFeedback', v / 100); this._emitJuceParam('pitchFeedback', v / 100); }
+    });
+
+    this.knobs.pitch_boost = createKnob('knob-pitch-boost', {
+      label: 'PITCH BOOST', min: 0, max: 18, step: 0.1, unit: 'dB', value: 0, size: 'medium',
+      onChange: (v) => { this.engine.setParam('pitchBoost', v); this._emitJuceParam('pitchBoost', v); }
     });
 
     // Deck 5: TAIL MODULATION

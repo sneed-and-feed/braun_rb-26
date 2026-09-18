@@ -77,7 +77,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.ok(html.includes('MASTER BUS & MONITOR'), 'Deck 6 title must be present');
     });
 
-    it('verifies 21 rotary knob containers exist in index.html for 24-parameter matrix', () => {
+    it('verifies 22 rotary knob containers exist in index.html for 25-knob matrix', () => {
       const htmlPath = path.join(__dirname, 'index.html');
       const html = fs.readFileSync(htmlPath, 'utf8');
 
@@ -86,6 +86,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
         'knob-low-crossover', 'knob-damping-low', 'knob-low-punch', 'knob-mono-bass',
         'knob-rt60-decay', 'knob-room-size', 'knob-damping-high',
         'knob-shimmer-send', 'knob-dimmer-send', 'knob-shim-dim-blend', 'knob-pitch-regen',
+        'knob-pitch-boost',
         'knob-tail-mod-rate', 'knob-tail-mod-depth', 'knob-tail-bloom',
         'knob-stereo-width', 'knob-early-late-mix', 'knob-dry-wet-mix', 'knob-output-trim'
       ];

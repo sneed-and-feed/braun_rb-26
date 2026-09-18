@@ -45,6 +45,7 @@ struct Rb26Parameters {
     float pitchBlend = 0.0f;        // -1.0 (Dimmer) to +1.0 (Shimmer)
     float pitchFeedback = 0.45f;    // 0.0 - 0.95
     float pitchDelayMs = 150.0f;    // 20.0 - 500.0 ms (Decoupled Pitch Shimmer/Dimmer Delay)
+    float pitchBoostDb = 0.0f;      // 0.0 - 18.0 dB (Pitch Booster Drive)
     
     // Tail-Level Pitch Modulation
     float tailModRateHz = 0.65f;    // 0.05 - 5.0 Hz
@@ -131,6 +132,7 @@ private:
     OnePoleSmoother mPitchFeedbackSmoother;
     OnePoleSmoother mPitchDelaySmoother;
     OnePoleSmoother mPitchBlendSmoother;
+    OnePoleSmoother mPitchBoostSmoother;
 
     // Master bus sub-bass mono collapse filter
     SubBassEllipticalFilter mMasterSubMono;
