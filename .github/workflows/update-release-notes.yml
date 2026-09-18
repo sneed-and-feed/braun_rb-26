@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - '.github/release-notes-v1.3.8.md'
+      - '.github/release-notes-v1.3.9.md'
 
 permissions:
   contents: write
 
 jobs:
   update-notes:
-    name: Update v1.3.8 Release Notes
+    name: Update v1.3.9 Release Notes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -21,4 +21,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit v1.3.8 --notes-file .github/release-notes-v1.3.8.md
+          gh release edit v1.3.9 --notes-file .github/release-notes-v1.3.9.md
