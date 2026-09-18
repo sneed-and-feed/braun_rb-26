@@ -361,6 +361,13 @@ body {
   border-color: var(--braun-amber);
 }
 
+.braun-rocker-btn:not(.is-active) .braun-led,
+.braun-btn:not(.is-active) .braun-led {
+  background-color: var(--border-line) !important;
+  box-shadow: none !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
 /* Discrete Segmented Toggles */
 .braun-segment-group {
   display: inline-flex;
@@ -860,7 +867,7 @@ body {
 }
 
 /* --- Responsive Deck 07 Breakpoints --- */
-@media (max-width: 1139px) {
+@media (max-width: 1040px) {
   .braun-exciter-grid {
     grid-template-columns: 1fr;
   }

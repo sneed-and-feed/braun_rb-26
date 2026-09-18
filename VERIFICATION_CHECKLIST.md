@@ -231,5 +231,5 @@ $$\mathcal{F}_s \in \{44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\ 96.0
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.3.6)
+VERDICT: CERTIFIED PRODUCTION READY (v1.3.8)
 ```

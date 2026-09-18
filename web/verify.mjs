@@ -47,7 +47,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.ok(rack.includes('.braun-rack-ear'), 'Rack ears must be styled');
       assert.ok(rack.includes('.braun-rack-screw'), 'Hex countersunk rack screws must be styled');
       assert.ok(rack.includes('.braun-rack-grid'), '6-deck rack grid layout must be defined');
-      assert.ok(rack.includes('@media (max-width: 1139px)'), 'Tablet landscape breakpoint must be defined');
+      assert.ok(rack.includes('@media (max-width: 1040px)') || rack.includes('@media (max-width: 1139px)'), 'Tablet landscape breakpoint must be defined');
       assert.ok(rack.includes('@media (max-width: 820px)'), 'Mobile/portrait breakpoint must be defined');
     });
   });

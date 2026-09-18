@@ -17,6 +17,13 @@ import { BraunCrtDisplay } from './ui/crt-display.js';
 import { BraunVectorPad } from './ui/vector-pad.js';
 import { Rb26WebEngine } from './audio/rb26_web_engine.js';
 
+// Suppress default browser context menu in WebView / Browser
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('contextmenu', function(e) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+  });
+}
+
 // Modal Scale Definitions matching AS-42
 export const SCALES = {
   BUDD_PENTATONIC: { name: 'BUDD PENTATONIC', intervals: [0, 2, 4, 7, 9] },
@@ -486,6 +493,8 @@ export class ReverbComparisonBuffer {
         const holdBtn = document.getElementById('btn-decay-hold');
         if (holdBtn) {
           holdBtn.classList.toggle('is-active', snapshot.decay_hold);
+          const led = holdBtn.querySelector('.braun-led');
+          if (led) led.classList.toggle('is-active', snapshot.decay_hold);
           const statusText = holdBtn.querySelector('.braun-status-text');
           if (statusText) statusText.textContent = snapshot.decay_hold ? 'FREEZE ON' : 'FREEZE OFF';
           if (this.app.engine) this.app.engine.setParam('freezeHold', snapshot.decay_hold);
@@ -495,6 +504,8 @@ export class ReverbComparisonBuffer {
         const limBtn = document.getElementById('btn-soft-limiter');
         if (limBtn) {
           limBtn.classList.toggle('is-active', snapshot.soft_limiter);
+          const led = limBtn.querySelector('.braun-led');
+          if (led) led.classList.toggle('is-active', snapshot.soft_limiter);
           if (this.app.engine) this.app.engine.setParam('limiterEnable', snapshot.soft_limiter);
         }
       }
@@ -619,6 +630,8 @@ export class BraunRb26App {
     const powerBtn = document.getElementById('btn-power');
     if (powerBtn) {
       powerBtn.classList.toggle('is-active', this.isPowered);
+      const led = powerBtn.querySelector('.braun-led');
+      if (led) led.classList.toggle('is-active', this.isPowered);
       const statusText = powerBtn.querySelector('.braun-status-text');
       if (statusText) statusText.textContent = this.isPowered ? 'POWER ON' : 'STANDBY';
     }
@@ -776,6 +789,8 @@ export class BraunRb26App {
         const powerBtn = document.getElementById('btn-power');
         if (powerBtn) {
           powerBtn.classList.add('is-active');
+          const led = powerBtn.querySelector('.braun-led');
+          if (led) led.classList.add('is-active');
           const statusText = powerBtn.querySelector('.braun-status-text');
           if (statusText) statusText.textContent = 'POWER ON';
         }
@@ -808,6 +823,8 @@ export class BraunRb26App {
             const holdBtn = document.getElementById('btn-decay-hold');
             if (holdBtn) {
               holdBtn.classList.toggle('is-active', isHeld);
+              const led = holdBtn.querySelector('.braun-led');
+              if (led) led.classList.toggle('is-active', isHeld);
               const statusText = holdBtn.querySelector('.braun-status-text');
               if (statusText) statusText.textContent = isHeld ? 'FREEZE ON' : 'FREEZE OFF';
             }
@@ -820,6 +837,8 @@ export class BraunRb26App {
             const limBtn = document.getElementById('btn-soft-limiter');
             if (limBtn) {
               limBtn.classList.toggle('is-active', isLim);
+              const led = limBtn.querySelector('.braun-led');
+              if (led) led.classList.toggle('is-active', isLim);
             }
             if (this.engine) this.engine.setParam('limiterEnable', isLim);
             return;
@@ -898,7 +917,8 @@ export class BraunRb26App {
           if (entry) {
             const knob = this.knobs[entry.key];
             if (knob && typeof knob.setValue === 'function') {
-              if (knob.isDragging) return; // Prevent stale host echo from overriding user's active drag
+              const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+              if (knob.isDragging || (now - (knob.lastUserInteractionTime || 0) < 250)) return;
               knob.setValue(data.value * entry.scale, false);
             }
           }
@@ -1081,7 +1101,7 @@ export class BraunRb26App {
     });
 
     this.knobs.input_trim = createKnob('knob-input-trim', {
-      label: 'INPUT TRIM', min: -24, max: 12, step: 0.5, unit: 'dB', value: 0, size: 'small',
+      label: 'INPUT TRIM', min: -18, max: 18, step: 0.5, unit: 'dB', value: 0, size: 'small',
       onChange: (v) => { this.engine.setParam('inputTrimDb', v); this._emitJuceParam('inputTrimDb', v); }
     });
 
@@ -1258,11 +1278,28 @@ export class BraunRb26App {
       });
     }
 
+    // UI Mode button (Switch to Native DAW UI)
+    const uiModeBtn = document.getElementById('btn-ui-mode');
+    if (uiModeBtn) {
+      uiModeBtn.addEventListener('click', () => {
+        if (typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
+          try {
+            window.__JUCE__.backend.emitEvent('paramChange', { id: 'toggleNativeUI', value: 1 });
+          } catch (err) {
+            console.warn('JUCE backend emitEvent toggleNativeUI error:', err);
+          }
+        }
+        this._emitJuceParam('toggleNativeUI', 1, true);
+      });
+    }
+
     // Freeze / Hold rocker button
     const holdBtn = document.getElementById('btn-decay-hold');
     if (holdBtn) {
       holdBtn.addEventListener('click', () => {
         const isHeld = holdBtn.classList.toggle('is-active');
+        const led = holdBtn.querySelector('.braun-led');
+        if (led) led.classList.toggle('is-active', isHeld);
         const statusText = holdBtn.querySelector('.braun-status-text');
         if (statusText) statusText.textContent = isHeld ? 'FREEZE ON' : 'FREEZE OFF';
         this.engine.setParam('freezeHold', isHeld);
@@ -1276,6 +1313,8 @@ export class BraunRb26App {
     if (limiterBtn) {
       limiterBtn.addEventListener('click', () => {
         const isActive = limiterBtn.classList.toggle('is-active');
+        const led = limiterBtn.querySelector('.braun-led');
+        if (led) led.classList.toggle('is-active', isActive);
         this.engine.setParam('limiterEnable', isActive);
         this._emitJuceParam('limiterEnable', isActive ? 1.0 : 0.0);
         this._emitJuceParam('limiter_enable', isActive ? 1.0 : 0.0);
@@ -1601,6 +1640,8 @@ export class BraunRb26App {
       if (holdBtn) {
         const isHold = Boolean(params.decay_hold);
         holdBtn.classList.toggle('is-active', isHold);
+        const led = holdBtn.querySelector('.braun-led');
+        if (led) led.classList.toggle('is-active', isHold);
         const statusText = holdBtn.querySelector('.braun-status-text');
         if (statusText) statusText.textContent = isHold ? 'FREEZE ON' : 'FREEZE OFF';
         this.engine.setParam('freezeHold', isHold);
@@ -1613,6 +1654,8 @@ export class BraunRb26App {
       if (limBtn) {
         const isLim = Boolean(params.soft_limiter);
         limBtn.classList.toggle('is-active', isLim);
+        const led = limBtn.querySelector('.braun-led');
+        if (led) led.classList.toggle('is-active', isLim);
         this.engine.setParam('limiterEnable', isLim);
         this._emitJuceParam('limiterEnable', isLim ? 1 : 0);
       }
@@ -1668,6 +1711,8 @@ export class BraunRb26App {
     if (holdBtn && preset.params.decay_hold !== undefined) {
       const isHold = Boolean(preset.params.decay_hold);
       holdBtn.classList.toggle('is-active', isHold);
+      const led = holdBtn.querySelector('.braun-led');
+      if (led) led.classList.toggle('is-active', isHold);
       const statusText = holdBtn.querySelector('.braun-status-text');
       if (statusText) statusText.textContent = isHold ? 'FREEZE ON' : 'FREEZE OFF';
       this.engine.setParam('freezeHold', isHold);
@@ -1678,6 +1723,8 @@ export class BraunRb26App {
     if (limBtn && preset.params.soft_limiter !== undefined) {
       const isLim = Boolean(preset.params.soft_limiter);
       limBtn.classList.toggle('is-active', isLim);
+      const led = limBtn.querySelector('.braun-led');
+      if (led) led.classList.toggle('is-active', isLim);
       this.engine.setParam('limiterEnable', isLim);
       this._emitJuceParam('limiterEnable', isLim ? 1 : 0);
     }
@@ -2767,6 +2814,8 @@ export class BraunRb26App {
     const poissonBtn = document.getElementById('btn-poisson-toggle');
     if (poissonBtn) {
       poissonBtn.classList.toggle('is-active', this.isPoissonRunning);
+      const led = poissonBtn.querySelector('.braun-led');
+      if (led) led.classList.toggle('is-active', this.isPoissonRunning);
     }
 
     if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
@@ -2795,7 +2844,11 @@ export class BraunRb26App {
       if (!this.isPoissonRunning || !this.isPowered) {
         this.isPoissonRunning = false;
         const poissonBtn = document.getElementById('btn-poisson-toggle');
-        if (poissonBtn) poissonBtn.classList.remove('is-active');
+        if (poissonBtn) {
+          poissonBtn.classList.remove('is-active');
+          const led = poissonBtn.querySelector('.braun-led');
+          if (led) led.classList.remove('is-active');
+        }
         return;
       }
       if (this.isJuce) return;
@@ -2895,6 +2948,8 @@ export class BraunRb26App {
         const holdBtn = document.getElementById('btn-decay-hold');
         if (holdBtn) {
           holdBtn.classList.toggle('is-active', isHeld);
+          const led = holdBtn.querySelector('.braun-led');
+          if (led) led.classList.toggle('is-active', isHeld);
           const statusText = holdBtn.querySelector('.braun-status-text');
           if (statusText) statusText.textContent = isHeld ? 'FREEZE ON' : 'FREEZE OFF';
         }

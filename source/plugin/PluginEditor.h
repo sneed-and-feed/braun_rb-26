@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_data_structures/juce_data_structures.h>
 #include "PluginProcessor.h"
 #include "Parameters.h"
 #include "LookAndFeel/BraunLookAndFeel.h"
@@ -26,9 +27,12 @@ public:
     // APVTS Listener callback
     void parameterChanged(const juce::String& parameterID, float newValue) override;
 
-    // Native vs WebView GUI switching
+    // Native vs WebView GUI switching & persistence
     bool isNativeModeActive() const noexcept { return useNativeUI; }
     void setNativeMode(bool native);
+    static juce::File getSettingsFile();
+    static bool loadPersistedNativeUIPreference();
+    static void savePersistedNativeUIPreference(bool native);
 
 #if JUCE_WEB_BROWSER
     // Web Integration & Bridge Methods

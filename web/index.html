@@ -71,6 +71,9 @@
               </select>
             </div>
 
+            <!-- UI Mode Selector (Switch to Native DAW UI) -->
+            <button id="btn-ui-mode" class="braun-btn" title="Switch to Native DAW UI"><span>UI: NATIVE</span></button>
+
             <!-- Patch Management Utilities -->
             <button id="btn-save-patch" class="braun-btn" title="Save Custom Patch to Local Storage">
               <span>SAVE</span>
@@ -497,6 +500,9 @@
 
   </div>
 
+  <script>
+    window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+  </script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -29,6 +29,7 @@ export class BraunKnob {
     this.onDragEnd = options.onDragEnd || null;
 
     this.isDragging = false;
+    this.lastUserInteractionTime = 0;
     this._lastFormatted = '';
     this._lastAria = null;
 
@@ -164,11 +165,13 @@ export class BraunKnob {
       }
 
       this.isDragging = true;
+      this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       startVal = this.value;
       lastShift = Boolean(e.shiftKey);
       this.element.classList.add('is-active');
 
       const applyDeltaY = (currentY, shiftKey) => {
+        this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         const currentShift = Boolean(shiftKey);
         if (currentShift !== lastShift) {
           // Re-anchor start values when Shift modifier is pressed/released to eliminate sudden jumps
@@ -282,6 +285,7 @@ export class BraunKnob {
     // Mouse Wheel fine adjustment
     this.element.addEventListener('wheel', (e) => {
       e.preventDefault();
+      this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       const direction = e.deltaY < 0 ? 1 : -1;
       const stepSize = (e.shiftKey ? this.step * 0.1 : this.step);
       this.setValue(this.value + direction * stepSize, true);
@@ -320,6 +324,7 @@ export class BraunKnob {
           break;
       }
       if (handled) {
+        this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         e.preventDefault();
       }
     });
@@ -328,6 +333,7 @@ export class BraunKnob {
     this.element.addEventListener('dblclick', (e) => {
       if (e.target === this.assembly || (this.assembly && this.assembly.contains(e.target))) {
         // Reset to default value on assembly double-click
+        this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         this.setValue(this.defaultValue, true);
         return;
       }
@@ -346,6 +352,7 @@ export class BraunKnob {
     const commit = () => {
       const parsed = parseFloat(this.directInput.value);
       if (!isNaN(parsed)) {
+        this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         this.setValue(parsed, true);
       }
       this.directInput.style.display = 'none';

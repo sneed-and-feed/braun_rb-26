@@ -245,7 +245,7 @@
 }
 
 /* --- Responsive Breakpoint Matrix --- */
-@media (max-width: 1139px) {
+@media (max-width: 1040px) {
   .braun-rack-grid {
     grid-template-columns: 1fr 1fr;
   }

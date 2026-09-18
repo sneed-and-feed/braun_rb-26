@@ -511,7 +511,7 @@ juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOpti
                 .withUserDataFolder(juce::File::getSpecialLocation(juce::File::SpecialLocationType::tempDirectory).getChildFile("BraunRB26_WebView2"))
                 .withBackgroundColour(juce::Colour(0xff141517)))
 #endif
-        .withUserScript("window.__IS_JUCE__ = true;")
+        .withUserScript("window.__IS_JUCE__ = true; window.addEventListener('contextmenu', function(e) { e.preventDefault(); });")
         .withNativeIntegrationEnabled()
         .withResourceProvider([&editor](const juce::String& url) {
             return editor.getResource(url);
@@ -533,6 +533,50 @@ juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOpti
 }
 #endif
 
+juce::File BRAUN_RB26AudioProcessorEditor::getSettingsFile()
+{
+    return juce::File::getSpecialLocation(juce::File::SpecialLocationType::userApplicationDataDirectory)
+        .getChildFile("Braun")
+        .getChildFile("RB26_settings.xml");
+}
+
+bool BRAUN_RB26AudioProcessorEditor::loadPersistedNativeUIPreference()
+{
+    const auto file = getSettingsFile();
+    if (!file.existsAsFile())
+        return false;
+
+    juce::PropertiesFile::Options opts;
+    opts.applicationName = "BRAUN_RB26";
+    opts.filenameSuffix = "xml";
+    opts.storageFormat = juce::PropertiesFile::storeAsXML;
+    opts.ignoreCaseOfKeyNames = true;
+    opts.millisecondsBeforeSaving = 0;
+
+    juce::PropertiesFile props(file, opts);
+    return props.getBoolValue("useNativeUI", false);
+}
+
+void BRAUN_RB26AudioProcessorEditor::savePersistedNativeUIPreference(bool native)
+{
+    const auto file = getSettingsFile();
+    auto parentDir = file.getParentDirectory();
+    if (!parentDir.isDirectory())
+        parentDir.createDirectory();
+
+    juce::PropertiesFile::Options opts;
+    opts.applicationName = "BRAUN_RB26";
+    opts.filenameSuffix = "xml";
+    opts.storageFormat = juce::PropertiesFile::storeAsXML;
+    opts.ignoreCaseOfKeyNames = true;
+    opts.millisecondsBeforeSaving = 0;
+
+    juce::PropertiesFile props(file, opts);
+    props.setValue("useNativeUI", native);
+    props.saveIfNeeded();
+    props.save();
+}
+
 BRAUN_RB26AudioProcessorEditor::BRAUN_RB26AudioProcessorEditor(BRAUN_RB26AudioProcessor& p)
     : AudioProcessorEditor(&p),
       processorRef(p)
@@ -542,11 +586,13 @@ BRAUN_RB26AudioProcessorEditor::BRAUN_RB26AudioProcessorEditor(BRAUN_RB26AudioPr
 
     setupNativeControls();
 
+    const bool defaultToNative = loadPersistedNativeUIPreference();
+
 #if JUCE_WEB_BROWSER
     webComponent = std::make_unique<juce::WebBrowserComponent>(createWebOptions(*this));
     webComponent->setOpaque(true);
     addAndMakeVisible(*webComponent);
-    useNativeUI = false;
+    useNativeUI = defaultToNative;
     webComponent->goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
 #else
     useNativeUI = true;
@@ -555,10 +601,10 @@ BRAUN_RB26AudioProcessorEditor::BRAUN_RB26AudioProcessorEditor(BRAUN_RB26AudioPr
     setNativeMode(useNativeUI);
     registerParameterListeners();
 
-    // 19" studio rack aspect ratio: 1080x720 default, resizable
-    setSize(1080, 720);
+    // 19" studio rack aspect ratio: 1280x760 default, resizable
+    setSize(1280, 760);
     setResizable(true, true);
-    setResizeLimits(800, 560, 2560, 1440);
+    setResizeLimits(960, 600, 2560, 1440);
 
     // 60 Hz telemetry polling timer for smooth phosphor CRT waterfall and goniometer
     startTimerHz(60);
@@ -857,7 +903,7 @@ void BRAUN_RB26AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         incomingId.equalsIgnoreCase("nativeUI") || 
         incomingId.equalsIgnoreCase("switchUI"))
     {
-        setNativeMode(true);
+        setNativeMode(!useNativeUI);
         return;
     }
 
@@ -1501,11 +1547,14 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
 void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
 {
     useNativeUI = native;
+    savePersistedNativeUIPreference(useNativeUI);
 
 #if JUCE_WEB_BROWSER
     if (webComponent != nullptr)
     {
         webComponent->setVisible(!useNativeUI);
+        if (!useNativeUI)
+            webComponent->setBounds(getLocalBounds());
     }
     viewModeButton.setVisible(useNativeUI);
     viewModeButton.setButtonText("SWITCH TO WEB UI");
