@@ -111,12 +111,9 @@ int main() {
         rb26::Rb26ReverbEngine engine;
         engine.prepare(fs, 512);
 
-        rb26::Rb26Parameters p;
-        p.dryWetMix = 0.5f;
-        p.earlyLateMix = 0.5f;
-        p.decayRt60Sec = 3.5f;
-        p.diffusionDensity = 0.75f;
-        p.freezeHold = false;
+        auto presets = rb26::Rb26ReverbEngine::getFactoryPresets();
+        rb26::Rb26Parameters p = presets[8].params; // INFINITE_ETHEREAL_FREEZE
+        p.freezeHold = false; // Start with freeze OFF so audio fills the tank
         engine.setParameters(p);
 
         // Inject 4800 samples of 440 Hz audio
@@ -172,6 +169,36 @@ int main() {
             return 1;
         }
         std::cout << "  -> PASS: Rb26ReverbEngine sustained freeze hold cleanly!\n";
+
+        // Audit unfreezing:
+        p.freezeHold = false;
+        engine.setParameters(p);
+        double unfreezeRms1s = 0.0;
+        double unfreezeRms2s = 0.0;
+        double unfreezeRms4s = 0.0;
+        for (int b = 0; b < 400; ++b) {
+            engine.process(inCh, outCh, 2, 512);
+            if (b >= 90 && b < 100) { // ~1 second after unfreeze
+                for (int i = 0; i < 512; ++i) unfreezeRms1s += (outL[i] * outL[i] + outR[i] * outR[i]);
+            }
+            if (b >= 190 && b < 200) { // ~2 seconds after unfreeze
+                for (int i = 0; i < 512; ++i) unfreezeRms2s += (outL[i] * outL[i] + outR[i] * outR[i]);
+            }
+            if (b >= 390 && b < 400) { // ~4 seconds after unfreeze
+                for (int i = 0; i < 512; ++i) unfreezeRms4s += (outL[i] * outL[i] + outR[i] * outR[i]);
+            }
+        }
+        unfreezeRms1s = std::sqrt(unfreezeRms1s / (10 * 1024.0));
+        unfreezeRms2s = std::sqrt(unfreezeRms2s / (10 * 1024.0));
+        unfreezeRms4s = std::sqrt(unfreezeRms4s / (10 * 1024.0));
+        std::cout << "  [AUDIT] After unfreeze: 1s RMS = " << unfreezeRms1s
+                  << " | 2s RMS = " << unfreezeRms2s
+                  << " | 4s RMS = " << unfreezeRms4s << "\n";
+        if (unfreezeRms2s >= 0.01) {
+            std::cerr << "FAIL: Unfreeze decay did not release sufficiently within 2s (RMS: " << unfreezeRms2s << " >= 0.01)!\n";
+            return 1;
+        }
+        std::cout << "  -> PASS: Reverb cleanly released after unfreeze within 2s (RMS < 0.01)!\n";
     }
 
     // -------------------------------------------------------------------------

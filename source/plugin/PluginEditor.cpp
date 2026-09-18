@@ -277,12 +277,15 @@ paramsMeta.forEach(p => {
       <button id="ctrl_${p.id}">${p.def ? 'ON' : 'OFF'}</button>
     `;
     const btn = ku.querySelector('button');
-    let state = !!p.def;
+    btn.dataset.state = p.def ? '1' : '0';
+    btn.style.color = p.def ? 'var(--braun-orange)' : 'var(--text-main)';
     btn.addEventListener('click', () => {
-      state = !state;
-      btn.textContent = state ? 'ON' : 'OFF';
-      btn.style.color = state ? 'var(--braun-orange)' : 'var(--text-main)';
-      emitParam(p.id, state ? 1 : 0);
+      const curState = btn.dataset.state === '1';
+      const newState = !curState;
+      btn.dataset.state = newState ? '1' : '0';
+      btn.textContent = newState ? 'ON' : 'OFF';
+      btn.style.color = newState ? 'var(--braun-orange)' : 'var(--text-main)';
+      emitParam(p.id, newState ? 1 : 0);
     });
   } else {
     ku.innerHTML = `
@@ -446,8 +449,10 @@ if (window.__JUCE__ && window.__JUCE__.backend) {
     const valDisp = document.getElementById('val_' + p.id);
     if (ctrl) {
       if (p.isBool) {
-        ctrl.textContent = data.value > 0.5 ? 'ON' : 'OFF';
-        ctrl.style.color = data.value > 0.5 ? 'var(--braun-orange)' : 'var(--text-main)';
+        const isTrue = data.value > 0.5;
+        ctrl.dataset.state = isTrue ? '1' : '0';
+        ctrl.textContent = isTrue ? 'ON' : 'OFF';
+        ctrl.style.color = isTrue ? 'var(--braun-orange)' : 'var(--text-main)';
       } else if (p.isChoice) {
         ctrl.value = Math.round(data.value);
       } else {

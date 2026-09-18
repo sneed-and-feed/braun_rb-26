@@ -137,9 +137,20 @@ void Rb26ReverbEngine::reset() noexcept {
 
     mTelemetryWriteIndex.store(0, std::memory_order_relaxed);
     mTelemetryReadIndex.store(0, std::memory_order_relaxed);
+    mWasFrozen = false;
 }
 
 void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
+    const bool unfreezeEdge = (mWasFrozen && !params.freezeHold);
+    mWasFrozen = params.freezeHold;
+
+    if (unfreezeEdge) {
+        std::fill(mPitchDelayBufferL.begin(), mPitchDelayBufferL.end(), 0.0f);
+        std::fill(mPitchDelayBufferR.begin(), mPitchDelayBufferR.end(), 0.0f);
+        mLastPitchFbL = 0.0f;
+        mLastPitchFbR = 0.0f;
+    }
+
     if (params.freezeHold && mIsIdle) {
         mIsIdle = false;
         mSilentSamplesCount = 0;
@@ -805,7 +816,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.bassRt60Mult = 1.0f;
         p.params.punchDucking = 0.50f;
         p.params.subMonoHz = 120.0f;
-        p.params.decayRt60Sec = 30.0f;
+        p.params.decayRt60Sec = 4.5f;
         p.params.roomSize = 1.20f;
         p.params.highDampingHz = 8000.0f;
         p.params.freezeHold = true;
@@ -814,7 +825,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.shimmerInterval = 12;
         p.params.dimmerInterval = -12;
         p.params.pitchBlend = 0.20f;
-        p.params.pitchFeedback = 0.50f;
+        p.params.pitchFeedback = 0.25f;
         p.params.tailModRateHz = 0.65f;
         p.params.tailModDepthMs = 2.25f;
         p.params.tailBloomMs = 85.0f;

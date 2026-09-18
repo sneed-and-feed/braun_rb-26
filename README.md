@@ -1,10 +1,10 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.4.3](https://img.shields.io/badge/Version-1.4.3-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.3)
+[![Version: 1.4.4](https://img.shields.io/badge/Version-1.4.4-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.4)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.3/BRAUN_RB26-v1.4.3-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.3/BRAUN_RB26-v1.4.3-macOS-Universal.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -17,9 +17,9 @@
 
 ---
 
-### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.3)
-* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.3-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.3/BRAUN_RB26-v1.4.3-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
-* **Windows x64**: **[`BRAUN_RB26-v1.4.3-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.3/BRAUN_RB26-v1.4.3-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.3/BRAUN_RB26-v1.4.3-VST3-Windows-x64.zip)** (~3 MB).
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.4)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.4-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.4.4-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-VST3-Windows-x64.zip)** (~3 MB).
 * Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
 * **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
@@ -28,11 +28,11 @@
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
 > [!TIP]
-> **What's New in v1.4.3 (Window Integrity, Non-Destructive UI Switching & Persistence Fix)**:
-> - **Win32 Window Integrity**: Removed `EnumChildWindows` and `SetWindowLongPtr` style mutations on the host window HWND (`WS_CLIPCHILDREN`), resolving Win32 painting and compositing breakage upon switching between Native and Web UI.
-> - **Non-Destructive Web Browser Lifecycle**: Maintained `webComponent` attached as a child without calling `removeChildComponent`, preventing internal WebView2 peer disconnection and window corruption.
-> - **Startup Persistence & Test Isolation**: Corrected test harness setting pollution in `%APPDATA%\Braun\RB26_settings.xml`, ensuring the plugin cleanly boots into Web UI by default on launch.
-> - **Idempotent IPC & Event Debouncing**: Hardened C++ mode switching and debounced Web UI `uiModeBtn` click events against double-firing and race conditions.
+> **What's New in v1.4.4 (Standalone Freeze / Unfreeze Mechanics & UI Synchronization)**:
+> - **Acoustic Release Calibration**: Recalibrated preset `INFINITE_ETHEREAL_FREEZE` to `decayRt60Sec = 4.5s` and `pitchFeedback = 0.25` so toggling freeze off audibly and cleanly releases within 2–4.5s instead of lingering indefinitely.
+> - **Input Excitation During Freeze**: Enhanced FDN input smoother during freeze hold to `0.08f` (-22 dB), allowing live chords, chimes, and exciter impulses to swell into the frozen reverb tank.
+> - **Pitch Delay Quenching on Unfreeze Edge**: Cleared residual delayed pitch feedback loops (`mPitchDelayBuffer` and `mLastPitchFb`) on unfreeze edges to eliminate re-pumping of old frozen audio into the tank.
+> - **Fallback & Web UI Synchronization**: Synchronized `dataset.state` on boolean toggle buttons and immediate dual-identifier IPC (`freezeHold` and `freeze_hold`) to ensure the APVTS and GUI stay strictly locked in standalone and plugin modes.
 
 ---
 

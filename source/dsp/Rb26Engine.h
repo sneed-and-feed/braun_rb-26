@@ -168,6 +168,8 @@ private:
     float mDecayPeakFollower { 0.0f };
     int mTelemetryDecimator { 0 };
 
+    bool mWasFrozen { false };
+
     void pushVisualizerFrame(const VisualizerFrame& frame) noexcept;
 };
 

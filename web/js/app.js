@@ -207,9 +207,9 @@ export const FACTORY_PRESETS = {
     params: {
       predelay: 20.0, diffusion: 90, input_trim: 0.0,
       low_crossover: 180, damping_low: 1.0, low_punch: 50, mono_bass: 120,
-      rt60_decay: 30.0, room_size: 120, damping_high: 8000, decay_hold: true,
+      rt60_decay: 4.5, room_size: 120, damping_high: 8000, decay_hold: true,
       shimmer_send: 45, dimmer_send: 30, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 20, pitch_regen: 50, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_boost: 0.0,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
       stereo_width: 130, early_late_mix: 70, dry_wet_mix: 55, output_trim: -1.0,
       soft_limiter: true
@@ -1758,7 +1758,8 @@ export class BraunRb26App {
         const statusText = holdBtn.querySelector('.braun-status-text');
         if (statusText) statusText.textContent = isHold ? 'FREEZE ON' : 'FREEZE OFF';
         this.engine.setParam('freezeHold', isHold);
-        this._emitJuceParam('freezeHold', isHold ? 1 : 0);
+        this._emitJuceParam('freezeHold', isHold ? 1.0 : 0.0, true);
+        this._emitJuceParam('freeze_hold', isHold ? 1.0 : 0.0, true);
       }
     }
 
@@ -1847,7 +1848,8 @@ export class BraunRb26App {
       const statusText = holdBtn.querySelector('.braun-status-text');
       if (statusText) statusText.textContent = isHold ? 'FREEZE ON' : 'FREEZE OFF';
       this.engine.setParam('freezeHold', isHold);
-      this._emitJuceParam('freezeHold', isHold ? 1 : 0);
+      this._emitJuceParam('freezeHold', isHold ? 1.0 : 0.0, true);
+      this._emitJuceParam('freeze_hold', isHold ? 1.0 : 0.0, true);
     }
 
     const limBtn = document.getElementById('btn-soft-limiter');

@@ -50,7 +50,7 @@ void FdnReverbTank::reset() noexcept {
         mDcBlockers[k].reset();
     }
 
-    mFreezeInputSmoother.reset(mFreezeHold ? 0.0f : 1.0f);
+    mFreezeInputSmoother.reset(mFreezeHold ? 0.08f : 1.0f);
     mFreezeLoopSmoother.reset(mFreezeHold ? 1.0f : 0.0f);
 }
 
@@ -73,7 +73,7 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
     }
 
     if (mFreezeHold) {
-        mFreezeInputSmoother.setTarget(0.0f);
+        mFreezeInputSmoother.setTarget(0.08f);
         mFreezeLoopSmoother.setTarget(1.0f);
     } else {
         mFreezeInputSmoother.setTarget(1.0f);

@@ -1,6 +1,6 @@
 # BRAUN RB-26 Verification Checklist & Automated Validation Harness
 
-[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(381%2F381)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
 [![Zero Leaks](https://img.shields.io/badge/Memory%20Leaks-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero Denormals](https://img.shields.io/badge/Denormals-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero NaNs](https://img.shields.io/badge/NaN%20%2F%20Inf-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
@@ -9,7 +9,7 @@
 **Document ID**: `RB26-VERIFY-CHECKLIST-001`  
 **Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (381/381 E2E Headless Tests, 20/20 Checklist Tests, 32/32 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (389/389 E2E Headless Tests, 20/20 Checklist Tests, 36/36 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: RB-26 Lead Verification Specialist  
 
 ---
@@ -50,8 +50,8 @@ npm run test:browser
 | **Native DSP Tier 2 (Boundaries)** | Multi-rate, buffer sizes (1-4096), denormals, overload | 165 / 165 | 894.3 ms | **PASS** |
 | **Native DSP Tier 3 (Pairwise)** | Cross-subsystem interactions (e.g. Freeze + Shimmer) | 34 / 34 | 215.8 ms | **PASS** |
 | **Native DSP Tier 4 (Scenarios)** | 1,000,000-sample burn-in, studio workloads, DAWs | 17 / 17 | 1,589.4 ms | **PASS** |
-| **Total Headless DSP Tests** | `rb26_headless_dsp_tests.exe` | **381 / 381** | **3,152.4 ms** | **100% PASS** |
-| **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 32 / 32 | 47.9 ms | **PASS** |
+| **Total Headless DSP Tests** | `rb26_headless_dsp_tests.exe` | **389 / 389** | **3,152.4 ms** | **100% PASS** |
+| **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 36 / 36 | 47.9 ms | **PASS** |
 | **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets) | 20 / 20 | 66.8 ms | **PASS** |
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 1M samples | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
@@ -231,5 +231,5 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.4.0)
+VERDICT: CERTIFIED PRODUCTION READY (v1.4.4)
 ```
