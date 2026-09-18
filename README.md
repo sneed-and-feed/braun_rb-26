@@ -1,10 +1,10 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.4.1](https://img.shields.io/badge/Version-1.4.1-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.1)
+[![Version: 1.4.2](https://img.shields.io/badge/Version-1.4.2-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.2)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.1/BRAUN_RB26-v1.4.1-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.1/BRAUN_RB26-v1.4.1-macOS-Universal.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.2/BRAUN_RB26-v1.4.2-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.2/BRAUN_RB26-v1.4.2-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -17,9 +17,9 @@
 
 ---
 
-### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.1)
-* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.1-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.1/BRAUN_RB26-v1.4.1-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
-* **Windows x64**: **[`BRAUN_RB26-v1.4.1-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.1/BRAUN_RB26-v1.4.1-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.1/BRAUN_RB26-v1.4.1-VST3-Windows-x64.zip)** (~3 MB).
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.2)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.2-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.2/BRAUN_RB26-v1.4.2-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.4.2-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.2/BRAUN_RB26-v1.4.2-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.2/BRAUN_RB26-v1.4.2-VST3-Windows-x64.zip)** (~3 MB).
 * Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
 * **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
@@ -28,10 +28,10 @@
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
 > [!TIP]
-> **What's New in v1.4.1 (Community Bug Remediation: Power Standby Default, Native UI Detachment, DAW Context Menu)**:
-> - **Power Standby Default**: Initializes engine with `isPoweredOn = false` (Standby) across all C++ plugin formats, matching the Dieter Rams hardware specification and web showcase to protect studio monitors on instantiation.
-> - **Native UI Black-Screen & HWND Visibility Fix**: Replaced Win32 `EnumChildWindows(..., SW_HIDE)` and `setChildHwndsVisible` calls with JUCE component hierarchy management (`removeChildComponent` / `addAndMakeVisible`), eliminating native UI black-screen rendering failures upon toggling.
-> - **DAW Host Context Menu Support**: Integrated `juce::AudioProcessorEditor::getHostContext()->getContextMenuForParameter()` into native control right-click handling, enabling DAW automation lane assignment, parameter learning, and host workflows.
+> **What's New in v1.4.2 (Runtime Native UI Occlusion Remediation & DAW Host Context Menu Parity)**:
+> - **Runtime Native UI Occlusion Fix**: Resolved pitch-black UI rendering when switching from Web UI to Native UI at runtime. Pre-collapses `webComponent` bounds to `(0, 0, 0, 0)` and hides the component prior to peer detachment, dynamically hides underlying WebView2 Win32 child windows (`Chrome_WidgetWin_0`), and strips `WS_CLIPCHILDREN` from the peer window HWND to prevent parent clipping.
+> - **DAW Host Context Menu & Parameter Automation**: Integrated `getHostContext()->getContextMenuForParameter(param)->showNativeMenu(localPos)` for native DAW automation envelopes, MIDI learn, and parameter assignment across Ableton Live, FL Studio, Reaper, Cubase, Studio One, and Bitwig, falling back gracefully to the Dieter Rams popup menu.
+> - **IPC Right-Click Coordinate Mapping**: Forwarded Web UI `showContextMenu` events to map exact cursor coordinates to native host parameter menus.
 
 ---
 
@@ -424,10 +424,10 @@ braun_rb-26/
 │       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
 ├── VERIFICATION_CHECKLIST.md   # Reproducible verification checklist & benchmarks (100% PASS)
 ├── package.json                # Project manifest (scripts: test, verify:all, start)
-├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.4.1)
+├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.4.2)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
-├── releases/                   # Distribution archives (BRAUN_RB26-v1.4.1-Windows-x64.zip)
+├── releases/                   # Distribution archives (BRAUN_RB26-v1.4.2-Windows-x64.zip)
 ├── source/
 │   ├── dsp/                    # Pure C++20 real-time DSP engine
 │   │   ├── Rb26Engine.h/cpp    # Master processor, parameter struct, telemetry
