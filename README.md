@@ -1,10 +1,10 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
-[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(381%2F381)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.3.9](https://img.shields.io/badge/Version-1.3.9-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.9)
+[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Version: 1.4.0](https://img.shields.io/badge/Version-1.4.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.0)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-macOS-Universal.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.0/BRAUN_RB26-v1.4.0-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.0/BRAUN_RB26-v1.4.0-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -17,9 +17,9 @@
 
 ---
 
-### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.9)
-* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.3.9-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
-* **Windows x64**: **[`BRAUN_RB26-v1.3.9-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-VST3-Windows-x64.zip)** (~3 MB).
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.0)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.0-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.0/BRAUN_RB26-v1.4.0-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.4.0-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.0/BRAUN_RB26-v1.4.0-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.0/BRAUN_RB26-v1.4.0-VST3-Windows-x64.zip)** (~3 MB).
 * Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
 * **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
@@ -28,13 +28,12 @@
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
 > [!TIP]
-> **What's New in v1.3.9 (Consolidated FDN API, 25ms Freeze Transitions, Zero-Curl Linux, Preset Reset Fix, Householder DC Blocker & Acoustic Decay Audit)**:
-> - **Consolidated `FdnReverbTank::setParameters` API**: Streamlined parameter configuration with default manifold argument for cleaner DSP integration.
-> - **25ms Freeze Ramp Smoothing**: Lengthened freeze ramp smoothing time constant to 25ms for natural chord transitions.
-> - **Elimination of Linux `libcurl` Dependency**: Set `JUCE_USE_CURL=0` across Linux builds, eliminating unnecessary external shared library dependencies.
-> - **Web UI "Reset All" Button Fix**: Cleanly resets all parameter knobs, switches, and vector pad coordinates back to the active selected preset.
-> - **Householder -1 Eigenmode DC Blocker & Smooth Knee Saturation**: Added 5 Hz DC blocker to suppress Householder reflection DC accumulation alongside C^1 smooth knee saturation (0.90 to 1.05).
-> - **Official AcousticDecayAudit Test Suite**: Integrated comprehensive acoustic decay audit verifying decay envelope fidelity and energy decay curve linearity (151/151 assertions passed).
+> **What's New in v1.4.0 (Community Feedback Remediation & Technical Polish)**:
+> - **Native UI WebView2 HWND Occlusion Fix & Context Menus (M1)**: Eliminated Win32 HWND occlusion by collapsing WebView2 bounds in native fallback mode; implemented native right-click popup menus for slider reset and clipboard copy/paste.
+> - **Reverb Diffusion Perceptual Calibration & Schroeder Diffusers (M2)**: Upgraded diffusion mapping to perceptual square-root scaling with expanded allpass feedback depth ($g = 0.74 \cdot d_{\text{eff}}$), smooth knee saturation for bounded late tank output, and 4-stage Schroeder allpass diffusers in Web Audio.
+> - **Pitch Presence & Dedicated Booster Control (M3)**: Added dedicated `pitch_boost` parameter ($0\text{ to }+18\text{ dB}$, default $0\text{ dB}$) with $C^1$ Hermite soft saturation, delivering rich shimmer presence with zero digital clipping.
+> - **Vector Modulation Touchpad Latch Default & Lifecycle Teardown (M4)**: Defaulted Deck 05 vector pad to latch mode with illuminated Braun amber/orange LED and `LATCHED` indicator, spring-damper return animation, capture loss handling, and `destroy()` teardown.
+> - **Full Multi-Platform Certification (M5)**: Clean multi-target Release compilation across VST3, CLAP, and Standalone, with 100% pass rate across all 9 automated and adversarial test suites.
 
 ---
 
@@ -42,7 +41,7 @@
 
 The RB-26 is a research-grade algorithmic reverberator that extends the Braun functionalist design language into spatial acoustics. It ships as native **VST3**, **CLAP**, **AU/AUv3**, and **Standalone** plugin formats for **Windows**, **macOS** (Universal Apple Silicon & Intel), and **Linux**, compiled from a single C++20 DSP core, plus a fully-featured **Web Audio** showcase that runs entirely client-side in any modern browser.
 
-Unlike conventional reverb processors, the RB-26 implements four **non-Euclidean spatial manifold** geometries, **Shepard-Risset continuous pitch spirals**, a **bidirectional pitch-shifted feedback diffusion** network ("Shimmer" + "Dimmer"), a decoupled **4th-order Linkwitz-Riley low-end matrix**, an interactive **Deck 05 Vector Modulation Pad**, and an onboard **playable acoustic exciter engine** with Harold Budd felt-piano physical modeling — all zero-allocation, real-time safe, and verifiable against 388 headless DSP stress tests.
+Unlike conventional reverb processors, the RB-26 implements four **non-Euclidean spatial manifold** geometries, **Shepard-Risset continuous pitch spirals**, a **bidirectional pitch-shifted feedback diffusion** network ("Shimmer" + "Dimmer"), a decoupled **4th-order Linkwitz-Riley low-end matrix**, an interactive **Deck 05 Vector Modulation Pad**, and an onboard **playable acoustic exciter engine** with Harold Budd felt-piano physical modeling — all zero-allocation, real-time safe, and verifiable against 389 headless DSP stress tests.
 
 ---
 
@@ -405,16 +404,16 @@ npm run verify:checklist
 
 | Metric / Parameter | Specification | Measured Result | Status |
 |:---|:---|:---:|:---:|
-| **Overall Verification Verdict** | All 4 Tiers (Features, Boundaries, Pairwise, Scenarios) | **381 / 381 Tests Passed** | **100% PASS** |
-| **Supported Sample Rates** | 44.1k, 48.0k, 88.2k, 96.0k, 176.4k, 192.0k | Normalized coefficients & delay scaling | **Verified** |
-| **Real-Time Memory Allocations** | Zero dynamic heap allocation in `processBlock()` | **0 bytes / 0 allocations** over 1M samples | **0 Leaks** |
-| **Denormal / NaN Immunity** | Hardware FTZ/DAZ (`ScopedNoDenormals`) + `flushDenormal()` | Bit-exact $0.0f$ flush ($< 10^{-15}$), 0 stalls | **0 Denormals** |
-| **Through-Latency** | Algorithmic latency compensation reported to host | **0 samples** ($0.000\text{ ms}$) | **Zero Latency** |
-| **Low-End LR4 Crossover** | Linkwitz-Riley 4th-order (60–400 Hz) magnitude sum | $\lvert H_{sum} \rvert \equiv 1.0000$ ($0^\circ$ relative phase) | **Flat 0 dB** |
-| **Inactive Pitch Bypass** | Block bypass when shimmer & dimmer sends $\le 0.001f$ | 192 kHz CPU drops from 1.63% to **0.01%** | **163x Speedup** |
-| **Fast Sine Lookup Table** | 2048-point linearly-interpolated `FastSinTable` | **121.26 dB SNR**, -109.89 dB THD | **12–15x Speedup** |
-| **Soft Limiter Ceiling** | Hermite cubic soft-knee saturator ($k = 0.85$, $M = 1.00$) | Peak $\le 1.000000$ under $+18\text{ dBFS}$ to $+40\text{ dBFS}$ | **Clean Clamping** |
-| **Mono-In / Stereo-Out** | Replicated mono input pointer isolation from garbage channel 1 | Bit-exact output match with clean reference | **100% Isolated** |
+| Overall Verification Verdict | All 4 Tiers (Features, Boundaries, Pairwise, Scenarios) | 389 / 389 Tests Passed | 100% PASS |
+| Supported Sample Rates | 44.1k, 48.0k, 88.2k, 96.0k, 176.4k, 192.0k | Normalized coefficients & delay scaling | Verified |
+| Real-Time Memory Allocations | Zero dynamic heap allocation in `processBlock()` | 0 bytes / 0 allocations over 1M samples | 0 Leaks |
+| Denormal / NaN Immunity | Hardware FTZ/DAZ (`ScopedNoDenormals`) + `flushDenormal()` | Bit-exact $0.0f$ flush ($< 10^{-15}$), 0 stalls | 0 Denormals |
+| Through-Latency | Algorithmic latency compensation reported to host | 0 samples ($0.000\text{ ms}$) | Zero Latency |
+| Low-End LR4 Crossover | Linkwitz-Riley 4th-order (60–400 Hz) magnitude sum | $\lvert H_{sum} \rvert \equiv 1.0000$ ($0^\circ$ relative phase) | Flat 0 dB |
+| Inactive Pitch Bypass | Block bypass when shimmer & dimmer sends $\le 0.001f$ | 192 kHz CPU drops from 1.63% to 0.01% | 163x Speedup |
+| Fast Sine Lookup Table | 2048-point linearly-interpolated `FastSinTable` | 121.26 dB SNR, -109.89 dB THD | 12–15x Speedup |
+| Soft Limiter Ceiling | Hermite cubic soft-knee saturator ($k = 0.85, M = 1.00$) | Peak $\le 1.000000$ under $+18\text{ dBFS}$ to $+40\text{ dBFS}$ | Clean Clamping |
+| Mono-In / Stereo-Out | Replicated mono input pointer isolation from garbage channel 1 | Bit-exact output match with clean reference | 100% Isolated |
 
 ---
 
@@ -427,10 +426,10 @@ braun_rb-26/
 │       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
 ├── VERIFICATION_CHECKLIST.md   # Reproducible verification checklist & benchmarks (100% PASS)
 ├── package.json                # Project manifest (scripts: test, verify:all, start)
-├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.3.9)
+├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.4.0)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
-├── releases/                   # Distribution archives (BRAUN_RB26-v1.3.9-Windows-x64.zip)
+├── releases/                   # Distribution archives (BRAUN_RB26-v1.4.0-Windows-x64.zip)
 ├── source/
 │   ├── dsp/                    # Pure C++20 real-time DSP engine
 │   │   ├── Rb26Engine.h/cpp    # Master processor, parameter struct, telemetry
