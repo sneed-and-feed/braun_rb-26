@@ -27,6 +27,8 @@ export class BraunKnob {
     this.color = options.color || 'var(--knob-fill)';
     this.onChange = options.onChange || null;
     this.onDragEnd = options.onDragEnd || null;
+    this.paramId = options.paramId || this.id;
+    this.onContextMenu = options.onContextMenu || null;
 
     this.isDragging = false;
     this.lastUserInteractionTime = 0;
@@ -350,9 +352,20 @@ export class BraunKnob {
       if (e && typeof e.preventDefault === 'function') e.preventDefault();
       if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
       this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      this.setValue(this.defaultValue, true);
-      if (typeof this.onDragEnd === 'function') {
-        this.onDragEnd(this.value);
+      if (typeof this.onContextMenu === 'function') {
+        this.onContextMenu(e);
+      } else if (typeof window !== 'undefined' && window.__JUCE__ && window.__JUCE__.backend) {
+        window.__JUCE__.backend.emitEvent('showContextMenu', {
+          id: this.paramId || this.id,
+          x: Math.round(e.screenX || 0),
+          y: Math.round(e.screenY || 0)
+        });
+      }
+      if (typeof window === 'undefined' || !window.__JUCE__ || !window.__JUCE__.backend) {
+        this.setValue(this.defaultValue, true);
+        if (typeof this.onDragEnd === 'function') {
+          this.onDragEnd(this.value);
+        }
       }
     });
   }

@@ -77,7 +77,7 @@ private:
     rb26::Rb26ReverbEngine reverbEngine;
     rb26::AcousticExciterEngine exciterEngine;
     rb26::Rb26AtomicPointers atomicPointers;
-    std::atomic<bool> isPoweredOn { true };
+    std::atomic<bool> isPoweredOn { false };
     std::atomic<bool> mPendingEngineReset { false };
     int mCurrentProgram { 0 };
 

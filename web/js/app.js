@@ -563,7 +563,7 @@ export class BraunRb26App {
       typeof window !== 'undefined' &&
       (window.__IS_JUCE__ || window.__JUCE__?.backend || window.__JUCE__ || (window.location && (window.location.protocol === 'juce:' || window.location.hostname === 'juce.backend')))
     );
-    this.isPowered = this.isJuce;
+    this.isPowered = false;
     this.currentPresetKey = 'DEFAULT';
 
     // JUCE IPC Coalescing Dispatcher
@@ -1105,11 +1105,48 @@ export class BraunRb26App {
   }
 
   _initKnobs() {
+    const knobParamMap = {
+      'knob-predelay': 'pre_delay_ms',
+      'knob-diffusion': 'diffusion_density',
+      'knob-input-trim': 'input_trim_db',
+      'knob-low-crossover': 'low_crossover_hz',
+      'knob-damping-low': 'bass_rt60_mult',
+      'knob-low-punch': 'punch_ducking',
+      'knob-mono-bass': 'sub_mono_hz',
+      'knob-rt60-decay': 'decay_rt60_sec',
+      'knob-room-size': 'room_size',
+      'knob-damping-high': 'high_damping_hz',
+      'knob-shimmer-send': 'shimmer_send',
+      'knob-dimmer-send': 'dimmer_send',
+      'knob-shim-dim-blend': 'pitch_blend',
+      'knob-pitch-regen': 'pitch_feedback',
+      'knob-pitch-boost': 'pitch_boost',
+      'knob-tail-mod-rate': 'tail_mod_rate_hz',
+      'knob-tail-mod-depth': 'tail_mod_depth_ms',
+      'knob-tail-bloom': 'tail_bloom_ms',
+      'knob-stereo-width': 'stereo_width',
+      'knob-early-late-mix': 'early_late_mix',
+      'knob-dry-wet-mix': 'dry_wet_mix',
+      'knob-output-trim': 'output_trim_db'
+    };
+
     const createKnob = (id, options) => {
       const el = document.getElementById(id);
       if (!el) return null;
+      const paramId = knobParamMap[id] || options.paramId || id;
       return new BraunKnob(el, {
         ...options,
+        id,
+        paramId,
+        onContextMenu: (e) => {
+          if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend) {
+            window.__JUCE__.backend.emitEvent('showContextMenu', {
+              id: paramId,
+              x: Math.round(e.screenX || 0),
+              y: Math.round(e.screenY || 0)
+            });
+          }
+        },
         onDragEnd: (val) => {
           this._flushJuceParams();
           if (typeof options.onDragEnd === 'function') options.onDragEnd(val);

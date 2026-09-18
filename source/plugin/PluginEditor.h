@@ -139,7 +139,6 @@ private:
     void setupNativeControls();
     void updateNativeControlLayout();
     void showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos);
-    void setChildHwndsVisible(bool visible);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BRAUN_RB26AudioProcessorEditor)
 };
