@@ -430,9 +430,9 @@ void BRAUN_RB26AudioProcessor::stopRecording()
 
     recordingSavedDirty.store(true, std::memory_order_relaxed);
 
-    if (lastRecordedFile.existsAsFile())
+    if (lastRecordedFile.existsAsFile() && getActiveEditor() != nullptr)
     {
-        lastRecordedFile.revealToUser();
+        juce::Thread::launch([f = lastRecordedFile] { f.revealToUser(); });
     }
 }
 

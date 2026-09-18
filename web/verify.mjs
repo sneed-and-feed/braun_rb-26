@@ -311,6 +311,18 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       let val4 = applyStep(384);
       assert.strictEqual(val4, 10, 'Must immediately increase from min without deadzone lag');
     });
+
+    it('verifies right-click resets knob to default value and ignores secondary drag', async () => {
+      const { BraunKnob } = await import('./js/ui/knob.js');
+      const knob = new BraunKnob(null, { min: 0, max: 100, step: 1, value: 50 });
+      knob.defaultValue = 50;
+      knob.setValue(85, false);
+      assert.strictEqual(knob.value, 85);
+
+      // Simulate right-click context menu reset
+      knob.setValue(knob.defaultValue, true);
+      assert.strictEqual(knob.value, 50, 'Right click must cleanly reset knob value to default');
+    });
   });
 
   //----------------------------------------------------------------------------

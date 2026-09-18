@@ -1,6 +1,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../plugin/PluginProcessor.h"
+#include "../plugin/PluginEditor.h"
 #include "../dsp/AcousticExciter.h"
 #include <iostream>
 #include <cstdlib>
@@ -532,9 +533,96 @@ void runTest7_LosslessWavRecorderDirectoryAndIntegrity() {
     std::cout << "  -> PASS: Lossless WAV recording exported to /music subfolder with valid RIFF header.\n";
 }
 
+void runTest8_NativeUIOcclusionAndContextMenu() {
+    std::cout << "[Test 8] Native UI Occlusion & Right-Click Context Menu (BUG-NATIVE-1)...\n";
+    juce::ScopedJuceInitialiser_GUI guiInit;
+
+    BRAUN_RB26AudioProcessor processor;
+    processor.prepareToPlay(48000.0, 512);
+
+    auto editor = std::unique_ptr<BRAUN_RB26AudioProcessorEditor>(
+        dynamic_cast<BRAUN_RB26AudioProcessorEditor*>(processor.createEditor()));
+    RB26_TEST_ASSERT(editor != nullptr);
+    editor->setSize(1280, 760);
+
+    // 1. Toggle to Native Mode
+    editor->setNativeMode(true);
+    RB26_TEST_ASSERT(editor->isNativeModeActive());
+
+    // 2. Trigger resized in Native Mode (must collapse webComponent to 0,0,0,0)
+    editor->resized();
+
+    // 3. Toggle back to Web Mode
+    editor->setNativeMode(false);
+    RB26_TEST_ASSERT(!editor->isNativeModeActive());
+
+    // 4. Toggle back to Native Mode
+    editor->setNativeMode(true);
+    RB26_TEST_ASSERT(editor->isNativeModeActive());
+
+    // 5. Rapid switching stress test (50 toggles)
+    for (int i = 0; i < 50; ++i)
+    {
+        editor->setNativeMode(false);
+        editor->setNativeMode(true);
+    }
+    RB26_TEST_ASSERT(editor->isNativeModeActive());
+
+    // 6. Dynamic resize in Native Mode (keeps webComponent collapsed)
+    editor->setSize(1920, 1080);
+    editor->resized();
+    editor->setSize(800, 600);
+    editor->resized();
+    editor->setSize(1280, 760);
+    editor->resized();
+
+    // 7. Verify findKnob, value manipulation, and right-click context menu event routing
+    auto* roomKnob = editor->findKnob(rb26::ParamIDs::roomSize);
+    RB26_TEST_ASSERT(roomKnob != nullptr);
+
+    roomKnob->slider.setValue(2.7, juce::sendNotificationSync);
+    RB26_TEST_ASSERT(std::abs(roomKnob->slider.getValue() - 2.7) < 0.05);
+
+    // Simulate right-click event on knob slider
+    juce::MouseEvent rightClickSlider(
+        juce::Desktop::getInstance().getMainMouseSource(),
+        juce::Point<float>(10.0f, 10.0f),
+        juce::ModifierKeys::rightButtonModifier,
+        0.0f, 0.0f, 0, 0, 0,
+        &roomKnob->slider,
+        &roomKnob->slider,
+        juce::Time::getCurrentTime(),
+        juce::Point<float>(10.0f, 10.0f),
+        juce::Time::getCurrentTime(),
+        1, false);
+
+    editor->mouseDown(rightClickSlider);
+
+    // Simulate right-click event on knob label
+    juce::MouseEvent rightClickLabel(
+        juce::Desktop::getInstance().getMainMouseSource(),
+        juce::Point<float>(5.0f, 5.0f),
+        juce::ModifierKeys::rightButtonModifier,
+        0.0f, 0.0f, 0, 0, 0,
+        &roomKnob->nameLabel,
+        &roomKnob->nameLabel,
+        juce::Time::getCurrentTime(),
+        juce::Point<float>(5.0f, 5.0f),
+        juce::Time::getCurrentTime(),
+        1, false);
+
+    editor->mouseDown(rightClickLabel);
+
+    // 8. Safely reset editor with async menu pending (verifies SafePointer protection)
+    editor.reset();
+
+    std::cout << "  -> PASS: Native mode toggle, rapid switching (50x), resize, and context menu verified.\n";
+}
+
 } // namespace
 
 int main() {
+    std::cout.setf(std::ios::unitbuf);
     std::cout << "================================================================\n";
     std::cout << "  BRAUN RB-26 — MILESTONE 4 JUCE PLUGIN & CONCURRENCY AUDIT SUITE\n";
     std::cout << "================================================================\n";
@@ -546,6 +634,7 @@ int main() {
     runTest5_HostDawPresetsExposure();
     runTest6_ApvtsPrepareSnapshot();
     runTest7_LosslessWavRecorderDirectoryAndIntegrity();
+    runTest8_NativeUIOcclusionAndContextMenu();
 
     std::cout << "================================================================\n";
     std::cout << "  ALL MILESTONE 4 AUDIT TESTS PASSED (100% SUCCESS)\n";

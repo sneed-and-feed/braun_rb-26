@@ -105,6 +105,10 @@ export class BraunKnob {
     const onPointerDown = (e) => {
       if (e.target === this.directInput) return;
       if (this.isDragging) return;
+      if (e.button !== undefined && e.button !== 0) {
+        // Only primary mouse button initiates drag; right-click is reserved for context menu / reset
+        return;
+      }
 
       // Touch Disambiguation: Labels and value readouts allow native vertical momentum scrolling
       const isLabelOrValue = Boolean(
@@ -338,6 +342,18 @@ export class BraunKnob {
         return;
       }
       this._startDirectEntry();
+    });
+
+    // Right-click: clean reset to default value with host DAW / Web Audio notification
+    this.element.addEventListener('contextmenu', (e) => {
+      if (e.target === this.directInput) return;
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      this.lastUserInteractionTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      this.setValue(this.defaultValue, true);
+      if (typeof this.onDragEnd === 'function') {
+        this.onDragEnd(this.value);
+      }
     });
   }
 
