@@ -1358,8 +1358,10 @@ export class BraunRb26App {
           } catch (err) {
             console.warn('JUCE backend emitEvent toggleNativeUI error:', err);
           }
+        } else {
+          this._emitJuceParam('toggleNativeUI', 1, true);
         }
-        this._emitJuceParam('toggleNativeUI', 1, true);
+        if (typeof uiModeBtn.blur === 'function') uiModeBtn.blur();
       });
     }
 

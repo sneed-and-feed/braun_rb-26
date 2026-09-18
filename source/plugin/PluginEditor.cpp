@@ -940,7 +940,7 @@ void BRAUN_RB26AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         incomingId.equalsIgnoreCase("nativeUI") || 
         incomingId.equalsIgnoreCase("switchUI"))
     {
-        setNativeMode(!useNativeUI);
+        setNativeMode(true);
         return;
     }
 
@@ -1453,7 +1453,7 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
     // View Mode button (toggle between Native and Web UI)
     viewModeButton.setButtonText("SWITCH TO WEB UI");
     viewModeButton.onClick = [this] {
-        setNativeMode(!useNativeUI);
+        setNativeMode(false);
     };
     addChildComponent(viewModeButton);
 #endif
