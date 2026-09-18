@@ -1350,8 +1350,18 @@ export class BraunRb26App {
 
     // UI Mode button (Switch to Native DAW UI)
     const uiModeBtn = document.getElementById('btn-ui-mode');
-    if (uiModeBtn) {
-      uiModeBtn.addEventListener('click', () => {
+    if (uiModeBtn && !uiModeBtn._boundNativeSwitch) {
+      uiModeBtn._boundNativeSwitch = true;
+      let isSwitching = false;
+      uiModeBtn.addEventListener('click', (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (isSwitching) return;
+        isSwitching = true;
+        setTimeout(() => { isSwitching = false; }, 400);
+
         if (typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
           try {
             window.__JUCE__.backend.emitEvent('paramChange', { id: 'toggleNativeUI', value: 1 });

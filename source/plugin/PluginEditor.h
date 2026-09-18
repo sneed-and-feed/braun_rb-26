@@ -90,11 +90,6 @@ private:
     std::atomic<float> pendingParamValues[kNumParams] {};
     std::atomic<bool> paramDirty[kNumParams] {};
 
-    // Windows HWND style configuration (WS_CLIPCHILDREN | WS_CLIPSIBLINGS)
-    bool hwndStylesConfigured { false };
-    int hwndCheckCounter { 0 };
-    void ensureHwndStyles();
-
     // Telemetry & Scope streaming at 60 Hz with idle throttling
     int silentFrameCounter { 0 };
     int silentTelemetryCounter { 0 };
@@ -137,6 +132,8 @@ private:
     juce::TextButton chordTriggerBtn;
 
     void setupNativeControls();
+    void updateNativeControlVisibility();
+    void layoutNativeControls();
     void updateNativeControlLayout();
     void showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos);
 

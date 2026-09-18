@@ -627,6 +627,7 @@ void runTest8_NativeUIOcclusionAndContextMenu() {
     editor->mouseDown(rightClickLabel);
 
     // 8. Safely reset editor with async menu pending (verifies SafePointer protection)
+    editor->setNativeMode(false);
     editor.reset();
 
     std::cout << "  -> PASS: Native mode toggle, rapid switching (50x), resize, and context menu verified.\n";

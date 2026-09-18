@@ -644,77 +644,20 @@ void BRAUN_RB26AudioProcessorEditor::resized()
     if (webComponent != nullptr)
     {
         if (!useNativeUI)
-        {
             webComponent->setBounds(getLocalBounds());
-        }
+        else
+            webComponent->setBounds(0, 0, 0, 0);
     }
 #endif
 
-    if (useNativeUI)
-    {
-        updateNativeControlLayout();
-    }
+    layoutNativeControls();
 }
 
 void BRAUN_RB26AudioProcessorEditor::parentHierarchyChanged()
 {
     AudioProcessorEditor::parentHierarchyChanged();
-#if JUCE_WEB_BROWSER
-    hwndStylesConfigured = false;
-    if (!useNativeUI)
-    {
-        ensureHwndStyles();
-    }
-    else
-    {
-#if JUCE_WINDOWS
-        if (auto* peer = getPeer())
-        {
-            if (HWND hwnd = static_cast<HWND>(peer->getNativeHandle()))
-            {
-                LONG_PTR style = ::GetWindowLongPtr(hwnd, GWL_STYLE);
-                ::SetWindowLongPtr(hwnd, GWL_STYLE, style & ~WS_CLIPCHILDREN);
-            }
-        }
-#endif
-    }
-#endif
 }
 
-#if JUCE_WEB_BROWSER
-void BRAUN_RB26AudioProcessorEditor::ensureHwndStyles()
-{
-#if JUCE_WINDOWS
-    if (auto* peer = getPeer())
-    {
-        HWND hwnd = static_cast<HWND>(peer->getNativeHandle());
-        if (hwnd == nullptr)
-            return;
-
-        LONG_PTR style = ::GetWindowLongPtr(hwnd, GWL_STYLE);
-        if ((style & (WS_CLIPCHILDREN | WS_CLIPSIBLINGS)) != (WS_CLIPCHILDREN | WS_CLIPSIBLINGS))
-        {
-            ::SetWindowLongPtr(hwnd, GWL_STYLE, style | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-        }
-
-        int childCount = 0;
-        ::EnumChildWindows(hwnd, [](HWND child, LPARAM lParam) -> BOOL {
-            auto* count = reinterpret_cast<int*>(lParam);
-            (*count)++;
-            LONG_PTR childStyle = ::GetWindowLongPtr(child, GWL_STYLE);
-            if ((childStyle & (WS_CLIPCHILDREN | WS_CLIPSIBLINGS)) != (WS_CLIPCHILDREN | WS_CLIPSIBLINGS))
-            {
-                ::SetWindowLongPtr(child, GWL_STYLE, childStyle | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
-            }
-            return TRUE;
-        }, reinterpret_cast<LPARAM>(&childCount));
-
-        if (childCount > 0)
-            hwndStylesConfigured = true;
-    }
-#endif
-}
-#endif
 
 void BRAUN_RB26AudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
 {
@@ -772,13 +715,6 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
 #if JUCE_WEB_BROWSER
     if (!useNativeUI && webComponent != nullptr)
     {
-        // Windows HWND style guard
-        if (!hwndStylesConfigured || ++hwndCheckCounter >= 60)
-        {
-            hwndCheckCounter = 0;
-            ensureHwndStyles();
-        }
-
         if (processorRef.consumeRecordingSavedDirty())
         {
             auto* obj = new juce::DynamicObject();
@@ -940,7 +876,8 @@ void BRAUN_RB26AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
         incomingId.equalsIgnoreCase("nativeUI") || 
         incomingId.equalsIgnoreCase("switchUI"))
     {
-        setNativeMode(true);
+        if (!useNativeUI)
+            setNativeMode(true);
         return;
     }
 
@@ -1453,7 +1390,8 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
     // View Mode button (toggle between Native and Web UI)
     viewModeButton.setButtonText("SWITCH TO WEB UI");
     viewModeButton.onClick = [this] {
-        setNativeMode(false);
+        if (useNativeUI)
+            setNativeMode(false);
     };
     addChildComponent(viewModeButton);
 #endif
@@ -1597,76 +1535,28 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
     {
         if (useNativeUI)
         {
-            webComponent->setBounds(0, 0, 0, 0);
             webComponent->setVisible(false);
-
-#if JUCE_WINDOWS
-            if (auto* peer = getPeer())
-            {
-                if (HWND hwnd = static_cast<HWND>(peer->getNativeHandle()))
-                {
-                    ::EnumChildWindows(hwnd, [](HWND child, LPARAM lParam) -> BOOL {
-                        HWND parentHwnd = reinterpret_cast<HWND>(lParam);
-                        if (child != parentHwnd)
-                        {
-                            char className[256] = { 0 };
-                            ::GetClassNameA(child, className, sizeof(className));
-                            juce::String cName(className);
-                            if (cName.containsIgnoreCase("Chrome") || cName.containsIgnoreCase("Intermediate"))
-                            {
-                                ::ShowWindow(child, SW_HIDE);
-                                ::SetWindowPos(child, nullptr, 0, 0, 0, 0,
-                                               SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
-                            }
-                        }
-                        return TRUE;
-                    }, reinterpret_cast<LPARAM>(hwnd));
-
-                    LONG_PTR style = ::GetWindowLongPtr(hwnd, GWL_STYLE);
-                    ::SetWindowLongPtr(hwnd, GWL_STYLE, style & ~WS_CLIPCHILDREN);
-                }
-            }
-#endif
-            removeChildComponent(webComponent.get());
+            webComponent->setBounds(0, 0, 0, 0);
+            webComponent->toBack();
         }
         else
         {
-            ensureHwndStyles();
-
-#if JUCE_WINDOWS
-            if (auto* peer = getPeer())
-            {
-                if (HWND hwnd = static_cast<HWND>(peer->getNativeHandle()))
-                {
-                    ::EnumChildWindows(hwnd, [](HWND child, LPARAM lParam) -> BOOL {
-                        HWND parentHwnd = reinterpret_cast<HWND>(lParam);
-                        if (child != parentHwnd)
-                        {
-                            char className[256] = { 0 };
-                            ::GetClassNameA(child, className, sizeof(className));
-                            juce::String cName(className);
-                            if (cName.containsIgnoreCase("Chrome") || cName.containsIgnoreCase("Intermediate"))
-                            {
-                                ::ShowWindow(child, SW_SHOW);
-                            }
-                        }
-                        return TRUE;
-                    }, reinterpret_cast<LPARAM>(hwnd));
-                }
-            }
-#endif
-            addAndMakeVisible(*webComponent);
-            webComponent->setBounds(getLocalBounds());
             webComponent->setVisible(true);
+            webComponent->setBounds(getLocalBounds());
             webComponent->toFront(false);
         }
     }
     viewModeButton.setVisible(useNativeUI);
     viewModeButton.setButtonText("SWITCH TO WEB UI");
-    if (useNativeUI)
-        viewModeButton.toFront(true);
 #endif
 
+    updateNativeControlVisibility();
+    resized();
+    repaint();
+}
+
+void BRAUN_RB26AudioProcessorEditor::updateNativeControlVisibility()
+{
     const bool nativeVisible = useNativeUI;
     powerButton.setVisible(nativeVisible);
     themeButton.setVisible(nativeVisible);
@@ -1718,14 +1608,17 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
         impulseTriggerBtn.toFront(false);
         hammerTriggerBtn.toFront(false);
         chordTriggerBtn.toFront(false);
-
-        updateNativeControlLayout();
+#if JUCE_WEB_BROWSER
+        viewModeButton.toFront(true);
+#endif
     }
-    repaint();
 }
 
-void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
+void BRAUN_RB26AudioProcessorEditor::layoutNativeControls()
 {
+    if (!useNativeUI)
+        return;
+
     auto totalBounds = getLocalBounds();
     if (totalBounds.isEmpty()) return;
 
@@ -1890,6 +1783,11 @@ void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
         layoutKnob(findKnob(rb26::ParamIDs::stereoWidth), knobArea.removeFromLeft(knobW).reduced(6));
         layoutKnob(findKnob(rb26::ParamIDs::outputTrimDb), knobArea.reduced(6));
     }
+}
+
+void BRAUN_RB26AudioProcessorEditor::updateNativeControlLayout()
+{
+    layoutNativeControls();
 }
 
 BRAUN_RB26AudioProcessorEditor::KnobSlot* BRAUN_RB26AudioProcessorEditor::findKnob(const juce::ParameterID& id)
