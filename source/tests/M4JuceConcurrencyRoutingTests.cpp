@@ -28,7 +28,12 @@ void runTest1_ConcurrencyAndPowerReset() {
     BRAUN_RB26AudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
 
+    // Initial state: Standby (power false)
+    RB26_TEST_ASSERT(!processor.isPower());
+
     // 1. Process normal audio with power ON
+    processor.setPower(true);
+    RB26_TEST_ASSERT(processor.isPower());
     juce::AudioBuffer<float> buffer(2, 512);
     buffer.clear();
     buffer.setSample(0, 0, 1.0f);
@@ -193,6 +198,7 @@ void runTest3_MonoInStereoOutRouting() {
     // Set 1 input channel, 2 output channels
     processor.setPlayConfigDetails(1, 2, 48000.0, 512);
     processor.prepareToPlay(48000.0, 512);
+    processor.setPower(true);
 
     RB26_TEST_ASSERT(processor.getTotalNumInputChannels() == 1);
     RB26_TEST_ASSERT(processor.getTotalNumOutputChannels() == 2);
@@ -265,6 +271,8 @@ void runTest3_MonoInStereoOutRouting() {
     procB.setPlayConfigDetails(1, 2, 48000.0, 512);
     procA.prepareToPlay(48000.0, 512);
     procB.prepareToPlay(48000.0, 512);
+    procA.setPower(true);
+    procB.setPower(true);
 
     juce::AudioBuffer<float> bufA(2, 512);
     juce::AudioBuffer<float> bufB(2, 512);
@@ -311,6 +319,7 @@ void runTest4_MasterLimiterBypassAndSingleLimiting() {
 
     BRAUN_RB26AudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
+    processor.setPower(true);
 
     // 100% Dry signal path so the impulse immediately reaches the output stage without delay line latency
     if (auto* p = processor.getAPVTS().getParameter("dry_wet_mix")) {
@@ -420,6 +429,7 @@ void runTest6_ApvtsPrepareSnapshot() {
     // Load non-default preset before prepare
     processor.setCurrentProgram(4); // GERMAN PLATE 140
     processor.prepareToPlay(48000.0, 512);
+    processor.setPower(true);
 
     // Process first block immediately
     juce::AudioBuffer<float> buffer(2, 512);
@@ -446,6 +456,7 @@ void runTest7_LosslessWavRecorderDirectoryAndIntegrity() {
 
     BRAUN_RB26AudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
+    processor.setPower(true);
 
     RB26_TEST_ASSERT(!processor.isRecording());
     RB26_TEST_ASSERT(!processor.consumeRecordingSavedDirty());
@@ -539,6 +550,7 @@ void runTest8_NativeUIOcclusionAndContextMenu() {
 
     BRAUN_RB26AudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
+    RB26_TEST_ASSERT(!processor.isPower());
 
     auto editor = std::unique_ptr<BRAUN_RB26AudioProcessorEditor>(
         dynamic_cast<BRAUN_RB26AudioProcessorEditor*>(processor.createEditor()));

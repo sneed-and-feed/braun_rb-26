@@ -174,8 +174,8 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
     <p>STUDIO REVERBERATION UNIT &mdash; WENIGER, ABER BESSER</p>
   </div>
   <div style="display:flex; gap:8px; align-items:center;">
-    <button id="btnPower" style="background:var(--braun-orange); color:#fff; padding:4px 10px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; border:none; letter-spacing:1px;">POWER ON</button>
-    <div class="badge">ACTIVE</div>
+    <button id="btnPower" style="background:var(--knob-cap); color:var(--text-main); padding:4px 10px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; border:1px solid var(--border-color); letter-spacing:1px;">STANDBY</button>
+    <div class="badge">STANDBY</div>
   </div>
 </header>
 
@@ -297,6 +297,12 @@ paramsMeta.forEach(p => {
       emitParam(p.id, parseFloat(rng.value));
     });
   }
+  ku.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (window.__JUCE__ && window.__JUCE__.backend) {
+      window.__JUCE__.backend.emitEvent('showContextMenu', { id: p.id, x: e.screenX, y: e.screenY });
+    }
+  });
   decks[p.deck].appendChild(ku);
 });
 
@@ -313,7 +319,7 @@ function emitExciter(data) {
 }
 
 // Power toggle
-let isPowered = true;
+let isPowered = false;
 const pBtn = document.getElementById('btnPower');
 if (pBtn) {
   pBtn.addEventListener('click', () => {
@@ -527,6 +533,18 @@ juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOpti
         })
         .withEventListener("stopRecording", [&editor](const juce::var& /*data*/) {
             editor.handleStopRecordingFromWeb();
+        })
+        .withEventListener("showContextMenu", [&editor](const juce::var& data) {
+            if (data.isObject())
+            {
+                const juce::String id = data.getProperty("id", "").toString();
+                const int x = static_cast<int>(data.getProperty("x", 0));
+                const int y = static_cast<int>(data.getProperty("y", 0));
+                if (auto* slot = editor.findKnob(id))
+                {
+                    editor.showKnobContextMenu(*slot, { x, y });
+                }
+            }
         });
 
     return options;
@@ -629,11 +647,6 @@ void BRAUN_RB26AudioProcessorEditor::resized()
         {
             webComponent->setBounds(getLocalBounds());
         }
-        else
-        {
-            webComponent->setBounds(0, 0, 0, 0);
-            setChildHwndsVisible(false);
-        }
     }
 #endif
 
@@ -651,37 +664,7 @@ void BRAUN_RB26AudioProcessorEditor::parentHierarchyChanged()
     if (!useNativeUI)
     {
         ensureHwndStyles();
-        setChildHwndsVisible(true);
     }
-    else
-    {
-        setChildHwndsVisible(false);
-    }
-#endif
-}
-
-void BRAUN_RB26AudioProcessorEditor::setChildHwndsVisible(bool visible)
-{
-#if JUCE_WINDOWS && JUCE_WEB_BROWSER
-    if (auto* peer = getPeer())
-    {
-        if (HWND hwnd = static_cast<HWND>(peer->getNativeHandle()))
-        {
-            if (::IsWindow(hwnd))
-            {
-                const int cmd = visible ? SW_SHOW : SW_HIDE;
-                ::EnumChildWindows(hwnd, [](HWND child, LPARAM lParam) -> BOOL {
-                    if (child != nullptr && ::IsWindow(child))
-                    {
-                        ::ShowWindow(child, static_cast<int>(lParam));
-                    }
-                    return TRUE;
-                }, static_cast<LPARAM>(cmd));
-            }
-        }
-    }
-#else
-    juce::ignoreUnused(visible);
 #endif
 }
 
@@ -1413,7 +1396,8 @@ void BRAUN_RB26AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
 void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
 {
     // Power button
-    powerButton.setButtonText(processorRef.isPower() ? "POWER ON" : "STANDBY");
+    powerButton.setButtonText("STANDBY");
+    powerButton.setToggleState(false, juce::dontSendNotification);
     powerButton.setClickingTogglesState(false);
     powerButton.onClick = [this] {
         processorRef.setPower(!processorRef.isPower());
@@ -1596,18 +1580,18 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
 #if JUCE_WEB_BROWSER
     if (webComponent != nullptr)
     {
-        webComponent->setVisible(!useNativeUI);
         if (useNativeUI)
         {
+            removeChildComponent(webComponent.get());
+            webComponent->setVisible(false);
             webComponent->setBounds(0, 0, 0, 0);
-            webComponent->toBack();
-            setChildHwndsVisible(false);
         }
         else
         {
+            addAndMakeVisible(*webComponent);
+            webComponent->setVisible(true);
             webComponent->setBounds(getLocalBounds());
             webComponent->toFront(false);
-            setChildHwndsVisible(true);
             ensureHwndStyles();
         }
     }
@@ -1851,9 +1835,44 @@ BRAUN_RB26AudioProcessorEditor::KnobSlot* BRAUN_RB26AudioProcessorEditor::findKn
 {
     for (auto& slot : knobSlots)
     {
-        if (slot->paramId == paramId)
+        if (slot->paramId.equalsIgnoreCase(paramId))
             return slot.get();
     }
+
+    for (const auto& item : rb26::getParameterMetadataTable())
+    {
+        if (paramId.equalsIgnoreCase(item.apvtsId) || paramId.equalsIgnoreCase(item.webId))
+        {
+            for (auto& slot : knobSlots)
+            {
+                if (slot->paramId.equalsIgnoreCase(item.apvtsId))
+                    return slot.get();
+            }
+        }
+    }
+
+    juce::String cleanId = paramId;
+    if (cleanId.startsWithIgnoreCase("knob-") || cleanId.startsWithIgnoreCase("knob_"))
+        cleanId = cleanId.substring(5);
+    cleanId = cleanId.replaceCharacter('-', '_');
+
+    for (auto& slot : knobSlots)
+    {
+        if (slot->paramId.equalsIgnoreCase(cleanId))
+            return slot.get();
+    }
+    for (const auto& item : rb26::getParameterMetadataTable())
+    {
+        if (cleanId.equalsIgnoreCase(item.apvtsId) || cleanId.equalsIgnoreCase(item.webId))
+        {
+            for (auto& slot : knobSlots)
+            {
+                if (slot->paramId.equalsIgnoreCase(item.apvtsId))
+                    return slot.get();
+            }
+        }
+    }
+
     return nullptr;
 }
 
@@ -1904,11 +1923,23 @@ void BRAUN_RB26AudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 void BRAUN_RB26AudioProcessorEditor::showKnobContextMenu(KnobSlot& slot, juce::Point<int> screenPos)
 {
     auto* param = processorRef.getAPVTS().getParameter(slot.paramId);
+    if (auto* hContext = getHostContext())
+    {
+        if (auto hostMenu = hContext->getContextMenuForParameter(param))
+        {
+            auto menu = hostMenu->getEquivalentPopupMenu();
+            menu.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea(juce::Rectangle<int>(screenPos.x, screenPos.y, 1, 1)).withParentComponent(this));
+            return;
+        }
+    }
+
     auto* rangedParam = dynamic_cast<juce::RangedAudioParameter*>(param);
 
     juce::PopupMenu menu;
     const juce::String currentValueStr = slot.slider.getTextFromValue(slot.slider.getValue());
-    const juce::String title = slot.nameLabel.getText().toUpperCase() + "  (" + currentValueStr + ")";
+    const juce::String title = slot.nameLabel.getText().isNotEmpty()
+        ? (slot.nameLabel.getText().toUpperCase() + "  (" + currentValueStr + ")")
+        : (slot.paramId.toUpperCase() + "  (" + currentValueStr + ")");
     menu.addSectionHeader(title);
     menu.addSeparator();
 
@@ -1937,7 +1968,7 @@ void BRAUN_RB26AudioProcessorEditor::showKnobContextMenu(KnobSlot& slot, juce::P
     const juce::String paramId = slot.paramId;
 
     menu.showMenuAsync(
-        juce::PopupMenu::Options().withTargetScreenArea(juce::Rectangle<int>(screenPos.x, screenPos.y, 1, 1)),
+        juce::PopupMenu::Options().withTargetScreenArea(juce::Rectangle<int>(screenPos.x, screenPos.y, 1, 1)).withParentComponent(this),
         [safeThis, paramId, defaultDenormVal](int result)
         {
             if (safeThis == nullptr || result <= 0)
@@ -1961,7 +1992,10 @@ void BRAUN_RB26AudioProcessorEditor::showKnobContextMenu(KnobSlot& slot, juce::P
             }
             else if (result == 4) // Exact Value
             {
-                currentSlot->slider.showTextBox();
+                if (safeThis->isNativeModeActive())
+                {
+                    currentSlot->slider.showTextBox();
+                }
             }
         });
 }
