@@ -450,7 +450,173 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.ok(html.includes('id="btn-export-patch"'), 'Export patch button must exist');
       assert.ok(html.includes('id="btn-load-patch"'), 'Load patch button must exist');
       assert.ok(html.includes('id="btn-reset-all"'), 'Reset button must exist');
+      assert.ok(html.includes('title="Reset All Parameters to Selected Preset Default"'), 'Reset button must have calibrated title');
+      assert.ok(html.includes('aria-label="Reset All Parameters to Selected Preset Default"'), 'Reset button must have calibrated aria-label');
       assert.ok(html.includes('id="drop-overlay"'), 'Drag and drop overlay must exist');
+    });
+
+    it('verifies Reset All button functionality, custom user presets, vector pad coords, and A/B buffer isolation', async () => {
+      const { BraunRb26App } = await import('./js/app.js');
+
+      const origDoc = globalThis.document;
+      const origWin = globalThis.window;
+      const origStorage = globalThis.localStorage;
+
+      const mockStorage = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => mockStorage.get(k) || null,
+        setItem: (k, v) => mockStorage.set(k, String(v)),
+        removeItem: (k) => mockStorage.delete(k),
+        clear: () => mockStorage.clear()
+      };
+
+      const elements = {};
+      const createElement = (tag) => {
+        const el = {
+          tagName: tag.toUpperCase(),
+          dataset: {},
+          getAttribute: (name) => el.attributes[name] ?? null,
+          setAttribute: (name, val) => { el.attributes[name] = String(val); },
+          classList: {
+            _classes: new Set(),
+            add(c) { this._classes.add(c); },
+            remove(c) { this._classes.delete(c); },
+            toggle(c, f) {
+              if (f !== undefined) { f ? this._classes.add(c) : this._classes.delete(c); return f; }
+              if (this._classes.has(c)) { this._classes.delete(c); return false; }
+              this._classes.add(c); return true;
+            },
+            contains(c) { return this._classes.has(c); }
+          },
+          style: {},
+          attributes: {},
+          value: '',
+          innerHTML: '',
+          textContent: '',
+          children: [],
+          appendChild(c) { this.children.push(c); return c; },
+          removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); return c; },
+          querySelector: () => null,
+          querySelectorAll: () => [],
+          getContext: () => ({
+            resetTransform: () => {}, scale: () => {}, fillRect: () => {}, beginPath: () => {},
+            moveTo: () => {}, lineTo: () => {}, stroke: () => {}, fillText: () => {}, save: () => {},
+            restore: () => {}, drawImage: () => {}
+          }),
+          _listeners: {},
+          addEventListener(evt, fn) { (this._listeners[evt] = this._listeners[evt] || []).push(fn); },
+          blur() { this._blurred = true; },
+          async click() {
+            if (this._listeners.click) {
+              const e = { stopPropagation() {}, preventDefault() {}, target: this };
+              for (const fn of this._listeners.click) await fn(e);
+            }
+          }
+        };
+        return el;
+      };
+
+      try {
+        globalThis.document = {
+          createElement,
+          getElementById: (id) => elements[id] || (elements[id] = createElement('div')),
+          querySelector: () => null,
+          querySelectorAll: () => [],
+          body: createElement('body'),
+          addEventListener: () => {},
+          removeEventListener: () => {}
+        };
+        globalThis.window = {
+          location: { protocol: 'http:', hostname: 'localhost' },
+          addEventListener: () => {},
+          removeEventListener: () => {}
+        };
+
+        const app = new BraunRb26App();
+        app.knobs = {
+          rt60_decay: { _val: 6.5, getValue() { return this._val; }, setValue(v) { this._val = v; } },
+          tail_mod_rate: { _val: 0.65, getValue() { return this._val; }, setValue(v) { this._val = v; } },
+          tail_mod_depth: { _val: 45, getValue() { return this._val; }, setValue(v) { this._val = v; } }
+        };
+
+        let padX = 0.45, padY = 0.45;
+        app.vectorPad = {
+          x: padX,
+          y: padY,
+          defaultX: padX,
+          defaultY: padY,
+          setDefaults(x, y) { this.defaultX = x; this.defaultY = y; },
+          setCoordinates(x, y) { this.x = x; this.y = y; }
+        };
+
+        const selectPreset = createElement('select');
+        selectPreset.value = 'DEFAULT';
+        elements['select-preset'] = selectPreset;
+
+        const resetBtn = createElement('button');
+        elements['btn-reset-all'] = resetBtn;
+
+        resetBtn.addEventListener('click', () => {
+          const targetPreset = (selectPreset && selectPreset.value) || app.currentPresetKey || 'DEFAULT';
+          app.loadPreset(targetPreset);
+          resetBtn.blur();
+        });
+
+        // 1. Deviate values away from DEFAULT
+        app.knobs.rt60_decay.setValue(14.0);
+        app.vectorPad.setCoordinates(0.9, 0.2);
+        assert.strictEqual(app.knobs.rt60_decay.getValue(), 14.0);
+        assert.strictEqual(app.vectorPad.x, 0.9);
+
+        // Snapshot A/B buffer state before reset
+        app.abBuffer.activeBuffer = 'A';
+        app.abBuffer.bufferA = { rt60_decay: 6.5 };
+        app.abBuffer.bufferB = { rt60_decay: 11.0 };
+
+        // 2. Click Reset All
+        await resetBtn.click();
+
+        // 3. Verify knobs reset to DEFAULT preset (6.5s)
+        assert.strictEqual(app.knobs.rt60_decay.getValue(), 6.5);
+        const expectedPx = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (0.65 - 0.05) / 3.95), 1 / 1.6)));
+        assert.ok(Math.abs(app.vectorPad.x - expectedPx) < 0.01, 'Vector pad X must reset to calibrated coordinate');
+        assert.ok(Math.abs(app.vectorPad.y - 0.45) < 0.01, 'Vector pad Y must reset to calibrated coordinate');
+
+        // 4. Verify A/B comparison buffer state was untouched
+        assert.strictEqual(app.abBuffer.activeBuffer, 'A');
+        assert.strictEqual(app.abBuffer.bufferB.rt60_decay, 11.0);
+
+        // 5. Verify resetBtn was blurred
+        assert.strictEqual(resetBtn._blurred, true);
+
+        // 6. Test User Preset restore
+        const userPresetId = 'USER_TEST_123';
+        const userPresetData = {
+          [userPresetId]: {
+            id: userPresetId,
+            name: 'TEST CUSTOM',
+            isUser: true,
+            params: {
+              rt60_decay: 8.2,
+              tail_mod_rate: 1.5,
+              tail_mod_depth: 80
+            }
+          }
+        };
+        mockStorage.set('BRAUN_RB26_USER_PRESETS', JSON.stringify(userPresetData));
+
+        selectPreset.value = userPresetId;
+        app.knobs.rt60_decay.setValue(2.0);
+        await resetBtn.click();
+
+        assert.strictEqual(app.currentPresetKey, userPresetId);
+        assert.strictEqual(app.knobs.rt60_decay.getValue(), 8.2);
+        assert.strictEqual(selectPreset.value, userPresetId);
+      } finally {
+        globalThis.document = origDoc;
+        globalThis.window = origWin;
+        globalThis.localStorage = origStorage;
+      }
     });
 
     it('verifies standalone JUCE mode (isJuce=true) dispatches startRecording and stopRecording IPC', async () => {

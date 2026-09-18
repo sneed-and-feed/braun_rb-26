@@ -48,14 +48,14 @@ int main() {
         float outL = 0.0f, outR = 0.0f;
         // Inject burst
         for (int i = 0; i < 2000; ++i) {
-            float in = 0.5f * std::sin(2.0f * 3.14159265f * 440.0f * i / fs);
+            float in = static_cast<float>(0.5 * std::sin(2.0 * 3.141592653589793 * 440.0 * i / fs));
             tank.processSample(in, in, 0.0f, 0.0f, outL, outR);
         }
 
         // Measure energy before freeze
         double preFreezeEnergy = 0.0;
         for (int i = 0; i < 500; ++i) {
-            float in = 0.5f * std::sin(2.0f * 3.14159265f * 440.0f * (2000 + i) / fs);
+            float in = static_cast<float>(0.5 * std::sin(2.0 * 3.141592653589793 * 440.0 * (2000 + i) / fs));
             tank.processSample(in, in, 0.0f, 0.0f, outL, outR);
             preFreezeEnergy += (outL * outL + outR * outR);
         }
@@ -129,7 +129,7 @@ int main() {
 
         for (int b = 0; b < 10; ++b) {
             for (int i = 0; i < 512; ++i) {
-                inL[i] = 0.5f * std::sin(2.0f * 3.14159265f * 440.0f * (b * 512 + i) / fs);
+                inL[i] = static_cast<float>(0.5 * std::sin(2.0 * 3.141592653589793 * 440.0 * (b * 512 + i) / fs));
                 inR[i] = inL[i];
             }
             engine.process(inCh, outCh, 2, 512);
@@ -508,8 +508,8 @@ int main() {
             const int droneTotalSamp = static_cast<int>(rate * 5.0);
             for (int i = 0; i < droneTotalSamp; ++i) {
                 const double t = static_cast<double>(i) / rate;
-                const float s1 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f1 * t);
-                const float s2 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f2 * t);
+                const float s1 = static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * f1 * t));
+                const float s2 = static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * f2 * t));
                 float g = detector.process(s1 + s2, s1 + s2, 0.85f);
                 minGainDrone = std::min(minGainDrone, g);
                 if (g < 0.95f) duckSamplesDrone++;
@@ -563,8 +563,8 @@ int main() {
         for (int b = 0; b < numBlocks; ++b) {
             for (int i = 0; i < blockSize; ++i) {
                 const double t = static_cast<double>(b * blockSize + i) / fs;
-                const float s1 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f1 * t);
-                const float s2 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f2 * t);
+                const float s1 = static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * f1 * t));
+                const float s2 = static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * f2 * t));
                 inL[i] = s1 + s2;
                 inR[i] = s1 + s2;
             }
@@ -634,8 +634,8 @@ int main() {
         int lastDuckSample = -1;
         for (int i = 0; i < 48000 * 5; ++i) {
             const double t = static_cast<double>(i) / fs;
-            const float s1 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f1 * t);
-            const float s2 = 0.5f * std::sin(2.0 * 3.14159265358979323846 * f2 * t);
+            const float s1 = static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * f1 * t));
+            const float s2 = static_cast<float>(0.5 * std::sin(2.0 * 3.14159265358979323846 * f2 * t));
             float lowL = 0.0f, lowR = 0.0f;
             modal.processModalOnly(s1 + s2, s1 + s2, lowL, lowR);
             maxModalPeak = std::max(maxModalPeak, std::max(std::abs(lowL), std::abs(lowR)));

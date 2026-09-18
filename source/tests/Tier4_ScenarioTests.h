@@ -193,7 +193,7 @@ inline void registerTier4Tests() {
         // Bass slap: percussive attack followed by low resonance
         std::vector<float> slap(256);
         for (size_t i = 0; i < 256; ++i) {
-            slap[i] = std::exp(-static_cast<float>(i)/30.0f) * std::sin(test_utils::kTwoPi * 80.0 * i / 48000.0);
+            slap[i] = static_cast<float>(std::exp(-static_cast<float>(i)/30.0f) * std::sin(test_utils::kTwoPi * 80.0 * i / 48000.0));
         }
         std::vector<float> outL(256, 0.0f), outR(256, 0.0f);
         const float* inPtrs[2] = { slap.data(), slap.data() };

@@ -265,6 +265,13 @@ export class BraunVectorPad {
   }
 
   setDefaults(defaultX, defaultY) {
+    if (this._animId) {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._animId);
+      else clearTimeout(this._animId);
+      this._animId = null;
+    }
+    this.isEngaged = false;
+    this._updateStatusUi();
     this.defaultX = Math.max(0, Math.min(1.0, defaultX));
     this.defaultY = Math.max(0, Math.min(1.0, defaultY));
   }

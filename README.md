@@ -1,10 +1,10 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(381%2F381)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.3.8](https://img.shields.io/badge/Version-1.3.8-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.8)
+[![Version: 1.3.9](https://img.shields.io/badge/Version-1.3.9-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.9)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.8/BRAUN_RB26-v1.3.8-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.8/BRAUN_RB26-v1.3.8-macOS-Universal.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -17,9 +17,9 @@
 
 ---
 
-### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.8)
-* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.3.8-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.8/BRAUN_RB26-v1.3.8-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
-* **Windows x64**: **[`BRAUN_RB26-v1.3.8-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.8/BRAUN_RB26-v1.3.8-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.8/BRAUN_RB26-v1.3.8-VST3-Windows-x64.zip)** (~3 MB).
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.3.9)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.3.9-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.3.9-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.3.9/BRAUN_RB26-v1.3.9-VST3-Windows-x64.zip)** (~3 MB).
 * Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
 * **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
@@ -28,14 +28,13 @@
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
 > [!TIP]
-> **What's New in v1.3.8 (Default 3-Column View, Breakpoint Tuning, Persistent UI Switch, DAW Context Menus & Volume Calibration)**:
-> - **Default Window 3-Column View**: Default window opens in full 3-column view (1280x760, 19" studio rack chassis).
-> - **Responsive Breakpoint Tuning**: Responsive breakpoint tuned to 1040px to prevent premature 2-column collapsing.
-> - **Persistent Native DAW UI / Web UI Switching**: Toggle via header button with persistence saved in `%APPDATA%/Braun/RB26_settings.xml`.
-> - **Native DAW Context Menu Integration**: Native DAW context menu integration on parameter sliders.
-> - **Suppression of Default Context Menus**: Suppression of default Chromium/Edge context menus in Web view.
-> - **Freeze Button LED Circle Unlit State Fix**: Corrected unlit styling (`:not(.is-active) .braun-led`) for accurate visual feedback.
-> - **Input Trim Volume Range Calibration & Host Echo Suppression**: Input Trim volume range calibration ([-18, +18] dB) and 250ms host echo suppression preventing volume locking/jumping.
+> **What's New in v1.3.9 (Consolidated FDN API, 25ms Freeze Transitions, Zero-Curl Linux, Preset Reset Fix, Householder DC Blocker & Acoustic Decay Audit)**:
+> - **Consolidated `FdnReverbTank::setParameters` API**: Streamlined parameter configuration with default manifold argument for cleaner DSP integration.
+> - **25ms Freeze Ramp Smoothing**: Lengthened freeze ramp smoothing time constant to 25ms for natural chord transitions.
+> - **Elimination of Linux `libcurl` Dependency**: Set `JUCE_USE_CURL=0` across Linux builds, eliminating unnecessary external shared library dependencies.
+> - **Web UI "Reset All" Button Fix**: Cleanly resets all parameter knobs, switches, and vector pad coordinates back to the active selected preset.
+> - **Householder -1 Eigenmode DC Blocker & Smooth Knee Saturation**: Added 5 Hz DC blocker to suppress Householder reflection DC accumulation alongside C^1 smooth knee saturation (0.90 to 1.05).
+> - **Official AcousticDecayAudit Test Suite**: Integrated comprehensive acoustic decay audit verifying decay envelope fidelity and energy decay curve linearity (151/151 assertions passed).
 
 ---
 
@@ -428,10 +427,10 @@ braun_rb-26/
 │       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
 ├── VERIFICATION_CHECKLIST.md   # Reproducible verification checklist & benchmarks (100% PASS)
 ├── package.json                # Project manifest (scripts: test, verify:all, start)
-├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.3.8)
+├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.3.9)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
-├── releases/                   # Distribution archives (BRAUN_RB26-v1.3.8-Windows-x64.zip)
+├── releases/                   # Distribution archives (BRAUN_RB26-v1.3.9-Windows-x64.zip)
 ├── source/
 │   ├── dsp/                    # Pure C++20 real-time DSP engine
 │   │   ├── Rb26Engine.h/cpp    # Master processor, parameter struct, telemetry

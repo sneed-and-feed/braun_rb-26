@@ -40,12 +40,24 @@ namespace test {
 
 inline int gCurrentTestAssertFailures = 0;
 
+#if defined(_MSC_VER)
+#define TEST_ASSERT(cond, msg) do { \
+    __pragma(warning(push)) \
+    __pragma(warning(disable: 4127)) \
+    if (!(cond)) { \
+        std::cerr << "      ASSERTION FAILED [" << __FILE__ << ":" << __LINE__ << "]: " << (msg) << "\n"; \
+        ++test::gCurrentTestAssertFailures; \
+    } \
+    __pragma(warning(pop)) \
+} while (0)
+#else
 #define TEST_ASSERT(cond, msg) do { \
     if (!(cond)) { \
         std::cerr << "      ASSERTION FAILED [" << __FILE__ << ":" << __LINE__ << "]: " << (msg) << "\n"; \
         ++test::gCurrentTestAssertFailures; \
     } \
 } while (0)
+#endif
 
 #define TEST_ASSERT_NEAR(val, expected, tol, msg) do { \
     double v_ = static_cast<double>(val); \

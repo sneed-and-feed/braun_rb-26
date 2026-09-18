@@ -47,7 +47,7 @@ int main() {
     size_t sampleCounter = 0;
     for (size_t i = 0; i < 9600; ++i) {
         float s = static_cast<float>(std::sin(2.0 * kPi * 440.0 * sampleCounter++ / fs));
-        shifter.processSample(s);
+        (void)shifter.processSample(s);
     }
 
     int failures = 0;
@@ -62,7 +62,7 @@ int main() {
         // Run post-switch slewing transition
         for (size_t i = 0; i < 4800; ++i) {
             float s = static_cast<float>(std::sin(2.0 * kPi * 440.0 * sampleCounter++ / fs));
-            shifter.processSample(s);
+            (void)shifter.processSample(s);
         }
 
         std::vector<std::complex<double>> buf(N);

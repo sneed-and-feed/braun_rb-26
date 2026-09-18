@@ -100,7 +100,14 @@ public:
     static constexpr size_t kBufferCapacity = 131072;
     static constexpr size_t kBufferMask = kBufferCapacity - 1;
 
-    // Precomputed Horocycle cosh(xi * k / 7) values (xi = 1.760742) for ultra-fast room size evaluation
+    /**
+     * Precomputed Horocycle cosh(d_k) values for ultra-fast room size evaluation.
+     * The delay ratios represent discrete equidistant radial hyperbolic distance steps:
+     *   d_k = xi * k / 7 on H^2 (with xi = 1.760742)
+     * mapped to concentric horocyclic wavefront delay perimeters:
+     *   cosh(d_k) = (1 + r^2) / (1 - r^2)
+     * providing physical acoustic precision in the Poincaré hyperbolic geometry.
+     */
     static constexpr std::array<double, 8> kPoincareCosh = {{
         1.0,
         1.0318019661180760,
@@ -232,6 +239,12 @@ private:
     void updateSpatialWeights() noexcept;
 
     // Manifold-specific delay length calculation routines
+    /**
+     * Computes Poincaré hyperbolic delay lengths where delay ratios represent discrete
+     * equidistant radial hyperbolic distance steps (d_k = xi * k / 7 on H^2) mapped to
+     * concentric horocyclic wavefront delay perimeters (cosh(d_k) = (1+r^2)/(1-r^2)),
+     * providing physical acoustic precision.
+     */
     void computePoincareLengths(std::array<size_t, kNumLines>& lengths) const noexcept;
     void computeWhisperingLengths(std::array<size_t, kNumLines>& lengths) const noexcept;
     void computePlateLengths(std::array<size_t, kNumLines>& lengths) const noexcept;

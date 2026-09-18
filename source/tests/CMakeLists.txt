@@ -1,10 +1,5 @@
 # CMake configuration for test targets in source/tests
 
-if(UNIX AND NOT APPLE)
-    find_package(CURL REQUIRED)
-    link_libraries(CURL::libcurl)
-endif()
-
 add_executable(rb26_challenger1_m2_tests
     Challenger1M2StressTests.cpp
 )
@@ -73,7 +68,6 @@ target_link_libraries(rb26_m4_tests PRIVATE
 )
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(rb26_m4_tests PRIVATE CURL::libcurl)
     get_directory_property(_sub_target DIRECTORY ${CMAKE_SOURCE_DIR} JUCE_EMBEDDED_LINUX_SUBPROCESS_TARGET)
     if(_sub_target)
         target_link_libraries(rb26_m4_tests PRIVATE ${_sub_target})
@@ -109,4 +103,8 @@ target_include_directories(rb26_diag_cpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. 
 target_link_libraries(rb26_diag_cpu PRIVATE rb26_dsp_core)
 set_target_properties(rb26_diag_cpu PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
-
+add_executable(rb26_acoustic_decay_audit AcousticDecayAudit.cpp)
+target_include_directories(rb26_acoustic_decay_audit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../dsp)
+target_link_libraries(rb26_acoustic_decay_audit PRIVATE rb26_dsp_core)
+set_target_properties(rb26_acoustic_decay_audit PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME Rb26AcousticDecayAudit COMMAND rb26_acoustic_decay_audit)

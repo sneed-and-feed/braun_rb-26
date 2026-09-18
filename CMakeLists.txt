@@ -14,7 +14,7 @@ if(APPLE)
     endif()
 endif()
 
-project(BRAUN_RB26_PROJECT VERSION 1.3.8 LANGUAGES C CXX)
+project(BRAUN_RB26_PROJECT VERSION 1.3.9 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -56,7 +56,7 @@ if(RB26_USE_WEBVIEW)
         RB26_USE_WEBVIEW=1
         JUCE_USE_WIN_WEBVIEW2=1
         JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
-        JUCE_USE_CURL=1
+        JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
     )
 else()
@@ -68,13 +68,6 @@ else()
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
     )
-endif()
-
-# ==============================================================================
-# System Dependencies (Linux libcurl for JUCE Web / Networking)
-# ==============================================================================
-if(UNIX AND NOT APPLE)
-    find_package(CURL REQUIRED)
 endif()
 
 include(FetchContent)
@@ -185,11 +178,6 @@ target_link_libraries(rb26_dsp_core PUBLIC
     juce::juce_recommended_warning_flags
 )
 
-if(UNIX AND NOT APPLE)
-    find_package(CURL REQUIRED)
-    target_link_libraries(rb26_dsp_core PUBLIC CURL::libcurl)
-endif()
-
 # ==============================================================================
 # 5. Packaging Web Assets (Zip Archive & Binary Data if web UI present and enabled)
 # ==============================================================================
@@ -251,7 +239,7 @@ juce_add_plugin(BRAUN_RB26
     PLUGIN_CODE Rb26
     FORMATS ${RB26_FORMATS}
     PRODUCT_NAME "BRAUN_RB26"
-    VERSION "1.3.8"
+    VERSION "1.3.9"
     ${RB26_EXTRA_PLUGIN_ARGS}
 )
 
@@ -278,12 +266,9 @@ if(RB26_USE_WEBVIEW)
         RB26_USE_WEBVIEW=1
         JUCE_USE_WIN_WEBVIEW2=1
         JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
-        JUCE_USE_CURL=1
+        JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
     )
-    if(UNIX AND NOT APPLE)
-        target_link_libraries(BRAUN_RB26 PRIVATE CURL::libcurl)
-    endif()
 else()
     target_compile_definitions(BRAUN_RB26 PUBLIC
         JUCE_WEB_BROWSER=0
@@ -385,9 +370,6 @@ if(RB26_BUILD_TESTS)
             juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags
         )
-        if(UNIX AND NOT APPLE)
-            target_link_libraries(rb26_laf_tests PRIVATE CURL::libcurl)
-        endif()
         add_test(NAME Rb26LookAndFeelTests COMMAND rb26_laf_tests)
     endif()
 
@@ -404,9 +386,6 @@ if(RB26_BUILD_TESTS)
             juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags
         )
-        if(UNIX AND NOT APPLE)
-            target_link_libraries(rb26_web_resource_tests PRIVATE CURL::libcurl)
-        endif()
         add_test(NAME Rb26WebResourceTests COMMAND rb26_web_resource_tests)
     endif()
 

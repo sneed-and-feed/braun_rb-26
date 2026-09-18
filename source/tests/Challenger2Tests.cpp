@@ -1207,7 +1207,7 @@ bool runDelayModulationStressTests() {
         // Continuous 1000 Hz sine wave
         std::vector<float> inSig(totalSamples);
         for (size_t i = 0; i < totalSamples; ++i) {
-            inSig[i] = std::sin(2.0 * test_utils::kPi * 1000.0 * static_cast<double>(i) / fs) * 0.5f;
+            inSig[i] = static_cast<float>(std::sin(2.0 * test_utils::kPi * 1000.0 * static_cast<double>(i) / fs) * 0.5);
         }
 
         std::vector<float> outL(totalSamples, 0.0f);
@@ -1317,7 +1317,7 @@ bool runDelayModulationStressTests() {
 
         std::vector<float> inSig(totalSamples);
         for (size_t i = 0; i < totalSamples; ++i) {
-            inSig[i] = std::sin(2.0 * test_utils::kPi * 440.0 * static_cast<double>(i) / fs) * 0.4f;
+            inSig[i] = static_cast<float>(std::sin(2.0 * test_utils::kPi * 440.0 * static_cast<double>(i) / fs) * 0.4);
         }
 
         std::vector<float> outL(totalSamples, 0.0f);
@@ -1382,7 +1382,7 @@ bool runDelayModulationStressTests() {
 
         std::vector<float> inSig(totalSamples);
         for (size_t i = 0; i < totalSamples; ++i) {
-            inSig[i] = std::sin(2.0 * test_utils::kPi * 330.0 * static_cast<double>(i) / fs) * 0.5f;
+            inSig[i] = static_cast<float>(std::sin(2.0 * test_utils::kPi * 330.0 * static_cast<double>(i) / fs) * 0.5);
         }
 
         std::vector<float> outL(totalSamples, 0.0f);

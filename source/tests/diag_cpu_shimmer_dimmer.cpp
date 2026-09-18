@@ -16,7 +16,7 @@ int main() {
     const int numBlocks = 2000; // ~21 seconds of audio
 
     rb26::Rb26ReverbEngine engine;
-    engine.prepare(sampleRate, 4.0f);
+    engine.prepare(sampleRate, blockSize);
 
     struct TestCase {
         const char* name;
@@ -75,8 +75,8 @@ int main() {
 
         // Fill with realistic audio: sine wave with occasional transients
         for (int i = 0; i < blockSize; ++i) {
-            inL[i] = 0.3f * std::sin(2.0f * 3.14159f * 440.0f * i / sampleRate);
-            inR[i] = 0.3f * std::cos(2.0f * 3.14159f * 440.0f * i / sampleRate);
+            inL[i] = static_cast<float>(0.3 * std::sin(2.0 * 3.141592653589793 * 440.0 * i / sampleRate));
+            inR[i] = static_cast<float>(0.3 * std::cos(2.0 * 3.141592653589793 * 440.0 * i / sampleRate));
         }
 
         // Warm up 100 blocks

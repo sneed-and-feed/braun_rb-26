@@ -1040,13 +1040,101 @@ async function runBrowserTest() {
     console.log(`[BrowserTest] Vector pad Y=0.60 synced knob tail_mod_depth: ${syncedDepth}% (expected 60%)`);
     if (syncedDepth !== 60) throw new Error(`Expected tail_mod_depth 60, got ${syncedDepth}`);
 
-    // Test Calibrated Reset
+    // Test Calibrated Reset (Default Preset + Vector Pad + A/B Isolation)
     console.log('[BrowserTest] Testing Calibrated Reset...');
+    await evaluate(`{
+      const sel = document.getElementById('select-preset');
+      sel.value = 'DEFAULT';
+      sel.dispatchEvent(new Event('change'));
+      // Intentionally deviate RT60 away from default
+      window.__RB26__.knobs.rt60_decay.setValue(12.0, true);
+      // Intentionally deviate Vector Pad coordinates
+      if (window.__RB26__.vectorPad) {
+        window.__RB26__.vectorPad.setCoordinates(0.95, 0.15, true);
+      }
+      // Ensure A/B buffer has known state
+      window.__RB26__.abBuffer.activeBuffer = 'A';
+      window.__RB26__.abBuffer.bufferB = { rt60_decay: 4.2 };
+    }`);
     await evaluate(`document.getElementById('btn-reset-all').click()`);
     await new Promise(r => setTimeout(r, 100));
     const defaultRt60 = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
+    const padCoords = await evaluate(`({
+      x: window.__RB26__.vectorPad?.x ?? 0,
+      y: window.__RB26__.vectorPad?.y ?? 0,
+      defaultX: window.__RB26__.vectorPad?.defaultX ?? 0,
+      defaultY: window.__RB26__.vectorPad?.defaultY ?? 0,
+      abActive: window.__RB26__.abBuffer.activeBuffer,
+      abBufferBRt60: window.__RB26__.abBuffer.bufferB?.rt60_decay
+    })`);
     console.log(`[BrowserTest] Reset RT60 value: ${defaultRt60}s (expected 6.5s)`);
     if (Math.abs(defaultRt60 - 6.5) > 0.1) throw new Error(`Expected reset RT60 6.5, got ${defaultRt60}`);
+    console.log(`[BrowserTest] Vector pad reset coordinates: X=${padCoords.x.toFixed(3)}, Y=${padCoords.y.toFixed(3)} (defaults: ${padCoords.defaultX.toFixed(3)}, ${padCoords.defaultY.toFixed(3)})`);
+    if (Math.abs(padCoords.x - padCoords.defaultX) > 0.01 || Math.abs(padCoords.y - padCoords.defaultY) > 0.01) {
+      throw new Error(`Vector pad did not reset to calibrated coordinates: got (${padCoords.x}, ${padCoords.y}), expected (${padCoords.defaultX}, ${padCoords.defaultY})`);
+    }
+    if (padCoords.abActive !== 'A' || padCoords.abBufferBRt60 !== 4.2) {
+      throw new Error(`A/B comparison buffer state was unexpectedly modified by Reset All: active=${padCoords.abActive}, bufferB.rt60=${padCoords.abBufferBRt60}`);
+    }
+
+    // Test Reset All when a non-default preset is active
+    console.log('[BrowserTest] Testing Reset All when non-default preset is active (AMBIENT_GUITAR_CLOUD)...');
+    await evaluate(`{
+      const sel = document.getElementById('select-preset');
+      sel.value = 'AMBIENT_GUITAR_CLOUD';
+      sel.dispatchEvent(new Event('change'));
+      // Deviate RT60 knob
+      window.__RB26__.knobs.rt60_decay.setValue(3.0, true);
+    }`);
+    await evaluate(`document.getElementById('btn-reset-all').click()`);
+    await new Promise(r => setTimeout(r, 100));
+    const ambientRt60 = await evaluate(`window.__RB26__.knobs.rt60_decay.getValue()`);
+    console.log(`[BrowserTest] Reset RT60 value for AMBIENT_GUITAR_CLOUD: ${ambientRt60}s (expected 9.5s)`);
+    if (Math.abs(ambientRt60 - 9.5) > 0.1) throw new Error(`Expected reset RT60 9.5, got ${ambientRt60}`);
+
+    // Test Reset All on Custom User Preset (saved in localStorage)
+    console.log('[BrowserTest] Testing Reset All on custom User Preset (localStorage)...');
+    const userPresetResult = await evaluate(`(() => {
+      // 1. Create a user preset with specific params
+      window.__RB26__.knobs.rt60_decay.setValue(7.7, true);
+      window.__RB26__.knobs.tail_bloom.setValue(150, true);
+      window.__RB26__.saveUserPatch('TEST_RESET_CUSTOM');
+      const customId = window.__RB26__.currentPresetKey;
+      
+      // 2. Modify knobs away from the saved custom preset
+      window.__RB26__.knobs.rt60_decay.setValue(1.5, true);
+      window.__RB26__.knobs.tail_bloom.setValue(30, true);
+      
+      // 3. Click Reset All
+      document.getElementById('btn-reset-all').click();
+      
+      // 4. Read back restored values
+      const restoredRt60 = window.__RB26__.knobs.rt60_decay.getValue();
+      const restoredBloom = window.__RB26__.knobs.tail_bloom.getValue();
+      const activePreset = window.__RB26__.currentPresetKey;
+      const selectVal = document.getElementById('select-preset').value;
+      
+      // 5. Clean up localStorage and restore AMBIENT_GUITAR_CLOUD
+      const userPresets = window.__RB26__.getUserPresets();
+      delete userPresets[customId];
+      localStorage.setItem('BRAUN_RB26_USER_PRESETS', JSON.stringify(userPresets));
+      window.__RB26__._populateUserPresetsDropdown();
+      const sel = document.getElementById('select-preset');
+      sel.value = 'AMBIENT_GUITAR_CLOUD';
+      sel.dispatchEvent(new Event('change'));
+      
+      return { customId, restoredRt60, restoredBloom, activePreset, selectVal };
+    })()`);
+    console.log('[BrowserTest] User preset reset result:', userPresetResult);
+    if (Math.abs(userPresetResult.restoredRt60 - 7.7) > 0.1) {
+      throw new Error(`Expected user preset reset RT60 7.7, got ${userPresetResult.restoredRt60}`);
+    }
+    if (Math.abs(userPresetResult.restoredBloom - 150) > 2) {
+      throw new Error(`Expected user preset reset bloom 150, got ${userPresetResult.restoredBloom}`);
+    }
+    if (userPresetResult.activePreset !== userPresetResult.customId || userPresetResult.selectVal !== userPresetResult.customId) {
+      throw new Error(`Preset dropdown out of sync after User Preset reset: ${userPresetResult.activePreset} vs ${userPresetResult.selectVal}`);
+    }
 
     // Test Room Size Parameter Slew Smoothing & Dual-Bank Crossfading
     console.log('[BrowserTest] Testing Room Size live parameter smoothing and dual-bank crossfading...');
@@ -1168,8 +1256,8 @@ async function runBrowserTest() {
       throw new Error(`Output overloaded during direct engine rapid room size scrub! Peak: ${directPeakMax}`);
     }
 
-    // Allow adequate settling pause (2000ms) for the 6.5s RT60 tank reverberant tail and analyser smoothing (0.8) to decay before sampling FFT bin 0
-    await new Promise(r => setTimeout(r, 2000));
+    // Allow adequate settling pause (2500ms) for the reverberant tail and analyser smoothing (0.8) to decay before sampling FFT bin 0
+    await new Promise(r => setTimeout(r, 2500));
 
     // Verify DC-blocking attenuation: check sub-bass DC bin in frequency domain
     const dcDb = await evaluate(`
@@ -1330,8 +1418,12 @@ async function runBrowserTest() {
 
     console.log('[BrowserTest] Testing Power Cycle restore (Power ON)...');
     await evaluate(`document.getElementById('btn-power').click()`);
-    await new Promise(r => setTimeout(r, 100)); // Allow async ctx.resume and power restore
-    const isPowerRestored = await evaluate(`window.__RB26__.isPowered === true && window.__RB26__.engine.isPowered === true`);
+    let isPowerRestored = false;
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 50));
+      isPowerRestored = await evaluate(`window.__RB26__.isPowered === true && window.__RB26__.engine.isPowered === true`);
+      if (isPowerRestored) break;
+    }
     console.log(`[BrowserTest] Power restored: ${isPowerRestored}`);
     if (!isPowerRestored) throw new Error('Expected power to be ON after clicking power button');
 

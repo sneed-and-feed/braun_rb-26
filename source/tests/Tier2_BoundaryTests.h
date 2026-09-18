@@ -132,8 +132,8 @@ inline void registerTier2Tests() {
         rb26::OnePoleLowpass lp;
         lp.reset();
         lp.setCutoff(48000.0f, 5000.0f);
-        lp.process(1.0f);
-        for (int i = 0; i < 50000; ++i) lp.process(0.0f);
+        (void)lp.process(1.0f);
+        for (int i = 0; i < 50000; ++i) (void)lp.process(0.0f);
         float state = lp.process(0.0f);
         TEST_ASSERT(state == 0.0f, "Extended silence must flush damping filter state to exact 0.0f");
         return test::gCurrentTestAssertFailures == 0;
@@ -345,7 +345,7 @@ inline void registerTier2Tests() {
     registerTest("Tier 2", "T2_F06_1", "Loop Filter Boundary - Pure DC Step Rejection in Shimmer Filter", []() {
         rb26::ShimmerLoopFilter f;
         f.prepare(48000.0);
-        for (int i = 0; i < 2000; ++i) f.process(1.0f);
+        for (int i = 0; i < 2000; ++i) (void)f.process(1.0f);
         float y = f.process(1.0f);
         TEST_ASSERT(std::abs(y) < 1.0e-4f, "DC step must be rejected to zero");
         return test::gCurrentTestAssertFailures == 0;
@@ -354,7 +354,7 @@ inline void registerTier2Tests() {
     registerTest("Tier 2", "T2_F06_2", "Loop Filter Boundary - Pure DC Step Rejection in Dimmer Filter", []() {
         rb26::DimmerLoopFilter f;
         f.prepare(48000.0);
-        for (int i = 0; i < 4000; ++i) f.process(1.0f);
+        for (int i = 0; i < 4000; ++i) (void)f.process(1.0f);
         float y = f.process(1.0f);
         TEST_ASSERT(std::abs(y) < 1.0e-3f, "DC step must be rejected to zero");
         return test::gCurrentTestAssertFailures == 0;
@@ -375,7 +375,7 @@ inline void registerTier2Tests() {
     registerTest("Tier 2", "T2_F06_4", "Loop Filter Boundary - Immediate Filter State Reset", []() {
         rb26::ShimmerLoopFilter f;
         f.prepare(48000.0);
-        for (int i = 0; i < 100; ++i) f.process(1.0f);
+        for (int i = 0; i < 100; ++i) (void)f.process(1.0f);
         f.reset();
         float y = f.process(0.0f);
         TEST_ASSERT(y == 0.0f, "Reset must zero all filter states immediately");
@@ -1643,7 +1643,7 @@ inline void registerTier2Tests() {
     registerTest("Tier 2", "T2_F28_4", "Rack Layout Boundary - Full HD Grid Layout Geometry (1920x1080)", []() {
         int w = 1920, h = 1080;
         int deckH = h / 6; // 180px per deck
-        TEST_ASSERT(deckH >= 120, "Each deck on 1080p rack layout must have >= 120px height");
+        TEST_ASSERT(w == 1920 && deckH >= 120, "Each deck on 1080p rack layout must have >= 120px height");
         return test::gCurrentTestAssertFailures == 0;
     });
 
@@ -1876,7 +1876,7 @@ inline void registerTier2Tests() {
 
     registerTest("Tier 2", "T2_F33_4", "Verification Suite Boundary - Batch Stress Invocations", []() {
         for (int i = 0; i < 100; ++i) {
-            rb26::softLimit(0.5f);
+            (void)rb26::softLimit(0.5f);
         }
         TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "Batch invocations must run without fault");
         return test::gCurrentTestAssertFailures == 0;

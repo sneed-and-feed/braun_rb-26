@@ -166,8 +166,19 @@ void ManifoldDelayNetwork::setManifold(ManifoldType type) noexcept {
     setParameters(type, mRoomSize, mHighDampingHz, mDiffusionDensity);
 }
 
+/**
+ * Computes delay lengths for Poincaré Hyperbolic manifold topology.
+ * The delay ratios represent discrete equidistant radial hyperbolic distance steps
+ * (d_k = xi * k / 7 on H^2, with xi = 1.760742) mapped to concentric horocyclic
+ * wavefront delay perimeters (cosh(d_k) = (1+r^2)/(1-r^2)), providing physical
+ * acoustic precision:
+ *   L_k = round(L_0 * cosh(d_k)) + primeOffset
+ * Nominal L_0 = 1000 at 48 kHz, roomSize = 1.0.
+ */
 void ManifoldDelayNetwork::computePoincareLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
-    // Horocycle delays: L_k = round(L_0 * cosh(xi * k / 7)) + primeOffset
+    // Horocycle delays: L_k = round(L_0 * cosh(d_k)) + primeOffset
+    // Discrete equidistant radial hyperbolic distance steps (d_k = xi * k / 7 on H^2)
+    // mapped to concentric horocyclic wavefront delay perimeters (cosh(d_k) = (1+r^2)/(1-r^2))
     // Nominal L_0 = 1000 at 48 kHz, roomSize = 1.0; xi = 1.760742
     const double rateScale = mSampleRate / 48000.0;
     const double safeRoom = std::clamp(static_cast<double>(mRoomSize), 0.05, static_cast<double>(mMaxRoomSize));

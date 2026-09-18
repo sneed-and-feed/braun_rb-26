@@ -144,7 +144,7 @@ inline void registerTier1Tests() {
     registerTest("Tier 1", "T1_F02_2", "HF Damping - Coefficient Formula Exact Computation", []() {
         const float fs = 48000.0f;
         const float fc = 6500.0f;
-        const float expectedAlpha = 1.0f - std::exp(-test_utils::kTwoPi * (fc / fs));
+        const float expectedAlpha = 1.0f - static_cast<float>(std::exp(-test_utils::kTwoPi * (fc / fs)));
         TEST_ASSERT(expectedAlpha > 0.5f && expectedAlpha < 0.65f, "Alpha should be ~0.57 for 6.5kHz cutoff at 48kHz");
         return test::gCurrentTestAssertFailures == 0;
     });
@@ -184,8 +184,8 @@ inline void registerTier1Tests() {
         rb26::OnePoleLowpass lp;
         lp.reset();
         lp.setCutoff(48000.0f, 5000.0f);
-        for (int i = 0; i < 50; ++i) lp.process(1.0f);
-        for (int i = 0; i < 10000; ++i) lp.process(0.0f);
+        for (int i = 0; i < 50; ++i) (void)lp.process(1.0f);
+        for (int i = 0; i < 10000; ++i) (void)lp.process(0.0f);
         float finalState = lp.process(0.0f);
         TEST_ASSERT(finalState == 0.0f, "Damping state must flush denormals to exact 0.0f");
         return test::gCurrentTestAssertFailures == 0;
@@ -364,9 +364,9 @@ inline void registerTier1Tests() {
     registerTest("Tier 1", "T1_F04_4", "Shimmer Shifter - Constant Power Sine Crossfade Windows", []() {
         for (int i = 0; i <= 100; ++i) {
             float phase = static_cast<float>(i) / 100.0f;
-            float w1 = std::sin(test_utils::kPi * phase);
+            float w1 = static_cast<float>(std::sin(test_utils::kPi * phase));
             float phase2 = (phase >= 0.5f) ? (phase - 0.5f) : (phase + 0.5f);
-            float w2 = std::sin(test_utils::kPi * phase2);
+            float w2 = static_cast<float>(std::sin(test_utils::kPi * phase2));
             float power = w1 * w1 + w2 * w2;
             TEST_ASSERT_NEAR(power, 1.0f, 1.0e-5f, "Window power w1^2 + w2^2 must equal 1.0");
         }
@@ -431,7 +431,7 @@ inline void registerTier1Tests() {
         monoShifter.setInterval(-12);
         monoShifter.setInterval(-24);
         // Process arbitrary samples to ensure no crash on interval change
-        for (int i = 0; i < 500; ++i) monoShifter.processSample(0.5f);
+        for (int i = 0; i < 500; ++i) (void)monoShifter.processSample(0.5f);
         TEST_ASSERT(test::gCurrentTestAssertFailures == 0, "Window scaling must execute without exception");
         return test::gCurrentTestAssertFailures == 0;
     });
@@ -441,7 +441,7 @@ inline void registerTier1Tests() {
         monoShifter.prepare(48000.0);
         monoShifter.setInterval(-12);
         // Process a pulse burst and observe delayed output across the 4800-sample window
-        for (int i = 0; i < 200; ++i) monoShifter.processSample(1.0f);
+        for (int i = 0; i < 200; ++i) (void)monoShifter.processSample(1.0f);
         float peakAfter = 0.0f;
         for (int i = 200; i < 10000; ++i) {
             float out = monoShifter.processSample(0.0f);
@@ -616,7 +616,7 @@ inline void registerTier1Tests() {
     registerTest("Tier 1", "T1_F07_4", "Pitch Blend - Constant Power Weighting Across Range", []() {
         for (int i = -100; i <= 100; i += 10) {
             float blend = static_cast<float>(i) / 100.0f;
-            float angle = (test_utils::kPi * 0.25f) * (1.0f - blend);
+            float angle = static_cast<float>(test_utils::kPi * 0.25) * (1.0f - blend);
             float wS = std::cos(angle);
             float wD = std::sin(angle);
             float pwr = wS * wS + wD * wD;
@@ -1397,7 +1397,7 @@ inline void registerTier1Tests() {
 
     registerTest("Tier 1", "T1_F16_5", "Hermite Interpolation - Click-Free Dynamic Delay Traversal", []() {
         std::vector<float> buffer(2048);
-        for (size_t i = 0; i < 2048; ++i) buffer[i] = std::sin(test_utils::kTwoPi * i / 256.0f);
+        for (size_t i = 0; i < 2048; ++i) buffer[i] = static_cast<float>(std::sin(test_utils::kTwoPi * i / 256.0));
 
         float prev = 0.0f;
         float maxJump = 0.0f;
@@ -1437,7 +1437,7 @@ inline void registerTier1Tests() {
         float outL, outR;
         // Seed the tank with audio
         for (int i = 0; i < 500; ++i) {
-            float in = 0.5f * std::sin(2.0 * 3.14159 * 400.0 * i / 48000.0);
+            float in = static_cast<float>(0.5 * std::sin(2.0 * 3.141592653589793 * 400.0 * i / 48000.0));
             tank.processSample(in, in, 0.0f, 0.0f, outL, outR);
         }
         for (int i = 0; i < 2000; ++i) tank.processSample(0.0f, 0.0f, 0.0f, 0.0f, outL, outR);
@@ -1500,8 +1500,8 @@ inline void registerTier1Tests() {
     registerTest("Tier 1", "T1_F18_1", "Master Bus - Equal-Power Dry/Wet Summing Law", []() {
         for (int i = 0; i <= 100; i += 10) {
             float mix = static_cast<float>(i) / 100.0f;
-            float dryGain = std::cos(mix * test_utils::kPi * 0.5f);
-            float wetGain = std::sin(mix * test_utils::kPi * 0.5f);
+            float dryGain = static_cast<float>(std::cos(mix * test_utils::kPi * 0.5));
+            float wetGain = static_cast<float>(std::sin(mix * test_utils::kPi * 0.5));
             float pwr = dryGain * dryGain + wetGain * wetGain;
             TEST_ASSERT_NEAR(pwr, 1.0f, 1.0e-5f, "Equal power dry/wet gains must conserve power");
         }
@@ -1531,8 +1531,8 @@ inline void registerTier1Tests() {
     registerTest("Tier 1", "T1_F18_3", "Master Bus - Early/Late Balance Equal-Power Law", []() {
         for (int i = 0; i <= 100; i += 10) {
             float elMix = static_cast<float>(i) / 100.0f;
-            float eg = std::cos(elMix * test_utils::kPi * 0.5f);
-            float lg = std::sin(elMix * test_utils::kPi * 0.5f);
+            float eg = static_cast<float>(std::cos(elMix * test_utils::kPi * 0.5));
+            float lg = static_cast<float>(std::sin(elMix * test_utils::kPi * 0.5));
             float pwr = eg * eg + lg * lg;
             TEST_ASSERT_NEAR(pwr, 1.0f, 1.0e-5f, "Early/Late balance must follow equal power law");
         }
@@ -1599,7 +1599,7 @@ inline void registerTier1Tests() {
         preDelaySmoother.reset(0.0f);
         preDelaySmoother.setTarget(100.0f);
 
-        for (int i = 0; i < 2000; ++i) preDelaySmoother.next();
+        for (int i = 0; i < 2000; ++i) (void)preDelaySmoother.next();
         TEST_ASSERT(preDelaySmoother.getCurrent() > 50.0f, "Smoother should slew significantly towards target");
         return test::gCurrentTestAssertFailures == 0;
     });
@@ -1857,8 +1857,8 @@ inline void registerTier1Tests() {
     });
 
     registerTest("Tier 1", "T1_F24_5", "Platform Support - Standard Library Math Portability", []() {
-        float s = std::sin(test_utils::kPi * 0.25f);
-        float c = std::cos(test_utils::kPi * 0.25f);
+        float s = std::sin(static_cast<float>(test_utils::kPi * 0.25));
+        float c = std::cos(static_cast<float>(test_utils::kPi * 0.25));
         TEST_ASSERT_NEAR(s, c, 1.0e-6f, "std::sin and std::cos must evaluate accurately");
         return test::gCurrentTestAssertFailures == 0;
     });
@@ -2218,7 +2218,8 @@ inline void registerTier1Tests() {
         const int ccDecay = 15;
         const int ccMix = 16;
         const int ccFreeze = 64;
-        TEST_ASSERT(ccFreeze == 64, "Sustain pedal / freeze mapped to standard CC 64");
+        TEST_ASSERT(ccPreDelay == 14 && ccDecay == 15 && ccMix == 16 && ccFreeze == 64,
+                    "MIDI CC mapping schema for pre-delay, decay, mix, and freeze must be standard");
         return test::gCurrentTestAssertFailures == 0;
     });
 

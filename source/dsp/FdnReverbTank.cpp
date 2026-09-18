@@ -21,14 +21,18 @@ void FdnReverbTank::prepare(double sampleRate, float maxRoomSize) noexcept {
     }
 
     mFreezeInputSmoother.setSampleRate(fs);
-    mFreezeInputSmoother.setTimeConstant(0.008f);
+    mFreezeInputSmoother.setTimeConstant(kFreezeInputTimeConstantSec);
     mFreezeInputSmoother.reset(1.0f);
 
     mFreezeLoopSmoother.setSampleRate(fs);
-    mFreezeLoopSmoother.setTimeConstant(0.005f);
+    mFreezeLoopSmoother.setTimeConstant(kFreezeLoopTimeConstantSec);
     mFreezeLoopSmoother.reset(0.0f);
 
-    mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz);
+    for (size_t k = 0; k < kNumLines; ++k) {
+        mDcBlockers[k].setCutoff(5.0f, mSampleRate);
+    }
+
+    mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz, mDiffusionDensity);
     updateDecayGains();
     reset();
 }
@@ -42,27 +46,31 @@ void FdnReverbTank::reset() noexcept {
         mAllpassWriteIndices[i] = 0;
     }
 
+    for (size_t k = 0; k < kNumLines; ++k) {
+        mDcBlockers[k].reset();
+    }
+
     mFreezeInputSmoother.reset(mFreezeHold ? 0.0f : 1.0f);
     mFreezeLoopSmoother.reset(mFreezeHold ? 1.0f : 0.0f);
 }
 
 void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float highDampingHz,
                                  float diffusionDensity, bool freezeHold,
-                                 float tailModRateHz, float tailModDepthMs, float tailBloomMs) noexcept {
-    setParameters(roomSize, decayRt60Sec, highDampingHz, diffusionDensity, freezeHold,
-                  tailModRateHz, tailModDepthMs, tailBloomMs, mCurrentManifold);
-}
-
-void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float highDampingHz,
-                                 float diffusionDensity, bool freezeHold,
                                  float tailModRateHz, float tailModDepthMs, float tailBloomMs,
-                                 ManifoldType manifoldType) noexcept {
-    mRoomSize = std::clamp(roomSize, 0.1f, mMaxRoomSize);
-    mDecayRt60 = std::clamp(decayRt60Sec, 0.2f, 30.0f);
-    mHighDampingHz = std::clamp(highDampingHz, 500.0f, 20000.0f);
-    mDiffusionDensity = std::clamp(diffusionDensity, 0.0f, 1.0f);
+                                 std::optional<ManifoldType> manifoldType) noexcept {
+    const float safeRoom = (!std::isnan(roomSize)) ? roomSize : mRoomSize;
+    const float safeRt60 = (!std::isnan(decayRt60Sec)) ? decayRt60Sec : mDecayRt60;
+    const float safeDamp = (!std::isnan(highDampingHz)) ? highDampingHz : mHighDampingHz;
+    const float safeDiff = (!std::isnan(diffusionDensity)) ? diffusionDensity : mDiffusionDensity;
+
+    mRoomSize = std::clamp(safeRoom, 0.1f, mMaxRoomSize);
+    mDecayRt60 = std::clamp(safeRt60, 0.2f, 30.0f);
+    mHighDampingHz = std::clamp(safeDamp, 500.0f, 20000.0f);
+    mDiffusionDensity = std::clamp(safeDiff, 0.0f, 1.0f);
     mFreezeHold = freezeHold;
-    mCurrentManifold = manifoldType;
+    if (manifoldType.has_value()) {
+        mCurrentManifold = *manifoldType;
+    }
 
     if (mFreezeHold) {
         mFreezeInputSmoother.setTarget(0.0f);
@@ -72,7 +80,11 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
         mFreezeLoopSmoother.setTarget(0.0f);
     }
 
-    mTailModulator.setParameters(tailModRateHz, tailModDepthMs, tailBloomMs);
+    const float safeModRate  = (!std::isnan(tailModRateHz))  ? tailModRateHz  : 0.65f;
+    const float safeModDepth = (!std::isnan(tailModDepthMs)) ? tailModDepthMs : 2.25f;
+    const float safeBloom    = (!std::isnan(tailBloomMs))    ? tailBloomMs    : 85.0f;
+
+    mTailModulator.setParameters(safeModRate, safeModDepth, safeBloom);
     mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz, mDiffusionDensity);
     updateDecayGains();
 }
@@ -169,10 +181,11 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     for (size_t k = 0; k < kNumLines; ++k) {
         const float reflected = y[k] - matrixOffset;
         const float effGain = (1.0f - freezeLoop) * mFeedbackGains[k] + freezeLoop * 1.0f;
-        const float feedback = reflected * effGain;
+        const float dcBlocked = mDcBlockers[k].process(reflected);
+        const float feedback = dcBlocked * effGain;
         const float nextIn = feedback + injection[k];
         const float satNormal = applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f);
-        const float satFreeze = std::clamp(nextIn, -1.05f, 1.05f);
+        const float satFreeze = applySmoothBoundaryKnee(nextIn, 0.90f, 1.05f);
         saturated[k] = flushDenormal((1.0f - freezeLoop) * satNormal + freezeLoop * satFreeze);
     }
     mManifoldNetwork.writeFeedback(saturated);

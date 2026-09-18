@@ -90,7 +90,7 @@ static int gTotalAssertions = 0;
 } while (0)
 
 // Helper: Calculate RMS of buffer
-static double calcRMS(const float* data, size_t count) {
+[[maybe_unused]] static double calcRMS(const float* data, size_t count) {
     if (count == 0) return 0.0;
     double sum = 0.0;
     for (size_t i = 0; i < count; ++i) {
@@ -100,7 +100,7 @@ static double calcRMS(const float* data, size_t count) {
 }
 
 // Helper: Calculate Peak
-static float calcPeak(const float* data, size_t count) {
+[[maybe_unused]] static float calcPeak(const float* data, size_t count) {
     float peak = 0.0f;
     for (size_t i = 0; i < count; ++i) {
         peak = std::max(peak, std::abs(data[i]));

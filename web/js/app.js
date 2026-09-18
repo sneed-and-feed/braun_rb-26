@@ -452,6 +452,18 @@ export class ReverbComparisonBuffer {
       if (holdBtn) snap.decay_hold = holdBtn.classList.contains('is-active');
       const limBtn = document.getElementById('btn-soft-limiter');
       if (limBtn) snap.soft_limiter = limBtn.classList.contains('is-active');
+      const activeShim = document.querySelector('.shim-interval-btn.is-active');
+      if (activeShim) {
+        snap.shimmer_interval = parseInt(activeShim.getAttribute('data-interval') || activeShim.dataset?.interval, 10);
+      } else if (this.app.engine && this.app.engine.shimmerInterval !== undefined) {
+        snap.shimmer_interval = this.app.engine.shimmerInterval;
+      }
+      const activeDim = document.querySelector('.dim-interval-btn.is-active');
+      if (activeDim) {
+        snap.dimmer_interval = parseInt(activeDim.getAttribute('data-interval') || activeDim.dataset?.interval, 10);
+      } else if (this.app.engine && this.app.engine.dimmerInterval !== undefined) {
+        snap.dimmer_interval = this.app.engine.dimmerInterval;
+      }
     }
     return snap;
   }
@@ -508,6 +520,20 @@ export class ReverbComparisonBuffer {
           if (led) led.classList.toggle('is-active', snapshot.soft_limiter);
           if (this.app.engine) this.app.engine.setParam('limiterEnable', snapshot.soft_limiter);
         }
+      }
+      if (snapshot.shimmer_interval !== undefined) {
+        if (this.app.engine) this.app.engine.setParam('shimmerInterval', snapshot.shimmer_interval);
+        const shimBtns = document.querySelectorAll('.shim-interval-btn');
+        shimBtns.forEach((btn) => {
+          btn.classList.toggle('is-active', parseInt(btn.getAttribute('data-interval') || btn.dataset?.interval, 10) === snapshot.shimmer_interval);
+        });
+      }
+      if (snapshot.dimmer_interval !== undefined) {
+        if (this.app.engine) this.app.engine.setParam('dimmerInterval', snapshot.dimmer_interval);
+        const dimBtns = document.querySelectorAll('.dim-interval-btn');
+        dimBtns.forEach((btn) => {
+          btn.classList.toggle('is-active', parseInt(btn.getAttribute('data-interval') || btn.dataset?.interval, 10) === snapshot.dimmer_interval);
+        });
       }
     }
   }
@@ -1430,11 +1456,16 @@ export class BraunRb26App {
       });
     }
 
-    // Reset All Button
+    // Reset All Button (resets all parameters to the active preset)
     const resetBtn = document.getElementById('btn-reset-all');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        this.loadPreset('DEFAULT');
+        const presetSelect = document.getElementById('select-preset');
+        const targetPreset = (presetSelect && presetSelect.value) || this.currentPresetKey || 'DEFAULT';
+        this.loadPreset(targetPreset);
+        if (typeof resetBtn.blur === 'function') {
+          resetBtn.blur();
+        }
       });
     }
   }
@@ -1523,10 +1554,24 @@ export class BraunRb26App {
         snap[key] = knob.getValue();
       }
     }
-    const holdBtn = document.getElementById('btn-decay-hold');
-    if (holdBtn) snap.decay_hold = holdBtn.classList.contains('is-active');
-    const limBtn = document.getElementById('btn-soft-limiter');
-    if (limBtn) snap.soft_limiter = limBtn.classList.contains('is-active');
+    if (typeof document !== 'undefined') {
+      const holdBtn = document.getElementById('btn-decay-hold');
+      if (holdBtn) snap.decay_hold = holdBtn.classList.contains('is-active');
+      const limBtn = document.getElementById('btn-soft-limiter');
+      if (limBtn) snap.soft_limiter = limBtn.classList.contains('is-active');
+      const activeShim = document.querySelector('.shim-interval-btn.is-active');
+      if (activeShim) {
+        snap.shimmer_interval = parseInt(activeShim.getAttribute('data-interval') || activeShim.dataset?.interval, 10);
+      } else if (this.engine && this.engine.shimmerInterval !== undefined) {
+        snap.shimmer_interval = this.engine.shimmerInterval;
+      }
+      const activeDim = document.querySelector('.dim-interval-btn.is-active');
+      if (activeDim) {
+        snap.dimmer_interval = parseInt(activeDim.getAttribute('data-interval') || activeDim.dataset?.interval, 10);
+      } else if (this.engine && this.engine.dimmerInterval !== undefined) {
+        snap.dimmer_interval = this.engine.dimmerInterval;
+      }
+    }
     return snap;
   }
 
@@ -1627,12 +1672,24 @@ export class BraunRb26App {
       this.engine.setParam('shimmerInterval', params.shimmer_interval);
       const sIdx = params.shimmer_interval === 7 ? 0 : (params.shimmer_interval === 24 ? 2 : 1);
       this._emitJuceParam('shimmerInterval', sIdx);
+      if (typeof document !== 'undefined') {
+        const shimBtns = document.querySelectorAll('.shim-interval-btn');
+        shimBtns.forEach((btn) => {
+          btn.classList.toggle('is-active', parseInt(btn.getAttribute('data-interval') || btn.dataset?.interval, 10) === params.shimmer_interval);
+        });
+      }
     }
 
     if (params.dimmer_interval !== undefined) {
       this.engine.setParam('dimmerInterval', params.dimmer_interval);
       const dIdx = params.dimmer_interval === -2 ? 0 : (params.dimmer_interval === -7 ? 1 : 2);
       this._emitJuceParam('dimmerInterval', dIdx);
+      if (typeof document !== 'undefined') {
+        const dimBtns = document.querySelectorAll('.dim-interval-btn');
+        dimBtns.forEach((btn) => {
+          btn.classList.toggle('is-active', parseInt(btn.getAttribute('data-interval') || btn.dataset?.interval, 10) === params.dimmer_interval);
+        });
+      }
     }
 
     if (params.decay_hold !== undefined) {
@@ -1668,6 +1725,10 @@ export class BraunRb26App {
       const userPresets = this.getUserPresets();
       preset = userPresets[presetKey];
     }
+    if (!preset && presetKey !== 'DEFAULT') {
+      preset = FACTORY_PRESETS['DEFAULT'];
+      presetKey = 'DEFAULT';
+    }
     if (!preset) return;
 
     this.currentPresetKey = presetKey;
@@ -1683,7 +1744,9 @@ export class BraunRb26App {
       if (presetSelect.value !== presetKey) {
         presetSelect.value = presetKey;
       }
-      presetSelect.blur();
+      if (document.activeElement === presetSelect) {
+        presetSelect.blur();
+      }
     }
 
     if (this.vectorPad && preset.params) {
@@ -1699,12 +1762,24 @@ export class BraunRb26App {
       this.engine.setParam('shimmerInterval', preset.params.shimmer_interval);
       const sIdx = preset.params.shimmer_interval === 7 ? 0 : (preset.params.shimmer_interval === 24 ? 2 : 1);
       this._emitJuceParam('shimmerInterval', sIdx);
+      if (typeof document !== 'undefined') {
+        const shimBtns = document.querySelectorAll('.shim-interval-btn');
+        shimBtns.forEach((btn) => {
+          btn.classList.toggle('is-active', parseInt(btn.getAttribute('data-interval') || btn.dataset?.interval, 10) === preset.params.shimmer_interval);
+        });
+      }
     }
 
     if (preset.params.dimmer_interval !== undefined) {
       this.engine.setParam('dimmerInterval', preset.params.dimmer_interval);
       const dIdx = preset.params.dimmer_interval === -2 ? 0 : (preset.params.dimmer_interval === -7 ? 1 : 2);
       this._emitJuceParam('dimmerInterval', dIdx);
+      if (typeof document !== 'undefined') {
+        const dimBtns = document.querySelectorAll('.dim-interval-btn');
+        dimBtns.forEach((btn) => {
+          btn.classList.toggle('is-active', parseInt(btn.getAttribute('data-interval') || btn.dataset?.interval, 10) === preset.params.dimmer_interval);
+        });
+      }
     }
 
     const holdBtn = document.getElementById('btn-decay-hold');
