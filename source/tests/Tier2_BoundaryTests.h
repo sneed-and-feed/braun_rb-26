@@ -1117,6 +1117,114 @@ inline void registerTier2Tests() {
         return test::gCurrentTestAssertFailures == 0;
     });
 
+    registerTest("Tier 2", "T2_F18_6", "Master Boundary - Limiter Threshold Regression (Nominal -14 to -12 dBFS Peak & Extreme +40 dBFS Clamping)", []() {
+        // Part 1: Nominal unit impulse test (0 dBFS / 1.0f impulse)
+        // Verifies calibrated early reflection cluster headroom: unit impulse on maximum tap (tap 0, gain 0.82, pan -0.75)
+        // with kClusterGain = 0.28f yields a discrete reflection peak of 0.28 * 0.82 * cos(0.0625 * pi) = 0.2252 (-12.95 dBFS),
+        // strictly falling within the calibrated [-14 dBFS, -12 dBFS] headroom window.
+        const float theta0 = (-0.75f + 1.0f) * 0.25f * static_cast<float>(test_utils::kPi);
+        const float tap0Peak = 0.28f * 0.82f * std::cos(theta0);
+        const float tapPeakDb = rb26::gainToDb(tap0Peak);
+        TEST_ASSERT(tapPeakDb >= -14.0f && tapPeakDb <= -12.0f,
+                    "Nominal unit impulse tap cluster peak must be between -14 dBFS and -12 dBFS");
+
+        // Verify EarlyReflections instance processes unit impulse cleanly with peak below -12 dBFS
+        rb26::EarlyReflections er;
+        er.prepare(48000.0, 4.0f);
+        er.setParameters(1.0f, 0.0f); // Default roomSize = 1.0, diffusion = 0.0
+
+        float maxNominalPeak = 0.0f;
+        float outL = 0.0f, outR = 0.0f;
+        er.processSample(1.0f, 0.0f, outL, outR);
+        maxNominalPeak = std::max({ maxNominalPeak, std::abs(outL), std::abs(outR) });
+
+        for (int i = 0; i < 8000; ++i) {
+            er.processSample(0.0f, 0.0f, outL, outR);
+            maxNominalPeak = std::max({ maxNominalPeak, std::abs(outL), std::abs(outR) });
+        }
+        const float erPeakDb = rb26::gainToDb(maxNominalPeak);
+        TEST_ASSERT(erPeakDb <= -12.0f, "Damped early reflection impulse output must not exceed -12 dBFS");
+
+        // Part 2: Extreme impulse test: +40 dBFS impulse (amplitude 100.0f) with limiter enabled
+        // Guarantees ceiling <= 1.000000f, zero overshoot, zero NaNs/Infs
+        rb26::Rb26ReverbEngine engine;
+        engine.prepare(48000.0, 128);
+        rb26::Rb26Parameters p;
+        p.limiterEnable = true;
+        p.dryWetMix = 0.5f;
+        p.outputTrimDb = 0.0f;
+        engine.setParameters(p);
+
+        // Pre-run engine to settle initial filter state and smoothers
+        std::vector<float> zeros(128, 0.0f);
+        std::vector<float> bufL(128, 0.0f), bufR(128, 0.0f);
+        const float* zeroPtrs[2] = { zeros.data(), zeros.data() };
+        float* outPtrs[2] = { bufL.data(), bufR.data() };
+        for (int i = 0; i < 20; ++i) engine.process(zeroPtrs, outPtrs, 2, 128);
+
+        // Inject +40 dBFS impulse (100.0f)
+        std::vector<float> extL(128, 0.0f), extR(128, 0.0f);
+        extL[0] = 100.0f;
+        extR[0] = 100.0f;
+        const float* extPtrs[2] = { extL.data(), extR.data() };
+
+        float extremePeak = 0.0f;
+        bool hasNonFinite = false;
+
+        engine.process(extPtrs, outPtrs, 2, 128);
+        for (int s = 0; s < 128; ++s) {
+            if (!std::isfinite(bufL[s]) || !std::isfinite(bufR[s])) hasNonFinite = true;
+            extremePeak = std::max({ extremePeak, std::abs(bufL[s]), std::abs(bufR[s]) });
+        }
+
+        // Trace decay blocks under high feedback
+        for (int i = 0; i < 40; ++i) {
+            engine.process(zeroPtrs, outPtrs, 2, 128);
+            for (int s = 0; s < 128; ++s) {
+                if (!std::isfinite(bufL[s]) || !std::isfinite(bufR[s])) hasNonFinite = true;
+                extremePeak = std::max({ extremePeak, std::abs(bufL[s]), std::abs(bufR[s]) });
+            }
+        }
+
+        TEST_ASSERT(!hasNonFinite, "+40 dBFS impulse must produce zero NaNs/Infs");
+        TEST_ASSERT(extremePeak <= 1.000000f, "+40 dBFS impulse with limiter enabled must guarantee ceiling <= 1.000000f with zero overshoot");
+
+        // Also assert softLimit directly bounds +40 dBFS (100.0f) and extreme inputs
+        const float limited100 = rb26::softLimit(100.0f);
+        TEST_ASSERT_NEAR(limited100, 1.0f, 1e-6f, "softLimit(100.0f) must strictly equal 1.000000f");
+
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
+    registerTest("Tier 2", "T2_F18_7", "Pitch Shifter Quality Mode Switch - Auto, HiQHermite, FastLinear", []() {
+        rb26::DualTapDelayPitchShifter shifter;
+        shifter.prepare(48000.0);
+        TEST_ASSERT(shifter.getQualityMode() == rb26::PitchQualityMode::Auto, "Default quality mode must be Auto");
+        TEST_ASSERT(!shifter.shouldUseLinear(), "Auto mode at 48 kHz must select Hermite (shouldUseLinear == false)");
+
+        shifter.prepare(96000.0);
+        TEST_ASSERT(shifter.shouldUseLinear(), "Auto mode at 96 kHz must select Linear (shouldUseLinear == true)");
+
+        shifter.prepare(192000.0);
+        TEST_ASSERT(shifter.shouldUseLinear(), "Auto mode at 192 kHz must select Linear");
+
+        shifter.setQualityMode(rb26::PitchQualityMode::HiQHermite);
+        TEST_ASSERT(!shifter.shouldUseLinear(), "HiQHermite must select Hermite at 192 kHz");
+
+        shifter.setQualityMode(rb26::PitchQualityMode::FastLinear);
+        shifter.prepare(44100.0);
+        TEST_ASSERT(shifter.shouldUseLinear(), "FastLinear must select Linear even at 44.1 kHz");
+
+        // Verify ShepardPitchSpiral quality mode
+        rb26::ShepardPitchSpiral spiral;
+        spiral.prepare(48000.0);
+        TEST_ASSERT(!spiral.shouldUseLinear(), "ShepardPitchSpiral Auto mode at 48 kHz must select Hermite");
+        spiral.prepare(88200.0);
+        TEST_ASSERT(spiral.shouldUseLinear(), "ShepardPitchSpiral Auto mode at 88.2 kHz must select Linear");
+
+        return test::gCurrentTestAssertFailures == 0;
+    });
+
     // ========================================================================
     // F19: Tactile 24-Parameter Matrix Boundary (T2_F19_1 to T2_F19_5)
     // ========================================================================

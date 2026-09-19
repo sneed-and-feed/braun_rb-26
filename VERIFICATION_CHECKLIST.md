@@ -1,15 +1,15 @@
 # BRAUN RB-26 Verification Checklist & Automated Validation Harness
 
-[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Verification Status: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(391%2F391)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
 [![Zero Leaks](https://img.shields.io/badge/Memory%20Leaks-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero Denormals](https://img.shields.io/badge/Denormals-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![Zero NaNs](https://img.shields.io/badge/NaN%20%2F%20Inf-0-blue?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 [![C++20 & Web Audio](https://img.shields.io/badge/DSP%20Parity-Verified-EE592B?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 
 **Document ID**: `RB26-VERIFY-CHECKLIST-001`  
-**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.4.9)  
+**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.4.10)  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (389/389 E2E Headless Tests, 24/24 Checklist Tests, 36/36 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (391/391 E2E Headless Tests, 24/24 Checklist Tests, 36/36 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: RB-26 Lead Verification Specialist  
 
 ---
@@ -225,7 +225,7 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
 ================================================================================
   Verification Status           : 100% UNANIMOUS PASS
   Acoustic Decay Audit Suites   : 8 / 8 (Suites A-H, 100%)
-  Headless DSP Tests            : 389 / 389 (100%)
+  Headless DSP Tests            : 391 / 391 (100%)
   Web Unit Tests                : 36 / 36 (100%)
   Checklist Automated Tests     : 24 / 24 (100%)
   Total Assertions Evaluated    : > 1,180,000
@@ -235,5 +235,5 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.4.9)
+VERDICT: CERTIFIED PRODUCTION READY (v1.4.10)
 ```

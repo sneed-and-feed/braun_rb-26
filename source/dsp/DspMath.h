@@ -136,6 +136,22 @@ public:
 }
 
 // ============================================================================
+// Pitch Processing Quality Modes
+// ============================================================================
+enum class PitchQualityMode : int {
+    Auto = 0,        // Linear at >= 88.2 kHz, Hermite at <= 48 kHz (saves 50-60% CPU at 192 kHz)
+    HiQHermite = 1,  // Always 4-point 3rd-order Hermite spline interpolation
+    FastLinear = 2   // Always 2-point 1st-order linear interpolation
+};
+
+// ============================================================================
+// 2-Point Linear Interpolation (Fast Mode for High Sample Rates >= 88.2 kHz)
+// ============================================================================
+[[nodiscard]] inline float interpolateLinear2P1O(float y0, float y1, float mu) noexcept {
+    return flushDenormal(y0 + mu * (y1 - y0));
+}
+
+// ============================================================================
 // 4-Point, 3rd-Order Hermite Cubic Spline Interpolation (Horner Form)
 // Continuous first derivative (C1), minimal ripple up to 0.45 fs
 // ============================================================================

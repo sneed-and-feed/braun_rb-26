@@ -99,6 +99,22 @@ float ShepardPitchSpiral::getVoiceWeight(int voiceIdx) const noexcept {
     return 0.0f;
 }
 
+inline float ShepardPitchSpiral::readLinear(const std::vector<float>& buffer, float readPos) const noexcept {
+    if (!std::isfinite(readPos)) [[unlikely]] {
+        return 0.0f;
+    }
+    const int i0 = static_cast<int>(std::floor(readPos));
+    const float frac = readPos - static_cast<float>(i0);
+
+    const int i0_m = i0 & kBufferMask;
+    const int i1  = (i0 + 1) & kBufferMask;
+
+    const float y0 = buffer[static_cast<size_t>(i0_m)];
+    const float y1 = buffer[static_cast<size_t>(i1)];
+
+    return interpolateLinear2P1O(y0, y1, frac);
+}
+
 inline float ShepardPitchSpiral::readHermite(const std::vector<float>& buffer, float readPos) const noexcept {
     if (!std::isfinite(readPos)) [[unlikely]] {
         return 0.0f;
@@ -155,6 +171,7 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
     // 3. Process 4 voices for Left and Right channels
     float sumL = 0.0f;
     float sumR = 0.0f;
+    const bool useLin = shouldUseLinear();
 
     for (int m = 0; m < kNumVoices; ++m) {
         float rm = 1.0f;
@@ -193,8 +210,9 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             continue;
         }
 
-        // Delay excursion rate: dD/dt = 1 - r_m
-        const float grainPhaseInc = (1.0f - rm) / mWindowSamples;
+        // Phase increment for grain delay modulation:
+        // delay(t) = (1 - r_m) * t  ->  phaseInc = |1 - r_m| / windowSamples
+        const float grainPhaseInc = std::abs(1.0f - rm) / mWindowSamples;
 
         // --- Left Channel Voice Processing ---
         {
@@ -212,8 +230,8 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float readPosA = static_cast<float>(mWriteIndex) - delayA;
             const float readPosB = static_cast<float>(mWriteIndex) - delayB;
 
-            const float sA = readHermite(mDelayBufferL, readPosA);
-            const float sB = readHermite(mDelayBufferL, readPosB);
+            const float sA = useLin ? readLinear(mDelayBufferL, readPosA) : readHermite(mDelayBufferL, readPosA);
+            const float sB = useLin ? readLinear(mDelayBufferL, readPosB) : readHermite(mDelayBufferL, readPosB);
 
             // Constant-amplitude Hann crossfade windows: wA + wB == sin^2(pi*phi) + cos^2(pi*phi) == 1.0
             const float sinA = FastSinTable::sin(kPi * phiA);
@@ -241,8 +259,8 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             const float readPosA = static_cast<float>(mWriteIndex) - delayA;
             const float readPosB = static_cast<float>(mWriteIndex) - delayB;
 
-            const float sA = readHermite(mDelayBufferR, readPosA);
-            const float sB = readHermite(mDelayBufferR, readPosB);
+            const float sA = useLin ? readLinear(mDelayBufferR, readPosA) : readHermite(mDelayBufferR, readPosA);
+            const float sB = useLin ? readLinear(mDelayBufferR, readPosB) : readHermite(mDelayBufferR, readPosB);
 
             const float sinA = FastSinTable::sin(kPi * phiA);
             const float sinB = FastSinTable::sin(kPi * phiB);

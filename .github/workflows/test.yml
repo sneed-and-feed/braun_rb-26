@@ -1,4 +1,4 @@
-﻿name: Test Suite
+name: Test Suite
 
 on:
   push:
@@ -21,5 +21,22 @@ jobs:
         with:
           node-version: 22
 
-      - name: Run Test Suite
+      - name: Run Web Audio Test Suite
         run: npm test
+
+      - name: Install Linux Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libfreetype6-dev libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev
+
+      - name: Configure CMake (Native Linux Headless C++ Tests)
+        run: |
+          cmake -B build-ci -DCMAKE_BUILD_TYPE=Release -DRB26_USE_WEBVIEW=OFF -DRB26_BUILD_TESTS=ON
+
+      - name: Build Headless C++ DSP Test Runner
+        run: |
+          cmake --build build-ci --target rb26_headless_dsp_tests --config Release -j$(nproc)
+
+      - name: Run Headless C++ DSP Verification Suite
+        run: |
+          ctest --test-dir build-ci --output-on-failure -R Rb26HeadlessDspTests

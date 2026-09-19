@@ -73,6 +73,9 @@ void EarlyReflections::updateTaps() noexcept {
         mTapDelaysSamples[k] = std::clamp(delaySamples, size_t{1}, kBufferCapacity - 1);
 
         // Constant power azimuth panning: theta in [0, pi/2]
+        // Scaled by calibrated kClusterGain factor (0.28f, -11.06 dBFS) to guarantee that
+        // a 0 dBFS input impulse produces early reflection cluster peaks within the nominal
+        // [-14 dBFS, -12 dBFS] headroom window, eliminating discrete tap overload.
         const float theta = (kTapConfigs[k].pan + 1.0f) * 0.25f * kPi;
         mTapGainsL[k] = kClusterGain * kTapConfigs[k].gain * std::cos(theta);
         mTapGainsR[k] = kClusterGain * kTapConfigs[k].gain * std::sin(theta);

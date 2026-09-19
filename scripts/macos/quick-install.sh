@@ -54,6 +54,32 @@ ZIP_FILE="$TMP_DIR/rb26_mac.zip"
 echo -e "Downloading: ${CYAN}${DOWNLOAD_URL}${RESET}..."
 curl -sSL -L -o "$ZIP_FILE" "$DOWNLOAD_URL"
 
+# Fetch SHA256SUMS.txt from GitHub release
+BASE_URL="${DOWNLOAD_URL%/*}"
+SUMS_URL="${BASE_URL}/SHA256SUMS.txt"
+SUMS_FILE="$TMP_DIR/SHA256SUMS.txt"
+ZIP_BASENAME="${DOWNLOAD_URL##*/}"
+
+echo -e "Fetching checksums: ${CYAN}${SUMS_URL}${RESET}..."
+if curl -sSL -f -o "$SUMS_FILE" "$SUMS_URL" 2>/dev/null; then
+    EXPECTED_SHA=$(grep "$ZIP_BASENAME" "$SUMS_FILE" | awk '{print $1}')
+    if [ -n "$EXPECTED_SHA" ]; then
+        echo "Verifying SHA-256 checksum ($EXPECTED_SHA)..."
+        ACTUAL_SHA=$(shasum -a 256 "$ZIP_FILE" | awk '{print $1}')
+        if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+            echo -e "${RED}Error: SHA-256 checksum verification failed!${RESET}"
+            echo -e "  Expected: ${EXPECTED_SHA}"
+            echo -e "  Actual:   ${ACTUAL_SHA}"
+            exit 1
+        fi
+        echo -e "${GREEN}  ✓ SHA-256 checksum verified successfully${RESET}"
+    else
+        echo -e "${ORANGE}Notice: ${ZIP_BASENAME} not indexed in SHA256SUMS.txt, skipping check${RESET}"
+    fi
+else
+    echo -e "${ORANGE}Notice: SHA256SUMS.txt not present on release, skipping check${RESET}"
+fi
+
 echo "Extracting archive..."
 unzip -q -o "$ZIP_FILE" -d "$TMP_DIR/extracted"
 
@@ -71,7 +97,7 @@ if [ -n "$AU_SRC" ]; then
     echo -e "Installing ${BOLD}Audio Unit (AU)${RESET} -> $AU_DIR/..."
     rm -rf "$AU_DIR/BRAUN_RB26.component"
     cp -R "$AU_SRC" "$AU_DIR/"
-    xattr -cr "$AU_DIR/BRAUN_RB26.component" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$AU_DIR/BRAUN_RB26.component" 2>/dev/null || true
     echo -e "${GREEN}  ✓ AU installed & Gatekeeper unquarantined${RESET}"
 fi
 
@@ -81,7 +107,7 @@ if [ -n "$VST3_SRC" ]; then
     echo -e "Installing ${BOLD}VST3${RESET} -> $VST3_DIR/..."
     rm -rf "$VST3_DIR/BRAUN_RB26.vst3"
     cp -R "$VST3_SRC" "$VST3_DIR/"
-    xattr -cr "$VST3_DIR/BRAUN_RB26.vst3" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$VST3_DIR/BRAUN_RB26.vst3" 2>/dev/null || true
     echo -e "${GREEN}  ✓ VST3 installed & Gatekeeper unquarantined${RESET}"
 fi
 
@@ -91,7 +117,7 @@ if [ -n "$CLAP_SRC" ]; then
     echo -e "Installing ${BOLD}CLAP${RESET} -> $CLAP_DIR/..."
     rm -f "$CLAP_DIR/BRAUN_RB26.clap"
     cp "$CLAP_SRC" "$CLAP_DIR/"
-    xattr -cr "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
     echo -e "${GREEN}  ✓ CLAP installed & Gatekeeper unquarantined${RESET}"
 fi
 
@@ -101,7 +127,7 @@ if [ -n "$APP_SRC" ]; then
     echo -e "Installing ${BOLD}Standalone${RESET} -> $APP_DIR/..."
     rm -rf "$APP_DIR/BRAUN_RB26.app"
     cp -R "$APP_SRC" "$APP_DIR/"
-    xattr -cr "$APP_DIR/BRAUN_RB26.app" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$APP_DIR/BRAUN_RB26.app" 2>/dev/null || true
     echo -e "${GREEN}  ✓ Standalone app installed & Gatekeeper unquarantined${RESET}"
 fi
 

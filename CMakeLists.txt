@@ -14,7 +14,7 @@ if(APPLE)
     endif()
 endif()
 
-project(BRAUN_RB26_PROJECT VERSION 1.4.9 LANGUAGES C CXX)
+project(BRAUN_RB26_PROJECT VERSION 1.4.10 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,7 +39,13 @@ endif()
 # ==============================================================================
 # GUI Mode Selection Option: WebView (Default) vs Pure Native JUCE (Linux / Low Overhead)
 # ==============================================================================
-option(RB26_USE_WEBVIEW "Build BRAUN RB-26 with WebView GUI (disable for pure native JUCE UI)" ON)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(RB26_USE_WEBVIEW_DEFAULT OFF)
+else()
+    set(RB26_USE_WEBVIEW_DEFAULT ON)
+endif()
+
+option(RB26_USE_WEBVIEW "Build BRAUN RB-26 with WebView GUI (disable for pure native JUCE UI)" ${RB26_USE_WEBVIEW_DEFAULT})
 if(DEFINED RB26_ENABLE_WEBVIEW)
     set(RB26_USE_WEBVIEW ${RB26_ENABLE_WEBVIEW})
 endif()
@@ -228,7 +234,8 @@ if(RB26_USE_WEBVIEW)
 endif()
 
 juce_add_plugin(BRAUN_RB26
-    COMPANY_NAME "Braun"
+    COMPANY_NAME "Sneed's Feed & Seed Ltd."
+    BUNDLE_ID "com.sneedandfeed.rb26"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
@@ -238,8 +245,8 @@ juce_add_plugin(BRAUN_RB26
     PLUGIN_MANUFACTURER_CODE Brun
     PLUGIN_CODE Rb26
     FORMATS ${RB26_FORMATS}
-    PRODUCT_NAME "BRAUN_RB26"
-    VERSION "1.4.9"
+    PRODUCT_NAME "RB-26"
+    VERSION "1.4.10"
     ${RB26_EXTRA_PLUGIN_ARGS}
 )
 

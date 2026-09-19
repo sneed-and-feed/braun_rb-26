@@ -171,7 +171,7 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
 <header>
   <div class="title-group">
     <h1>BRAUN RB-26</h1>
-    <p>STUDIO REVERBERATION UNIT &mdash; WENIGER, ABER BESSER</p>
+    <p>STUDIO REVERBERATION UNIT &mdash; WENIGER, ABER BESSER &middot; Sneed's Feed & Seed Ltd. &middot; Not affiliated with Braun GmbH. Dieter Rams inspired design homage.</p>
   </div>
   <div style="display:flex; gap:8px; align-items:center;">
     <button id="btnPower" style="background:var(--knob-cap); color:var(--text-main); padding:4px 10px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; border:1px solid var(--border-color); letter-spacing:1px;">STANDBY</button>
@@ -630,6 +630,7 @@ BRAUN_RB26AudioProcessorEditor::BRAUN_RB26AudioProcessorEditor(BRAUN_RB26AudioPr
     setSize(1280, 760);
     setResizable(true, true);
     setResizeLimits(960, 600, 2560, 1440);
+    setTooltip("Sneed's Feed & Seed Ltd. - Not affiliated with Braun GmbH. Dieter Rams inspired design homage.");
 
     // 60 Hz telemetry polling timer for smooth phosphor CRT waterfall and goniometer
     startTimerHz(60);
@@ -1236,6 +1237,9 @@ void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::R
     g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::textMutedColourId));
     g.setFont(juce::FontOptions(10.0f, juce::Font::plain));
     g.drawText(juce::String("STUDIO REVERBERATOR ") + juce::String::charToString(0x00B7) + " DIN 1451", headerArea.removeFromLeft(220).reduced(4, 0), juce::Justification::centredLeft);
+
+    g.setFont(juce::FontOptions(9.0f, juce::Font::plain));
+    g.drawText("Sneed's Feed & Seed Ltd. " + juce::String::charToString(0x00B7) + " Not affiliated with Braun GmbH. Dieter Rams inspired design homage.", headerArea.reduced(16, 0), juce::Justification::centredRight);
 
     // Central CRT Phosphor Visualizer Scope
     auto crtArea = bounds.removeFromTop(130).reduced(16, 6);

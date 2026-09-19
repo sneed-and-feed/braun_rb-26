@@ -25,12 +25,21 @@ public:
     void prepare(double sampleRate) noexcept;
     void reset() noexcept;
     void setInterval(int semitones) noexcept;
+    void setQualityMode(PitchQualityMode mode) noexcept { mQualityMode = mode; }
+    [[nodiscard]] PitchQualityMode getQualityMode() const noexcept { return mQualityMode; }
+    [[nodiscard]] bool shouldUseLinear() const noexcept {
+        if (mQualityMode == PitchQualityMode::FastLinear) return true;
+        if (mQualityMode == PitchQualityMode::HiQHermite) return false;
+        return (mSampleRate >= 88200.0f);
+    }
 
     [[nodiscard]] float processSample(float input) noexcept;
 
 private:
     [[nodiscard]] inline float readHermite(float readPos) const noexcept;
+    [[nodiscard]] inline float readLinear(float readPos) const noexcept;
 
+    PitchQualityMode mQualityMode { PitchQualityMode::Auto };
     float mSampleRate { 48000.0f };
     float mWindowSec { 0.050f };       // 50 ms default window
     float mWindowSamples { 2400.0f };
@@ -125,6 +134,17 @@ public:
                              float spiralDepth,
                              int partchInterval = 1) noexcept;
 
+    // Quality mode switch (Auto, HiQHermite, FastLinear)
+    void setQualityMode(PitchQualityMode mode) noexcept {
+        mQualityMode = mode;
+        mShimmerShifterL.setQualityMode(mode);
+        mShimmerShifterR.setQualityMode(mode);
+        mDimmerShifterL.setQualityMode(mode);
+        mDimmerShifterR.setQualityMode(mode);
+        mShepardSpiral.setQualityMode(mode);
+    }
+    [[nodiscard]] PitchQualityMode getQualityMode() const noexcept { return mQualityMode; }
+
     [[nodiscard]] ShepardPitchSpiral& getShepardSpiral() noexcept { return mShepardSpiral; }
     [[nodiscard]] const ShepardPitchSpiral& getShepardSpiral() const noexcept { return mShepardSpiral; }
 
@@ -216,6 +236,7 @@ private:
 
     int mCurrentShimmerInterval { 12 };
     int mCurrentDimmerInterval { -12 };
+    PitchQualityMode mQualityMode { PitchQualityMode::Auto };
 };
 
 // Type alias for Explorer 1 naming

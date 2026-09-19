@@ -95,8 +95,9 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
     const float readPos1 = static_cast<float>(mWriteIndex) - delay1;
     const float readPos2 = static_cast<float>(mWriteIndex) - delay2;
 
-    const float out1 = readHermite(readPos1);
-    const float out2 = readHermite(readPos2);
+    const bool useLin = shouldUseLinear();
+    const float out1 = useLin ? readLinear(readPos1) : readHermite(readPos1);
+    const float out2 = useLin ? readLinear(readPos2) : readHermite(readPos2);
 
     // Constant-amplitude Hann crossfade windows: w1 + w2 == sin^2(pi*phi) + cos^2(pi*phi) == 1.0
     // C1 smooth zero-crossing at grain boundaries suppresses wrap discontinuity by > 115 dB
@@ -115,6 +116,22 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
     mWriteIndex = (mWriteIndex + 1) & kBufferMask;
 
     return flushDenormal(w1 * out1 + w2 * out2);
+}
+
+inline float DualTapDelayPitchShifter::readLinear(float readPos) const noexcept {
+    if (!std::isfinite(readPos)) [[unlikely]] {
+        return 0.0f;
+    }
+    const int i0 = static_cast<int>(std::floor(readPos));
+    const float frac = readPos - static_cast<float>(i0);
+
+    const int i0_m = i0 & kBufferMask;
+    const int i1  = (i0 + 1) & kBufferMask;
+
+    const float y0 = mDelayBuffer[static_cast<size_t>(i0_m)];
+    const float y1 = mDelayBuffer[static_cast<size_t>(i1)];
+
+    return interpolateLinear2P1O(y0, y1, frac);
 }
 
 inline float DualTapDelayPitchShifter::readHermite(float readPos) const noexcept {
@@ -168,6 +185,7 @@ void PitchShifter::prepare(double sampleRate, int /*maxBlockSize*/) noexcept {
     mDimmerFilterR.prepare(sampleRate);
 
     mShepardSpiral.prepare(sampleRate);
+    setQualityMode(mQualityMode);
 
     mShimmerSendSmoother.setSampleRate(mSampleRate);
     mDimmerSendSmoother.setSampleRate(mSampleRate);

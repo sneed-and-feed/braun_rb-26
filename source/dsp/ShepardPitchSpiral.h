@@ -84,6 +84,13 @@ public:
     void setPartchPolyphonic(bool polyphonic) noexcept;
     void setWindowSec(float sec) noexcept;
     void setStereoSpread(float spread) noexcept;
+    void setQualityMode(PitchQualityMode mode) noexcept { mQualityMode = mode; }
+    [[nodiscard]] PitchQualityMode getQualityMode() const noexcept { return mQualityMode; }
+    [[nodiscard]] bool shouldUseLinear() const noexcept {
+        if (mQualityMode == PitchQualityMode::FastLinear) return true;
+        if (mQualityMode == PitchQualityMode::HiQHermite) return false;
+        return (mSampleRate >= 88200.0f);
+    }
 
     // Getters for telemetry and verification
     [[nodiscard]] SpiralMode getMode() const noexcept { return mMode; }
@@ -114,7 +121,9 @@ private:
     };
 
     [[nodiscard]] inline float readHermite(const std::vector<float>& buffer, float readPos) const noexcept;
+    [[nodiscard]] inline float readLinear(const std::vector<float>& buffer, float readPos) const noexcept;
 
+    PitchQualityMode mQualityMode { PitchQualityMode::Auto };
     float mSampleRate { 48000.0f };
     SpiralMode mMode { SpiralMode::BarberShimmer };
     float mRateHz { 0.10f };             // Glissando rate (0.01 - 2.0 Hz)
