@@ -33,9 +33,9 @@ desktop.ini
 node_modules/
 package-lock.json
 
-# Archives
+# Archives & Releases
 *.zip
-!releases/*.zip
+releases/
 
 # Agent metadata
 .agents/
