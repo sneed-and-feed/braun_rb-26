@@ -379,8 +379,9 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             const float boostGain = dbToGain(boostDb);
 
             // 5. Early / Late Mix (Equal-power trigonometric balance with Hermite bounded booster saturation)
-            const float rawPitchL = delayedPitchL * 0.85f * boostGain;
-            const float rawPitchR = delayedPitchR * 0.85f * boostGain;
+            // Filtered through feedback lowpass/highpass and smoothly scaled to eliminate slapback transient clicks
+            const float rawPitchL = filteredPitchL * 0.50f * boostGain;
+            const float rawPitchR = filteredPitchR * 0.50f * boostGain;
             const float pitchAddL = applySmoothBoundaryKnee(rawPitchL, 0.72f, 1.05f);
             const float pitchAddR = applySmoothBoundaryKnee(rawPitchR, 0.72f, 1.05f);
             highReverbL = earlyGain * earlyL + lateGain * (lateL + pitchAddL);

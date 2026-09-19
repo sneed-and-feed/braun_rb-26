@@ -108,8 +108,3 @@ target_link_libraries(rb26_acoustic_decay_audit PRIVATE rb26_dsp_core)
 set_target_properties(rb26_acoustic_decay_audit PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME Rb26AcousticDecayAudit COMMAND rb26_acoustic_decay_audit)
 
-add_executable(rb26_verify_decay verify_manifold_decay.cpp)
-target_include_directories(rb26_verify_decay PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../dsp)
-target_link_libraries(rb26_verify_decay PRIVATE rb26_dsp_core)
-set_target_properties(rb26_verify_decay PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-

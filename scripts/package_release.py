@@ -7,11 +7,15 @@ root_dir = r"c:\Users\x\Documents\antigravity\braun_rb-26"
 
 os.makedirs(release_dir, exist_ok=True)
 
-# Extract version from package.json
+# Extract version from command line or package.json
 import json
-with open(os.path.join(root_dir, "package.json"), "r", encoding="utf-8") as f:
-    pkg = json.load(f)
-version = pkg.get("version", "1.4.7")
+import sys
+if len(sys.argv) > 1 and sys.argv[1].strip():
+    version = sys.argv[1].strip()
+else:
+    with open(os.path.join(root_dir, "package.json"), "r", encoding="utf-8") as f:
+        pkg = json.load(f)
+    version = pkg.get("version", "1.4.8")
 
 # 1. Package Windows-x64 full zip
 zip_path = os.path.join(release_dir, f"BRAUN_RB26-v{version}-Windows-x64.zip")

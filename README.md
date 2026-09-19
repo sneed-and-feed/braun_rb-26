@@ -1,10 +1,10 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.4.7](https://img.shields.io/badge/Version-1.4.7-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.7)
+[![Version: 1.4.8](https://img.shields.io/badge/Version-1.4.8-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.8)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-macOS-Universal.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -17,9 +17,9 @@
 
 ---
 
-### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.7)
-* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.7-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
-* **Windows x64**: **[`BRAUN_RB26-v1.4.7-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-VST3-Windows-x64.zip)** (~3 MB).
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.8)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.8-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.4.8-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-VST3-Windows-x64.zip)** (~3 MB).
 * Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
 * **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
@@ -31,12 +31,12 @@
 > **Manual Release & Binary Asset Policy**: GitHub release tags, binary packaging archives, and release asset uploads for BRAUN RB-26 and BRAUN AS-42 are managed **manually by the user/repository owner**. Automated agents, CI scripts, and LLM subagents MUST NOT attempt to upload binaries, publish GitHub releases, or generate remote tags directly.
 
 > [!TIP]
-> **What's New in v1.4.7 (Feedforward Manifold Extraction, RT60 Decay Parity, Equal-Power Circular Spatial Rotation & Expanded Dispersion)**:
-> - **Feedforward Manifold Extraction Architecture**: Completely moved resonant body formants (Sitka spruce $A_0$ 95 Hz, $T_1$ 320 Hz, Wood 2400 Hz) and edge caustics (9.5 kHz peaking + ultrasonic lowpass) out of the recursive FDN feedback loop into post-extraction feedforward stereo filters (`extractStereo`), eliminating in-loop choke trims.
-> - **Rigorous RT60 Decay Parity Across All 4 Manifolds**: With in-loop gain attenuation removed, decay times across all 4 geometries (Poincaré Hyperbolic, Whispering Gallery, Anharmonic Plate, Stockhausen Klangdom) track identical mathematical RT60 curves with sub-0.5% variance.
-> - **Tangible 0.35 Hz Equal-Power Circular Spatial Rotation**: Implemented non-negative circular panning ($\Omega_{\text{rot}} = 0.35\text{ Hz}$, ~2.85 s period) for Whispering Gallery via $\cos(\phi)$ / $\sin(\phi)$ mapping with $\phi \in [0, \pi/2]$, ensuring $\cos^2\phi + \sin^2\phi = 1$, zero anti-phase cancellation, and seamless $C^0$ slewed spatial transitions.
-> - **Expanded Delay Prime Dispersion**: Broadened `kWhisperingPrimeOffsets` across the delay lines with an expanded ~9.7 ms prime-staggered dispersion spread, eliminating phase smearing and standing-wave resonances in circular acoustic modes.
-> - **Comprehensive Acoustic Decay Audit Suite**: Added `rb26_acoustic_decay_audit` test binary with 8 automated multi-manifold acoustic decay verification suites (Suites A–H) asserting $100\%$ decay parity and stability across all operational modes.
+> **What's New in v1.4.8 (Early Reflections Calibration, Bounded Physical Room Scaling, Dry/Diffused Allpass Blending & Pitch Booster Anti-Bleed Filtering)**:
+> - **Early Reflections Gain Calibration**: Scaled tap configurations with an overall cluster attenuation factor `kClusterGain = 0.28f` to align early reflection levels (-12 to -14 dBFS peak) with the FDN late tank onset and Web Audio engine parity, eliminating the +38.5 dB discrete tap burst that buried the reverb tail.
+> - **HF Acoustic Boundary Damping**: Added dedicated 1st-order 6.0 kHz lowpass absorption filters per channel (`mDampingLpL` / `mDampingLpR`) to absorb high-frequency reflection energy, softening raw Dirac clicks into organic room boundary reflections.
+> - **Bounded Physical Room Scaling Window**: Mapped early reflection delay times via normalized hyperbolic tangent scaling (`0.20f + 0.80f * (tanh(roomSize) / tanh(1.0f))`) preserving physical Haas fusion psychoacoustics while allowing large `roomSize` to freely expand the FDN late tank geometry without producing audible multi-tap flutter or "drip" delays.
+> - **Equal-Power Dry / Diffused Allpass Crossfading**: Replaced 100% series allpass tap tripling with constant-power trigonometric crossfading (`dryG = cos(effDiff * pi/2)`, `wetG = sin(effDiff * pi/2)`), matching Web Audio diffusion characteristics and preventing artificial discrete tap replication.
+> - **Direct Pitch Booster Band-Limiting & Anti-Bleed**: Routed delayed pitch signals through the feedback bandpass filter cascade (150 Hz HP to 6.0 kHz LP) with smooth Hermite saturation scaling, ensuring the pitch booster generates a warm harmonic shimmer aura rather than an unfiltered delayed transient slapback.
 
 ---
 
@@ -83,7 +83,7 @@ curl -fsSL https://raw.githubusercontent.com/sneed-and-feed/braun_rb-26/main/scr
 > Automatically downloads the latest Universal release, installs AU (`.component`), VST3 (`.vst3`), CLAP (`.clap`), and Standalone (`.app`) to your user library, clears macOS Gatekeeper quarantine (`xattr -cr`), and refreshes CoreAudio `AudioComponentRegistrar` cache so DAWs detect the plugin immediately.
 
 **Option 2: Double-Click Package (.zip)**
-1. Download **[`BRAUN_RB26-v1.4.7-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-macOS-Universal.zip)**.
+1. Download **[`BRAUN_RB26-v1.4.8-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-macOS-Universal.zip)**.
 2. Unzip the package in Finder.
 3. Double-click **`Install.command`** to automatically copy all plugins and clear Gatekeeper quarantine.
 4. *Or* double-click **`Run_Standalone.command`** to immediately launch the standalone reverb without installing.

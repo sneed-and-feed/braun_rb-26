@@ -21,6 +21,11 @@ void EarlyReflections::prepare(double sampleRate, float maxRoomSize) noexcept {
         mAllpassWriteIndices[i] = 0;
     }
 
+    mDampingLpL.setCutoff(static_cast<float>(mSampleRate), 6000.0f);
+    mDampingLpR.setCutoff(static_cast<float>(mSampleRate), 6000.0f);
+    mDampingLpL.reset();
+    mDampingLpR.reset();
+
     updateTaps();
 }
 
@@ -35,6 +40,9 @@ void EarlyReflections::reset() noexcept {
         std::fill(mAllpassBuffers[i].begin(), mAllpassBuffers[i].end(), 0.0f);
         mAllpassWriteIndices[i] = 0;
     }
+
+    mDampingLpL.reset();
+    mDampingLpR.reset();
 }
 
 void EarlyReflections::setParameters(float roomSize, float diffusionDensity) noexcept {
@@ -57,15 +65,17 @@ void EarlyReflections::updateTaps() noexcept {
         }
     }
 
+    const float erScale = 0.20f + 0.80f * (std::tanh(mRoomSize) / std::tanh(1.0f));
+
     for (size_t k = 0; k < kNumTaps; ++k) {
-        const float delaySec = (kTapConfigs[k].baseDelayMs * 0.001f) * mRoomSize;
+        const float delaySec = (kTapConfigs[k].baseDelayMs * 0.001f) * erScale;
         const size_t delaySamples = static_cast<size_t>(std::round(delaySec * mSampleRate));
         mTapDelaysSamples[k] = std::clamp(delaySamples, size_t{1}, kBufferCapacity - 1);
 
         // Constant power azimuth panning: theta in [0, pi/2]
         const float theta = (kTapConfigs[k].pan + 1.0f) * 0.25f * kPi;
-        mTapGainsL[k] = kTapConfigs[k].gain * std::cos(theta);
-        mTapGainsR[k] = kTapConfigs[k].gain * std::sin(theta);
+        mTapGainsL[k] = kClusterGain * kTapConfigs[k].gain * std::cos(theta);
+        mTapGainsR[k] = kClusterGain * kTapConfigs[k].gain * std::sin(theta);
     }
 }
 
@@ -128,8 +138,11 @@ void EarlyReflections::processSample(float inL, float inR, float& outL, float& o
     const float diffL = processAllpass(1, processAllpass(0, sumL, mDiffusionDensity), mDiffusionDensity);
     const float diffR = processAllpass(3, processAllpass(2, sumR, mDiffusionDensity), mDiffusionDensity);
 
-    outL = flushDenormal(diffL);
-    outR = flushDenormal(diffR);
+    const float effDiff = std::sqrt(std::clamp(mDiffusionDensity, 0.0f, 1.0f));
+    const float dryG = FastSinTable::cos(effDiff * kHalfPi);
+    const float wetG = FastSinTable::sin(effDiff * kHalfPi);
+    outL = flushDenormal(mDampingLpL.process(dryG * sumL + wetG * diffL));
+    outR = flushDenormal(mDampingLpR.process(dryG * sumR + wetG * diffR));
 }
 
 void EarlyReflections::processBlock(const float* inL, const float* inR,

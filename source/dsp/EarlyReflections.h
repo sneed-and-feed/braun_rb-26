@@ -76,12 +76,17 @@ private:
     std::vector<float> mBufferR;
     size_t mWriteIndex { 0 };
 
+    static constexpr float kClusterGain = 0.28f;
+
     float mDiffusionDensity { 0.0f };
     static constexpr size_t kNumAllpass = 4;
     static constexpr std::array<size_t, kNumAllpass> kBaseAllpassLengths = {{ 149, 211, 163, 223 }};
     std::array<size_t, kNumAllpass> mAllpassLengths {};
     std::array<std::vector<float>, kNumAllpass> mAllpassBuffers {};
     std::array<size_t, kNumAllpass> mAllpassWriteIndices {};
+
+    OnePoleLowpass mDampingLpL;
+    OnePoleLowpass mDampingLpR;
 
     inline float processAllpass(size_t index, float input, float density) noexcept;
     void updateTaps() noexcept;
