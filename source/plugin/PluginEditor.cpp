@@ -630,7 +630,7 @@ BRAUN_RB26AudioProcessorEditor::BRAUN_RB26AudioProcessorEditor(BRAUN_RB26AudioPr
     setSize(1280, 760);
     setResizable(true, true);
     setResizeLimits(960, 600, 2560, 1440);
-    setTooltip("Sneed's Feed & Seed Ltd. - Not affiliated with Braun GmbH. Dieter Rams inspired design homage.");
+    setDescription("Sneed's Feed & Seed Ltd. - Not affiliated with Braun GmbH. Dieter Rams inspired design homage.");
 
     // 60 Hz telemetry polling timer for smooth phosphor CRT waterfall and goniometer
     startTimerHz(60);

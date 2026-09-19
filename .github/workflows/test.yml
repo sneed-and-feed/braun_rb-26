@@ -27,7 +27,7 @@ jobs:
       - name: Install Linux Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libfreetype6-dev libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev
+          sudo apt-get install -y libasound2-dev libfreetype-dev libfontconfig1-dev libgl-dev libcurl4-openssl-dev libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev
 
       - name: Configure CMake (Native Linux Headless C++ Tests)
         run: |
