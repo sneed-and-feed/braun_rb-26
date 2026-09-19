@@ -46,7 +46,7 @@ public:
      * Process a single audio sample (inlined for real-time performance).
      */
     [[nodiscard]] inline float processSample(float x) const noexcept {
-        if (!std::isfinite(x)) [[unlikely]] {
+        if (!rb26::isFiniteBitwise(x)) [[unlikely]] {
             return 0.0f;
         }
 

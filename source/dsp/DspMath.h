@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <vector>
 #include <limits>
 
@@ -68,10 +69,26 @@ private:
 };
 
 // ============================================================================
+// Bitwise IEEE 754 Finite Check — immune to -ffast-math optimizations
+// std::isfinite/isnan/isinf are unreliable under -ffast-math because the
+// compiler assumes NaN/Inf don't exist. This uses raw bit inspection instead.
+// ============================================================================
+[[nodiscard]] inline bool isFiniteBitwise(float val) noexcept {
+    uint32_t bits;
+    std::memcpy(&bits, &val, sizeof(float));
+    // IEEE 754: exponent field [30:23] all-ones (0x7F800000) means Inf or NaN
+    return (bits & 0x7F800000u) != 0x7F800000u;
+}
+
+[[nodiscard]] inline bool isNanOrInfBitwise(float val) noexcept {
+    return !isFiniteBitwise(val);
+}
+
+// ============================================================================
 // Branchless Software Denormal / NaN Flushing
 // ============================================================================
 [[nodiscard]] inline float flushDenormal(float val) noexcept {
-    if (!std::isfinite(val)) [[unlikely]] {
+    if (isNanOrInfBitwise(val)) [[unlikely]] {
         return 0.0f;
     }
     return (std::abs(val) < 1.0e-15f) ? 0.0f : val;
@@ -104,7 +121,7 @@ public:
     }();
 
     [[nodiscard]] static inline float sin(float angle) noexcept {
-        if (!std::isfinite(angle)) [[unlikely]] {
+        if (!isFiniteBitwise(angle)) [[unlikely]] {
             return 0.0f;
         }
         const float norm = angle * (static_cast<float>(kTableSize) / kTwoPi);
@@ -167,7 +184,7 @@ enum class PitchQualityMode : int {
 // C1 Hermite Soft-Knee Boundary Saturation (k = 0.72, ceiling = 1.05)
 // ============================================================================
 [[nodiscard]] inline float applySmoothBoundaryKnee(float x, float knee = 0.72f, float ceiling = 1.05f) noexcept {
-    if (std::isnan(x) || std::isinf(x)) [[unlikely]] {
+    if (isNanOrInfBitwise(x)) [[unlikely]] {
         return 0.0f;
     }
 

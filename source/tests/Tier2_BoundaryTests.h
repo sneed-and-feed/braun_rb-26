@@ -1816,7 +1816,7 @@ inline void registerTier2Tests() {
     // ========================================================================
     registerTest("Tier 2", "T2_F30_1", "Presentation Boundary - Parameter Serialization Sanitization", []() {
         auto sanitizeFloat = [](float val) {
-            if (std::isnan(val) || std::isinf(val)) return 0.0f;
+            if (rb26::isNanOrInfBitwise(val)) return 0.0f;
             return val;
         };
         float nanVal = std::numeric_limits<float>::quiet_NaN();
