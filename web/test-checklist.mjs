@@ -389,6 +389,8 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
         shimmer_send: [0, 100],
         dimmer_send: [0, 100],
         pitch_regen: [0, 100],
+        pitch_delay: [20, 500],
+        pitch_boost: [0, 18],
         tail_mod_rate: [0.05, 5.0],
         tail_mod_depth: [0, 100],
         tail_bloom: [0, 300],
@@ -400,6 +402,7 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
 
       const validShimmerIntervals = [7, 12, 24];
       const validDimmerIntervals = [-24, -12, -7, -2];
+      const validManifoldTypes = [0, 1, 2, 3];
 
       for (const preset of data.presets) {
         const p = preset.params;
@@ -413,11 +416,13 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
             `Param ${key} = ${p[key]} in ${preset.id} out of bounds [${min}, ${max}]`);
         }
 
-        // Check discrete intervals
+        // Check discrete intervals and manifolds
         assert.ok(validShimmerIntervals.includes(p.shimmer_interval),
           `Invalid shimmer_interval ${p.shimmer_interval} in ${preset.id}`);
         assert.ok(validDimmerIntervals.includes(p.dimmer_interval),
           `Invalid dimmer_interval ${p.dimmer_interval} in ${preset.id}`);
+        assert.ok(validManifoldTypes.includes(p.manifold_type),
+          `Invalid manifold_type ${p.manifold_type} in ${preset.id}`);
 
         // Check boolean switches
         assert.strictEqual(typeof p.decay_hold, 'boolean', `decay_hold in ${preset.id} must be boolean`);
@@ -432,6 +437,81 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
           `Preset ${preset.id} shimmer_send (${preset.params.shimmer_send}) must be >= 5%`);
         assert.ok(preset.params.dimmer_send >= 5,
           `Preset ${preset.id} dimmer_send (${preset.params.dimmer_send}) must be >= 5%`);
+      }
+    });
+  });
+
+  //----------------------------------------------------------------------------
+  describe('6. 28-Parameter Metadata Table & UI Binding Verification', () => {
+    const expectedMetadataTable = [
+      { apvtsId: "input_trim_db",      webId: "inputTrimDb",      isChoice: false, isBool: false },
+      { apvtsId: "pre_delay_ms",       webId: "preDelayMs",       isChoice: false, isBool: false },
+      { apvtsId: "dry_wet_mix",        webId: "dryWetMix",        isChoice: false, isBool: false },
+      { apvtsId: "early_late_mix",     webId: "earlyLateMix",     isChoice: false, isBool: false },
+      { apvtsId: "low_crossover_hz",   webId: "lowCrossoverHz",   isChoice: false, isBool: false },
+      { apvtsId: "bass_rt60_mult",     webId: "bassRt60Mult",     isChoice: false, isBool: false },
+      { apvtsId: "punch_ducking",      webId: "punchDucking",     isChoice: false, isBool: false },
+      { apvtsId: "sub_mono_hz",        webId: "subMonoHz",        isChoice: false, isBool: false },
+      { apvtsId: "room_size",          webId: "roomSize",         isChoice: false, isBool: false },
+      { apvtsId: "decay_rt60_sec",     webId: "decayRt60Sec",     isChoice: false, isBool: false },
+      { apvtsId: "high_damping_hz",    webId: "highDampingHz",    isChoice: false, isBool: false },
+      { apvtsId: "diffusion_density",  webId: "diffusionDensity", isChoice: false, isBool: false },
+      { apvtsId: "freeze_hold",        webId: "freezeHold",       isChoice: false, isBool: true  },
+      { apvtsId: "shimmer_send",       webId: "shimmerSend",      isChoice: false, isBool: false },
+      { apvtsId: "dimmer_send",        webId: "dimmerSend",       isChoice: false, isBool: false },
+      { apvtsId: "shimmer_interval",   webId: "shimmerInterval",  isChoice: true,  isBool: false },
+      { apvtsId: "dimmer_interval",    webId: "dimmerInterval",   isChoice: true,  isBool: false },
+      { apvtsId: "pitch_blend",        webId: "pitchBlend",       isChoice: false, isBool: false },
+      { apvtsId: "pitch_feedback",     webId: "pitchFeedback",    isChoice: false, isBool: false },
+      { apvtsId: "pitch_delay_ms",     webId: "pitchDelayMs",     isChoice: false, isBool: false },
+      { apvtsId: "tail_mod_rate_hz",   webId: "tailModRateHz",    isChoice: false, isBool: false },
+      { apvtsId: "tail_mod_depth_ms",  webId: "tailModDepthMs",   isChoice: false, isBool: false },
+      { apvtsId: "tail_bloom_ms",      webId: "tailBloomMs",      isChoice: false, isBool: false },
+      { apvtsId: "stereo_width",       webId: "stereoWidth",      isChoice: false, isBool: false },
+      { apvtsId: "output_trim_db",     webId: "outputTrimDb",     isChoice: false, isBool: false },
+      { apvtsId: "limiter_enable",     webId: "limiterEnable",    isChoice: false, isBool: true  },
+      { apvtsId: "pitch_boost",        webId: "pitchBoost",       isChoice: false, isBool: false },
+      { apvtsId: "manifold_type",      webId: "manifoldType",     isChoice: true,  isBool: false }
+    ];
+
+    it('verifies metadata table contains exactly 28 unique parameters', () => {
+      assert.strictEqual(expectedMetadataTable.length, 28, 'Metadata table must have exactly 28 parameters');
+      const apvtsIds = new Set(expectedMetadataTable.map(p => p.apvtsId));
+      const webIds = new Set(expectedMetadataTable.map(p => p.webId));
+      assert.strictEqual(apvtsIds.size, 28, 'All 28 APVTS IDs must be unique');
+      assert.strictEqual(webIds.size, 28, 'All 28 Web IDs must be unique');
+    });
+
+    it('verifies all 28 parameters are bound in index.html, app.js and IPC bridge', () => {
+      const appJsContent = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      const htmlContent = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+
+      for (const param of expectedMetadataTable) {
+        const hasWebId = appJsContent.includes(`'${param.webId}'`) || appJsContent.includes(`"${param.webId}"`);
+        const hasApvtsId = appJsContent.includes(`'${param.apvtsId}'`) || appJsContent.includes(`"${param.apvtsId}"`);
+        assert.ok(hasWebId || hasApvtsId, `Parameter ${param.webId} / ${param.apvtsId} must be referenced in app.js`);
+      }
+
+      // Verify 4-way manifold selector UI exists in index.html
+      assert.ok(htmlContent.includes('id="group-manifold"'), 'index.html must contain group-manifold');
+      for (let i = 0; i < 4; i++) {
+        assert.ok(htmlContent.includes(`data-val="${i}"`), `index.html must have manifold segment button for index ${i}`);
+      }
+
+      // Verify pitch_delay knob container exists in index.html
+      assert.ok(htmlContent.includes('id="knob-pitch-delay"'), 'index.html must contain knob-pitch-delay container');
+    });
+
+    it('verifies all 10 presets contain manifold_type and valid range [0, 3]', () => {
+      const presetsPath = fs.existsSync(path.join(__dirname, 'factory_presets.json'))
+        ? path.join(__dirname, 'factory_presets.json')
+        : path.join(__dirname, 'presets', 'factory_presets.json');
+      const data = JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
+      for (const preset of data.presets) {
+        assert.ok('manifold_type' in preset.params, `Preset ${preset.id} must define manifold_type`);
+        const m = preset.params.manifold_type;
+        assert.ok(Number.isInteger(m) && m >= 0 && m <= 3,
+          `Preset ${preset.id} manifold_type (${m}) must be an integer in range [0, 3]`);
       }
     });
   });

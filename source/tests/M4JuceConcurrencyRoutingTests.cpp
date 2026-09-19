@@ -451,8 +451,293 @@ void runTest6_ApvtsPrepareSnapshot() {
     std::cout << "  -> PASS: prepareToPlay immediately initialized smoothers to active APVTS values.\n";
 }
 
-void runTest7_LosslessWavRecorderDirectoryAndIntegrity() {
-    std::cout << "[Test 7] Lossless WAV Recorder Music Directory & RIFF Integrity...\n";
+void runTest7_ParameterReachabilityAndEnumImpact() {
+    std::cout << "[Test 7] Parameter Reachability (All 28 Params) & Enum Choice Impact...\n";
+    juce::ScopedJuceInitialiser_GUI guiInit;
+
+    BRAUN_RB26AudioProcessor processor;
+    processor.prepareToPlay(48000.0, 512);
+    processor.setPower(true);
+
+    const auto& metaTable = rb26::getParameterMetadataTable();
+    RB26_TEST_ASSERT(metaTable.size() == 28);
+
+    // 1. Verify every single parameter ID is reachable in APVTS
+    for (const auto& meta : metaTable) {
+        auto* param = processor.getAPVTS().getParameter(meta.apvtsId);
+        RB26_TEST_ASSERT(param != nullptr);
+        RB26_TEST_ASSERT(param->paramID == meta.apvtsId);
+        float normVal = param->getValue();
+        RB26_TEST_ASSERT(normVal >= 0.0f && normVal <= 1.0f);
+    }
+
+    // Helper for Euclidean difference
+    auto calcDiff = [](const std::vector<float>& a, const std::vector<float>& b) {
+        float sumSq = 0.0f;
+        for (size_t i = 0; i < a.size(); ++i) {
+            float d = a[i] - b[i];
+            sumSq += d * d;
+        }
+        return std::sqrt(sumSq);
+    };
+
+    // 2. Verify Enum Impact: manifold_type choices produce distinct audio output
+    auto runWithManifold = [&](int manifoldChoice) -> std::vector<float> {
+        BRAUN_RB26AudioProcessor proc;
+        proc.prepareToPlay(48000.0, 256);
+        proc.setPower(true);
+
+        auto* mParam = proc.getAPVTS().getParameter(rb26::ParamIDs::manifoldType.getParamID());
+        RB26_TEST_ASSERT(mParam != nullptr);
+        mParam->setValueNotifyingHost(std::clamp(mParam->convertTo0to1(static_cast<float>(manifoldChoice)), 0.0f, 1.0f));
+
+        auto* decayParam = proc.getAPVTS().getParameter(rb26::ParamIDs::decayRt60Sec.getParamID());
+        if (decayParam) decayParam->setValueNotifyingHost(std::clamp(decayParam->convertTo0to1(6.0f), 0.0f, 1.0f));
+
+        auto* mixParam = proc.getAPVTS().getParameter(rb26::ParamIDs::dryWetMix.getParamID());
+        if (mixParam) mixParam->setValueNotifyingHost(1.0f); // 100% wet
+
+        auto* preDelayParam = proc.getAPVTS().getParameter(rb26::ParamIDs::preDelayMs.getParamID());
+        if (preDelayParam) preDelayParam->setValueNotifyingHost(0.0f);
+
+        std::vector<float> output;
+        juce::AudioBuffer<float> block(2, 256);
+        juce::MidiBuffer midi;
+
+        // Feed an impulse in block 0
+        block.clear();
+        block.setSample(0, 0, 1.0f);
+        block.setSample(1, 0, 1.0f);
+        proc.processBlock(block, midi);
+
+        for (int i = 0; i < 256; ++i) {
+            output.push_back(block.getSample(0, i));
+        }
+
+        // Process another 32 blocks to collect reverberant response
+        for (int b = 0; b < 32; ++b) {
+            block.clear();
+            proc.processBlock(block, midi);
+            for (int i = 0; i < 256; ++i) {
+                output.push_back(block.getSample(0, i));
+            }
+        }
+        return output;
+    };
+
+    auto resp0 = runWithManifold(0);
+    auto resp1 = runWithManifold(1);
+    auto resp2 = runWithManifold(2);
+    auto resp3 = runWithManifold(3);
+
+    float diff01 = calcDiff(resp0, resp1);
+    float diff02 = calcDiff(resp0, resp2);
+    float diff03 = calcDiff(resp0, resp3);
+    float diff12 = calcDiff(resp1, resp2);
+    float diff23 = calcDiff(resp2, resp3);
+
+    std::cout << "  [Debug] Manifold diffs: 0-1=" << diff01 << " 0-2=" << diff02 << " 0-3=" << diff03
+              << " 1-2=" << diff12 << " 2-3=" << diff23 << "\n";
+
+    RB26_TEST_ASSERT(diff01 > 0.001f);
+    RB26_TEST_ASSERT(diff02 > 0.001f);
+    RB26_TEST_ASSERT(diff03 > 0.001f);
+    RB26_TEST_ASSERT(diff12 > 0.001f);
+    RB26_TEST_ASSERT(diff23 > 0.001f);
+
+    // 3. Verify Enum Impact: shimmer_interval choices produce distinct audio output
+    auto runWithShimmer = [&](int shimmerChoice) -> std::vector<float> {
+        BRAUN_RB26AudioProcessor proc;
+        proc.prepareToPlay(48000.0, 256);
+        proc.setPower(true);
+
+        auto* sParam = proc.getAPVTS().getParameter(rb26::ParamIDs::shimmerInterval.getParamID());
+        RB26_TEST_ASSERT(sParam != nullptr);
+        sParam->setValueNotifyingHost(std::clamp(sParam->convertTo0to1(static_cast<float>(shimmerChoice)), 0.0f, 1.0f));
+
+        auto* sSendParam = proc.getAPVTS().getParameter(rb26::ParamIDs::shimmerSend.getParamID());
+        if (sSendParam) sSendParam->setValueNotifyingHost(1.0f);
+
+        auto* mixParam = proc.getAPVTS().getParameter(rb26::ParamIDs::dryWetMix.getParamID());
+        if (mixParam) mixParam->setValueNotifyingHost(1.0f);
+
+        auto* preDelayParam = proc.getAPVTS().getParameter(rb26::ParamIDs::preDelayMs.getParamID());
+        if (preDelayParam) preDelayParam->setValueNotifyingHost(0.0f);
+
+        auto* pbParam = proc.getAPVTS().getParameter(rb26::ParamIDs::pitchBlend.getParamID());
+        if (pbParam) pbParam->setValueNotifyingHost(std::clamp(pbParam->convertTo0to1(1.0f), 0.0f, 1.0f));
+
+        auto* pdParam = proc.getAPVTS().getParameter(rb26::ParamIDs::pitchDelayMs.getParamID());
+        if (pdParam) pdParam->setValueNotifyingHost(std::clamp(pdParam->convertTo0to1(20.0f), 0.0f, 1.0f));
+
+        std::vector<float> output;
+        juce::AudioBuffer<float> block(2, 256);
+        juce::MidiBuffer midi;
+
+        block.clear();
+        block.setSample(0, 0, 1.0f);
+        block.setSample(1, 0, 1.0f);
+        proc.processBlock(block, midi);
+
+        for (int b = 0; b < 48; ++b) {
+            block.clear();
+            proc.processBlock(block, midi);
+            for (int i = 0; i < 256; ++i) output.push_back(block.getSample(0, i));
+        }
+        return output;
+    };
+
+    auto sResp0 = runWithShimmer(0);
+    auto sResp1 = runWithShimmer(1);
+    auto sResp2 = runWithShimmer(2);
+    float sDiff01 = calcDiff(sResp0, sResp1);
+    float sDiff12 = calcDiff(sResp1, sResp2);
+    std::cout << "  [Debug] Shimmer diffs: 0-1=" << sDiff01 << " 1-2=" << sDiff12 << "\n";
+    RB26_TEST_ASSERT(sDiff01 > 0.001f);
+    RB26_TEST_ASSERT(sDiff12 > 0.001f);
+
+    // 4. Verify Enum Impact: dimmer_interval choices produce distinct audio output
+    auto runWithDimmer = [&](int dimmerChoice) -> std::vector<float> {
+        BRAUN_RB26AudioProcessor proc;
+        proc.prepareToPlay(48000.0, 256);
+        proc.setPower(true);
+
+        auto* dParam = proc.getAPVTS().getParameter(rb26::ParamIDs::dimmerInterval.getParamID());
+        RB26_TEST_ASSERT(dParam != nullptr);
+        dParam->setValueNotifyingHost(std::clamp(dParam->convertTo0to1(static_cast<float>(dimmerChoice)), 0.0f, 1.0f));
+
+        auto* dSendParam = proc.getAPVTS().getParameter(rb26::ParamIDs::dimmerSend.getParamID());
+        if (dSendParam) dSendParam->setValueNotifyingHost(1.0f);
+
+        auto* mixParam = proc.getAPVTS().getParameter(rb26::ParamIDs::dryWetMix.getParamID());
+        if (mixParam) mixParam->setValueNotifyingHost(1.0f);
+
+        auto* preDelayParam = proc.getAPVTS().getParameter(rb26::ParamIDs::preDelayMs.getParamID());
+        if (preDelayParam) preDelayParam->setValueNotifyingHost(0.0f);
+
+        auto* pbParam = proc.getAPVTS().getParameter(rb26::ParamIDs::pitchBlend.getParamID());
+        if (pbParam) pbParam->setValueNotifyingHost(std::clamp(pbParam->convertTo0to1(-1.0f), 0.0f, 1.0f));
+
+        auto* pdParam = proc.getAPVTS().getParameter(rb26::ParamIDs::pitchDelayMs.getParamID());
+        if (pdParam) pdParam->setValueNotifyingHost(std::clamp(pdParam->convertTo0to1(20.0f), 0.0f, 1.0f));
+
+        std::vector<float> output;
+        juce::AudioBuffer<float> block(2, 256);
+        juce::MidiBuffer midi;
+
+        block.clear();
+        block.setSample(0, 0, 1.0f);
+        block.setSample(1, 0, 1.0f);
+        proc.processBlock(block, midi);
+
+        for (int b = 0; b < 48; ++b) {
+            block.clear();
+            proc.processBlock(block, midi);
+            for (int i = 0; i < 256; ++i) output.push_back(block.getSample(0, i));
+        }
+        return output;
+    };
+
+    auto dResp0 = runWithDimmer(0);
+    auto dResp1 = runWithDimmer(1);
+    auto dResp2 = runWithDimmer(2);
+    float dDiff01 = calcDiff(dResp0, dResp1);
+    float dDiff12 = calcDiff(dResp1, dResp2);
+    std::cout << "  [Debug] Dimmer diffs: 0-1=" << dDiff01 << " 1-2=" << dDiff12 << "\n";
+    RB26_TEST_ASSERT(dDiff01 > 0.001f);
+    RB26_TEST_ASSERT(dDiff12 > 0.001f);
+
+    std::cout << "  -> PASS: All 28 parameters reachable in APVTS; manifold, shimmer, and dimmer choices exhibit measurable DSP impact.\n";
+}
+
+void runTest8_UserPathManifoldSwitchingContinuity() {
+    std::cout << "[Test 8] End-to-End User Path Manifold Switching Continuity & Stability...\n";
+    juce::ScopedJuceInitialiser_GUI guiInit;
+
+    BRAUN_RB26AudioProcessor processor;
+    processor.prepareToPlay(48000.0, 128);
+    processor.setPower(true);
+
+    auto* manifoldParam = processor.getAPVTS().getParameter(rb26::ParamIDs::manifoldType.getParamID());
+    RB26_TEST_ASSERT(manifoldParam != nullptr);
+
+    auto* decayParam = processor.getAPVTS().getParameter(rb26::ParamIDs::decayRt60Sec.getParamID());
+    if (decayParam) decayParam->setValueNotifyingHost(std::clamp(decayParam->convertTo0to1(10.0f), 0.0f, 1.0f));
+
+    auto* mixParam = processor.getAPVTS().getParameter(rb26::ParamIDs::dryWetMix.getParamID());
+    if (mixParam) mixParam->setValueNotifyingHost(1.0f); // 100% wet
+
+    juce::AudioBuffer<float> buffer(2, 128);
+    juce::MidiBuffer midi;
+
+    // 1. Energize the reverb with a sustained burst
+    for (int b = 0; b < 4; ++b) {
+        for (int ch = 0; ch < 2; ++ch) {
+            float* ptr = buffer.getWritePointer(ch);
+            for (int i = 0; i < 128; ++i) {
+                ptr[i] = 0.20f * std::sin(static_cast<float>(b * 128 + i) * 0.05f);
+            }
+        }
+        processor.processBlock(buffer, midi);
+    }
+
+    // 2. Perform live manifold switching during active tail processing:
+    // Sequence: 1 -> 2 -> 3 -> 0 -> 2 -> 1 -> 3
+    const int manifoldSequence[] = { 1, 2, 3, 0, 2, 1, 3 };
+    float maxDelta = 0.0f;
+    float prevSampleL = 0.0f;
+    float prevSampleR = 0.0f;
+    bool firstSample = true;
+
+    for (int targetManifold : manifoldSequence) {
+        // User/Host changes the manifold parameter via APVTS
+        manifoldParam->setValueNotifyingHost(std::clamp(manifoldParam->convertTo0to1(static_cast<float>(targetManifold)), 0.0f, 1.0f));
+
+        // Process 16 blocks during transition
+        for (int b = 0; b < 16; ++b) {
+            buffer.clear();
+            processor.processBlock(buffer, midi);
+
+            const float* lPtr = buffer.getReadPointer(0);
+            const float* rPtr = buffer.getReadPointer(1);
+
+            for (int i = 0; i < 128; ++i) {
+                float l = lPtr[i];
+                float r = rPtr[i];
+
+                // Check finite / non-NaN
+                RB26_TEST_ASSERT(std::isfinite(l));
+                RB26_TEST_ASSERT(std::isfinite(r));
+
+                // Denormal check: if subnormal, fail
+                RB26_TEST_ASSERT(std::fpclassify(l) != FP_SUBNORMAL);
+                RB26_TEST_ASSERT(std::fpclassify(r) != FP_SUBNORMAL);
+
+                if (!firstSample) {
+                    float deltaL = std::abs(l - prevSampleL);
+                    float deltaR = std::abs(r - prevSampleR);
+                    if (deltaL > maxDelta) maxDelta = deltaL;
+                    if (deltaR > maxDelta) maxDelta = deltaR;
+
+                    // Continuity assertion: smooth slew must keep inter-sample jump < 0.05
+                    RB26_TEST_ASSERT(deltaL < 0.05f);
+                    RB26_TEST_ASSERT(deltaR < 0.05f);
+                } else {
+                    firstSample = false;
+                }
+
+                prevSampleL = l;
+                prevSampleR = r;
+            }
+        }
+    }
+
+    std::cout << "  -> PASS: Live manifold switching during active decay tail verified (max delta = "
+              << maxDelta << " < 0.05, zero NaNs, zero denormals).\n";
+}
+
+void runTest9_LosslessWavRecorderDirectoryAndIntegrity() {
+    std::cout << "[Test 9] Lossless WAV Recorder Music Directory & RIFF Integrity...\n";
     juce::ScopedJuceInitialiser_GUI guiInit;
 
     BRAUN_RB26AudioProcessor processor;
@@ -545,8 +830,8 @@ void runTest7_LosslessWavRecorderDirectoryAndIntegrity() {
     std::cout << "  -> PASS: Lossless WAV recording exported to /music subfolder with valid RIFF header.\n";
 }
 
-void runTest8_NativeUIOcclusionAndContextMenu() {
-    std::cout << "[Test 8] Native UI Occlusion & Right-Click Context Menu (BUG-NATIVE-1)...\n";
+void runTest10_NativeUIOcclusionAndContextMenu() {
+    std::cout << "[Test 10] Native UI Occlusion & Right-Click Context Menu (BUG-NATIVE-1)...\n";
     juce::ScopedJuceInitialiser_GUI guiInit;
 
     BRAUN_RB26AudioProcessor processor;
@@ -647,8 +932,10 @@ int main() {
     runTest4_MasterLimiterBypassAndSingleLimiting();
     runTest5_HostDawPresetsExposure();
     runTest6_ApvtsPrepareSnapshot();
-    runTest7_LosslessWavRecorderDirectoryAndIntegrity();
-    runTest8_NativeUIOcclusionAndContextMenu();
+    runTest7_ParameterReachabilityAndEnumImpact();
+    runTest8_UserPathManifoldSwitchingContinuity();
+    runTest9_LosslessWavRecorderDirectoryAndIntegrity();
+    runTest10_NativeUIOcclusionAndContextMenu();
 
     std::cout << "================================================================\n";
     std::cout << "  ALL MILESTONE 4 AUDIT TESTS PASSED (100% SUCCESS)\n";

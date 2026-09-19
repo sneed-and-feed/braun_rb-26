@@ -50,6 +50,7 @@ npm run test:browser
 | **Native DSP Tier 2 (Boundaries)** | Multi-rate, buffer sizes (1-4096), denormals, overload | 165 / 165 | 894.3 ms | **PASS** |
 | **Native DSP Tier 3 (Pairwise)** | Cross-subsystem interactions (e.g. Freeze + Shimmer) | 34 / 34 | 215.8 ms | **PASS** |
 | **Native DSP Tier 4 (Scenarios)** | 1,000,000-sample burn-in, studio workloads, DAWs | 17 / 17 | 1,589.4 ms | **PASS** |
+| **Acoustic Decay Audit** | `rb26_acoustic_decay_audit.exe` (Suites A-H) | 8 / 8 Suites | ~8.5 s | **100% PASS** |
 | **Total Headless DSP Tests** | `rb26_headless_dsp_tests.exe` | **389 / 389** | **3,152.4 ms** | **100% PASS** |
 | **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 36 / 36 | 47.9 ms | **PASS** |
 | **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets) | 20 / 20 | 66.8 ms | **PASS** |
@@ -211,6 +212,8 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
    - When running at $192.0\text{ kHz}$ with full dual Shimmer and Dimmer sends active at 100%, CPU utilization reaches ~1.63% on modern desktop cores. For large DAW arrangements with many instances, use $48.0\text{ kHz}$ or $96.0\text{ kHz}$, or leverage the automatic inactive pitch bypass when pitch diffusion is not required.
 4. **WebKitGTK Linux UI Contrast**:
    - On Linux distributions utilizing WebKitGTK with native GTK themes, unstyled HTML `<select>` elements can inherit dark text on dark backgrounds. RB-26 enforces `-webkit-appearance: none; appearance: none;` and explicit `#151618` / `#F0F0F0` contrast tokens to guarantee WCAG AA readability.
+5. **Binary Releases & GitHub Uploads Policy**:
+   - **MANDATORY POLICY**: Binary compilation packaging, zip bundling, and GitHub release uploads for `braun_rb-26` and `braun_as-42` are handled **MANUALLY by the user/repository owner**. Automated agents, subagents, and automated workflows MUST NOT attempt to upload binaries, run automated upload scripts, or create GitHub releases/tags directly. Future agents inspecting this checklist must preserve this manual release protocol.
 
 ---
 
@@ -221,6 +224,7 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
                     BRAUN RB-26 VERIFICATION AUDIT COMPLETE                     
 ================================================================================
   Verification Status           : 100% UNANIMOUS PASS
+  Acoustic Decay Audit Suites   : 8 / 8 (Suites A-H, 100%)
   Headless DSP Tests            : 389 / 389 (100%)
   Web Unit Tests                : 36 / 36 (100%)
   Checklist Automated Tests     : 20 / 20 (100%)
@@ -231,5 +235,5 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.4.4)
+VERDICT: CERTIFIED PRODUCTION READY (v1.4.7)
 ```

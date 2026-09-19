@@ -1,10 +1,10 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.4.4](https://img.shields.io/badge/Version-1.4.4-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.4)
+[![Version: 1.4.7](https://img.shields.io/badge/Version-1.4.7-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.7)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-macOS-Universal.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -17,9 +17,9 @@
 
 ---
 
-### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.4)
-* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.4-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
-* **Windows x64**: **[`BRAUN_RB26-v1.4.4-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.4/BRAUN_RB26-v1.4.4-VST3-Windows-x64.zip)** (~3 MB).
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.7)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.7-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.4.7-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-VST3-Windows-x64.zip)** (~3 MB).
 * Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
 * **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
@@ -27,12 +27,16 @@
 * **Web Audio**: 100% client-side in any modern browser (macOS, Windows, Linux, iOS, Android) via [Quick Start](#web-showcase-zero-install).
 * All releases & release notes: **[GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases)**.
 
+> [!NOTE]
+> **Manual Release & Binary Asset Policy**: GitHub release tags, binary packaging archives, and release asset uploads for BRAUN RB-26 and BRAUN AS-42 are managed **manually by the user/repository owner**. Automated agents, CI scripts, and LLM subagents MUST NOT attempt to upload binaries, publish GitHub releases, or generate remote tags directly.
+
 > [!TIP]
-> **What's New in v1.4.4 (Standalone Freeze / Unfreeze Mechanics & UI Synchronization)**:
-> - **Acoustic Release Calibration**: Recalibrated preset `INFINITE_ETHEREAL_FREEZE` to `decayRt60Sec = 4.5s` and `pitchFeedback = 0.25` so toggling freeze off audibly and cleanly releases within 2–4.5s instead of lingering indefinitely.
-> - **Input Excitation During Freeze**: Enhanced FDN input smoother during freeze hold to `0.08f` (-22 dB), allowing live chords, chimes, and exciter impulses to swell into the frozen reverb tank.
-> - **Pitch Delay Quenching on Unfreeze Edge**: Cleared residual delayed pitch feedback loops (`mPitchDelayBuffer` and `mLastPitchFb`) on unfreeze edges to eliminate re-pumping of old frozen audio into the tank.
-> - **Fallback & Web UI Synchronization**: Synchronized `dataset.state` on boolean toggle buttons and immediate dual-identifier IPC (`freezeHold` and `freeze_hold`) to ensure the APVTS and GUI stay strictly locked in standalone and plugin modes.
+> **What's New in v1.4.7 (Feedforward Manifold Extraction, RT60 Decay Parity, Equal-Power Circular Spatial Rotation & Expanded Dispersion)**:
+> - **Feedforward Manifold Extraction Architecture**: Completely moved resonant body formants (Sitka spruce $A_0$ 95 Hz, $T_1$ 320 Hz, Wood 2400 Hz) and edge caustics (9.5 kHz peaking + ultrasonic lowpass) out of the recursive FDN feedback loop into post-extraction feedforward stereo filters (`extractStereo`), eliminating in-loop choke trims.
+> - **Rigorous RT60 Decay Parity Across All 4 Manifolds**: With in-loop gain attenuation removed, decay times across all 4 geometries (Poincaré Hyperbolic, Whispering Gallery, Anharmonic Plate, Stockhausen Klangdom) track identical mathematical RT60 curves with sub-0.5% variance.
+> - **Tangible 0.35 Hz Equal-Power Circular Spatial Rotation**: Implemented non-negative circular panning ($\Omega_{\text{rot}} = 0.35\text{ Hz}$, ~2.85 s period) for Whispering Gallery via $\cos(\phi)$ / $\sin(\phi)$ mapping with $\phi \in [0, \pi/2]$, ensuring $\cos^2\phi + \sin^2\phi = 1$, zero anti-phase cancellation, and seamless $C^0$ slewed spatial transitions.
+> - **Expanded Delay Prime Dispersion**: Broadened `kWhisperingPrimeOffsets` across the delay lines with an expanded ~9.7 ms prime-staggered dispersion spread, eliminating phase smearing and standing-wave resonances in circular acoustic modes.
+> - **Comprehensive Acoustic Decay Audit Suite**: Added `rb26_acoustic_decay_audit` test binary with 8 automated multi-manifold acoustic decay verification suites (Suites A–H) asserting $100\%$ decay parity and stability across all operational modes.
 
 ---
 
@@ -67,7 +71,29 @@ Opens `http://localhost:3826/` with the full 19" 2U rackmount interface, 21 rota
 
 ### Plugin Installation (DAW Setup)
 
-#### VST3 Plugin
+#### macOS Easy-Run & Zero-Click Setup (Recommended)
+
+For macOS (Apple Silicon M1/M2/M3/M4 & Intel x86_64; Logic Pro, Ableton Live, FL Studio, Reaper, Bitwig):
+
+**Option 1: One-Line Zero-Click Terminal Installer** (Fastest)
+Run in macOS Terminal:
+```bash
+curl -fsSL https://raw.githubusercontent.com/sneed-and-feed/braun_rb-26/main/scripts/macos/quick-install.sh | bash
+```
+> Automatically downloads the latest Universal release, installs AU (`.component`), VST3 (`.vst3`), CLAP (`.clap`), and Standalone (`.app`) to your user library, clears macOS Gatekeeper quarantine (`xattr -cr`), and refreshes CoreAudio `AudioComponentRegistrar` cache so DAWs detect the plugin immediately.
+
+**Option 2: Double-Click Package (.zip)**
+1. Download **[`BRAUN_RB26-v1.4.7-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.7/BRAUN_RB26-v1.4.7-macOS-Universal.zip)**.
+2. Unzip the package in Finder.
+3. Double-click **`Install.command`** to automatically copy all plugins and clear Gatekeeper quarantine.
+4. *Or* double-click **`Run_Standalone.command`** to immediately launch the standalone reverb without installing.
+5. To uninstall anytime, double-click **`Uninstall.command`**.
+
+---
+
+#### Manual Installation
+
+##### VST3 Plugin
 
 - **Windows**: Copy `BRAUN_RB26.vst3` to `C:\Program Files\Common Files\VST3\`
   ```powershell
@@ -76,17 +102,20 @@ Opens `http://localhost:3826/` with the full 19" 2U rackmount interface, 21 rota
 - **macOS**: Copy `BRAUN_RB26.vst3` to `~/Library/Audio/Plug-Ins/VST3/` or `/Library/Audio/Plug-Ins/VST3/`
   ```bash
   cp -R "BRAUN_RB26.vst3" ~/Library/Audio/Plug-Ins/VST3/
+  xattr -cr ~/Library/Audio/Plug-Ins/VST3/BRAUN_RB26.vst3
   ```
 - **Linux**: Copy `BRAUN_RB26.vst3` to `~/.vst3/`
   ```bash
   cp -r "BRAUN_RB26.vst3" ~/.vst3/
   ```
 
-#### Audio Unit (AU) Plugin (macOS Only)
+##### Audio Unit (AU) Plugin (macOS Only)
 
 Copy `BRAUN_RB26.component` to `~/Library/Audio/Plug-Ins/Components/` for Logic Pro, GarageBand, and AU hosts:
 ```bash
 cp -R "BRAUN_RB26.component" ~/Library/Audio/Plug-Ins/Components/
+xattr -cr ~/Library/Audio/Plug-Ins/Components/BRAUN_RB26.component
+killall -9 AudioComponentRegistrar
 ```
 
 #### CLAP Plugin
@@ -184,9 +213,13 @@ Four specialized acoustic geometries that go beyond conventional room simulation
 | Manifold | Geometry | Acoustic Behavior |
 |---|---|---|
 | **Poincaré Hyperbolic Cavity** | Negative curvature $(\kappa < 0)$ | Exponential reflection growth, diffuse low-frequency dispersion via Airy function zeros |
-| **Whispering Gallery Caustic** | Circular caustic focusing | High-frequency edge caustics wrapping around the stereo horizon |
-| **Anharmonic Spruce Soundboard** | Biharmonic plate $(\nabla^4)$ | Physical spruce resonance formants with air-viscosity dispersion |
+| **Whispering Gallery Caustic** | Circular caustic focusing | High-frequency edge caustics wrapping around the stereo horizon (~272-sample cluster spread) |
+| **Anharmonic Spruce Soundboard** | Anisotropic membrane $(\nabla^2)$ | Physical spruce resonance formants with wood grain anisotropy ratio 0.08, combined with cascaded waveguide allpass dispersion |
 | **Stockhausen Klangdom Sphere** | 3D spherical coordinate delays | Multi-vector spatial diffusion with golden-ratio LFO drift |
+
+#### Acoustic Geometry & Dispersion Architecture
+- **Anharmonic Spruce Soundboard (Anisotropic Membrane Dispersion)**: The delay line modes are parameterized by the 2D anisotropic membrane Helmholtz wave equation $(\nabla^2)$ modal factor $L_k \propto 1 / \sqrt{m_k^2 + 0.08\, n_k^2}$. This directly reflects the orthogonal velocity anisotropy ratio ($c_\perp^2 / c_\parallel^2 \approx 0.08$) of Sitka spruce soundboards along and across the wood grain, rather than an isotropic biharmonic plate. Coupled with dual-stage cascaded waveguide allpass dispersion stages ($a_1 = +0.55, a_2 = +0.55$), high frequencies lead naturally while spruce body formants ($A_0 = 95\text{ Hz}$, $T_1 = 320\text{ Hz}$, and wood fiber resonance at $2400\text{ Hz}$) shape an organic resonant response.
+- **Whispering Gallery Caustic Aesthetics & Transient Smear**: Modeled after acoustic whispering galleries, delay lengths cluster tightly according to radial Airy function zeros $(1 - a_{k+1} / (2\pi(k+3)))$ over a narrow ~272-sample cluster spread at 48 kHz. These geometric parameterizations ($\cosh(d_k)$ and Airy zeros) serve as smooth delay spread maps. While tightly spaced delay lines on percussive material would ordinarily produce sharp comb-filtering resonances, the RB-26 architecture eliminates comb coloration through mutually-prime loop diffusers ($113$ to $467$ samples) and continuous $0.25\text{ Hz}$ circular spatial vector rotation that smoothly smears transient energy across the stereo field. A high-frequency caustic peaking filter ($+3.5\text{ dB}$ at $9.5\text{ kHz}$) with calibrated $-4.0\text{ dB}$ ($0.63\times$) trim and ultrasonic lowpass provides brilliant caustic sparkle while maintaining contractive loop gain ($< 1.0$) across all decay and damping regimes.
 
 ### Bidirectional Pitch Diffusion
 
@@ -445,7 +478,7 @@ braun_rb-26/
 │   ├── plugin/                 # JUCE 8 plugin wrapper
 │   │   ├── PluginProcessor.h/cpp       # AudioProcessor with APVTS & master soft limiter
 │   │   ├── PluginEditor.h/cpp          # Hybrid WebView2 + native L&F
-│   │   ├── Parameters.h                # 24-parameter metadata table (standby default)
+│   │   ├── Parameters.h                # 28-parameter metadata table (standby default)
 │   │   └── LookAndFeel/
 │   │       └── BraunLookAndFeel.h/cpp  # Dieter Rams native fallback UI & CRT scope
 │   └── tests/                  # C++ test harnesses

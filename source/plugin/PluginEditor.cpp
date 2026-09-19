@@ -230,6 +230,7 @@ const paramsMeta = [
   { id: 'room_size', webId: 'roomSize', label: 'Room Size', deck: 'FDN Tank', min: 0.1, max: 4.0, def: 0.65, unit: '' },
   { id: 'decay_rt60_sec', webId: 'decayRt60Sec', label: 'Decay Time', deck: 'FDN Tank', min: 0.2, max: 30.0, def: 3.5, unit: 's' },
   { id: 'high_damping_hz', webId: 'highDampingHz', label: 'Damping', deck: 'FDN Tank', min: 1000, max: 20000, def: 1800, unit: 'Hz' },
+  { id: 'manifold_type', webId: 'manifoldType', label: 'Manifold', deck: 'FDN Tank', min: 0, max: 3, def: 0, unit: '', isChoice: true, choices: ['Poincaré', 'Whispering', 'Plate', 'Klangdom'] },
   { id: 'freeze_hold', webId: 'freezeHold', label: 'Freeze', deck: 'FDN Tank', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
   { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.30, unit: '%' },
@@ -239,6 +240,7 @@ const paramsMeta = [
   { id: 'pitch_blend', webId: 'pitchBlend', label: 'Pitch Blend', deck: 'Pitch Diffusion', min: -1, max: 1, def: 0, unit: '' },
   { id: 'pitch_feedback', webId: 'pitchFeedback', label: 'Pitch FB', deck: 'Pitch Diffusion', min: 0, max: 0.95, def: 0.50, unit: '%' },
   { id: 'pitch_delay_ms', webId: 'pitchDelayMs', label: 'Pitch Delay', deck: 'Pitch Diffusion', min: 20, max: 500, def: 150, unit: 'ms' },
+  { id: 'pitch_boost', webId: 'pitchBoost', label: 'Pitch Boost', deck: 'Pitch Diffusion', min: 0, max: 18, def: 0, unit: 'dB' },
 
   { id: 'tail_mod_rate_hz', webId: 'tailModRateHz', label: 'Mod Rate', deck: 'Tail Bloom & Mod', min: 0.05, max: 5.0, def: 0.85, unit: 'Hz' },
   { id: 'tail_mod_depth_ms', webId: 'tailModDepthMs', label: 'Mod Depth', deck: 'Tail Bloom & Mod', min: 0, max: 5.0, def: 1.2, unit: 'ms' },
@@ -1498,6 +1500,10 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
             {
                 slot->comboBox.addItemList(rb26::getDimmerIntervalChoices(), 1);
             }
+            else if (juce::String(item.apvtsId) == rb26::ParamIDs::manifoldType.getParamID())
+            {
+                slot->comboBox.addItemList(rb26::getManifoldTypeChoices(), 1);
+            }
             slot->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
                 processorRef.getAPVTS(), item.apvtsId, slot->comboBox);
             addChildComponent(slot->label);
@@ -1716,14 +1722,17 @@ void BRAUN_RB26AudioProcessorEditor::layoutNativeControls()
     // DECK 3: REVERB TANK (FDN) (Row 0, Col 2)
     // 4 Knobs: room_size, decay_rt60_sec, high_damping_hz, diffusion_density
     // 1 Toggle: freeze_hold
+    // 1 Combo: manifold_type
     {
         auto cell = getCellBounds(0, 2);
         cell.removeFromTop(22);
-        auto btnArea = cell.removeFromBottom(24).reduced(6, 2);
+        auto btmControlRow = cell.removeFromBottom(38).reduced(4, 2);
+        auto btnArea = btmControlRow.removeFromLeft(btmControlRow.getWidth() / 3).reduced(2, 2);
         if (auto* btn = findButton(rb26::ParamIDs::freezeHold))
         {
             btn->button.setBounds(btnArea);
         }
+        layoutCombo(findCombo(rb26::ParamIDs::manifoldType), btmControlRow.reduced(2, 0));
 
         auto topRow = cell.removeFromTop(cell.getHeight() / 2);
         auto bottomRow = cell;

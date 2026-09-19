@@ -39,6 +39,7 @@ public:
     void changeProgramName(int index, const juce::String& newName) override;
 
     // Preset & State Serialization
+    void setPresetParameters(const rb26::Rb26Parameters& p);
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 

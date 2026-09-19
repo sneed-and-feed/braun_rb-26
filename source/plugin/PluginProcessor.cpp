@@ -52,19 +52,8 @@ int BRAUN_RB26AudioProcessor::getCurrentProgram()
     return mCurrentProgram;
 }
 
-void BRAUN_RB26AudioProcessor::setCurrentProgram(int index)
+void BRAUN_RB26AudioProcessor::setPresetParameters(const rb26::Rb26Parameters& p)
 {
-    if (index < 0 || index >= getNumPrograms())
-        return;
-
-    mCurrentProgram = index;
-
-    static const auto presets = rb26::Rb26ReverbEngine::getFactoryPresets();
-    if (static_cast<size_t>(index) >= presets.size())
-        return;
-
-    const auto& p = presets[static_cast<size_t>(index)].params;
-
     auto setParamFloat = [this](const juce::ParameterID& pid, float val) {
         if (auto* param = apvts.getParameter(pid.getParamID()))
             param->setValueNotifyingHost(std::clamp(param->convertTo0to1(val), 0.0f, 1.0f));
@@ -105,6 +94,21 @@ void BRAUN_RB26AudioProcessor::setCurrentProgram(int index)
     setParamFloat(rb26::ParamIDs::outputTrimDb, p.outputTrimDb);
     setParamBool(rb26::ParamIDs::limiterEnable, p.limiterEnable);
     setParamFloat(rb26::ParamIDs::pitchBoost, p.pitchBoostDb);
+    setParamChoice(rb26::ParamIDs::manifoldType, static_cast<float>(rb26::indexFromManifoldType(p.manifold)));
+}
+
+void BRAUN_RB26AudioProcessor::setCurrentProgram(int index)
+{
+    if (index < 0 || index >= getNumPrograms())
+        return;
+
+    mCurrentProgram = index;
+
+    static const auto presets = rb26::Rb26ReverbEngine::getFactoryPresets();
+    if (static_cast<size_t>(index) >= presets.size())
+        return;
+
+    setPresetParameters(presets[static_cast<size_t>(index)].params);
 }
 
 const juce::String BRAUN_RB26AudioProcessor::getProgramName(int index)

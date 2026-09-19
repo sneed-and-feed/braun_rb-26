@@ -56,6 +56,7 @@ struct Rb26Parameters {
     float stereoWidth = 1.0f;       // 0.0 - 2.0
     float outputTrimDb = 0.0f;      // -24.0 - +12.0 dB
     bool limiterEnable = true;      // true/false
+    ManifoldType manifold = ManifoldType::PoincareHyperbolic;
 };
 
 struct PresetDefinition {

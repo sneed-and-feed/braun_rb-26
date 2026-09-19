@@ -368,12 +368,34 @@ body {
   border-color: rgba(0, 0, 0, 0.2) !important;
 }
 
-/* Discrete Segmented Toggles */
+/* Discrete Segmented Toggles & Manifold Cluster */
+.braun-manifold-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 4px 6px;
+  background-color: var(--bg-panel-inset);
+  border: 1px solid var(--border-line);
+  border-radius: 4px;
+}
+
+.braun-manifold-cluster .braun-label-inline {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
 .braun-segment-group {
   display: inline-flex;
   border: 1px solid var(--border-line);
   border-radius: 3px;
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .braun-segment-btn {
@@ -381,28 +403,38 @@ body {
   color: var(--text-secondary);
   border: none;
   border-right: 1px solid var(--border-line);
-  padding: 4px 8px;
+  padding: 4px 9px;
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   cursor: pointer;
   outline: none;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .braun-segment-btn:last-child {
   border-right: none;
 }
 
-.braun-segment-btn.is-active {
-  background-color: var(--text-primary);
-  color: var(--bg-panel);
+.braun-segment-btn:hover:not(.active):not(.is-active) {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
 }
 
+.braun-segment-btn.active,
+.braun-segment-btn.is-active {
+  background-color: var(--braun-orange);
+  color: #ffffff;
+  box-shadow: 0 0 6px rgba(238, 89, 43, 0.45);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .braun-segment-btn.active,
 [data-theme="dark"] .braun-segment-btn.is-active {
   background-color: var(--braun-orange);
-  color: #fff;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(238, 89, 43, 0.6);
 }
 
 /* --- Panel Headings & Typography --- */

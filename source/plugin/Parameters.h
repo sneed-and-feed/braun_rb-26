@@ -39,6 +39,7 @@ namespace ParamIDs {
     inline const juce::ParameterID outputTrimDb      { "output_trim_db", 1 };
     inline const juce::ParameterID limiterEnable     { "limiter_enable", 1 };
     inline const juce::ParameterID pitchBoost        { "pitch_boost", 1 };
+    inline const juce::ParameterID manifoldType      { "manifold_type", 1 };
 }
 
 // ============================================================================
@@ -85,6 +86,34 @@ inline int dimmerIndexFromInterval(int semitones) noexcept {
 }
 
 // ============================================================================
+// Choice helpers for 4-Way Manifold Geometry
+// ============================================================================
+inline const juce::StringArray& getManifoldTypeChoices() {
+    static const juce::StringArray choices { "Poincaré Hyperbolic", "Whispering Gallery", "Anharmonic Plate", "Stockhausen Klangdom" };
+    return choices;
+}
+
+inline ManifoldType manifoldTypeFromIndex(int index) noexcept {
+    switch (index) {
+        case 0: return ManifoldType::PoincareHyperbolic;
+        case 1: return ManifoldType::WhisperingGallery;
+        case 2: return ManifoldType::AnharmonicPlate;
+        case 3: return ManifoldType::StockhausenKlangdom;
+        default: return ManifoldType::PoincareHyperbolic;
+    }
+}
+
+inline int indexFromManifoldType(ManifoldType type) noexcept {
+    switch (type) {
+        case ManifoldType::PoincareHyperbolic: return 0;
+        case ManifoldType::WhisperingGallery: return 1;
+        case ManifoldType::AnharmonicPlate: return 2;
+        case ManifoldType::StockhausenKlangdom: return 3;
+        default: return 0;
+    }
+}
+
+// ============================================================================
 // Parameter Metadata Table for 2-Way APVTS / Web / GUI Binding
 // ============================================================================
 struct ParameterMetadata {
@@ -99,8 +128,8 @@ struct ParameterMetadata {
     bool isChoice;
 };
 
-inline const std::array<ParameterMetadata, 27>& getParameterMetadataTable() {
-    static const std::array<ParameterMetadata, 27> table {{
+inline const std::array<ParameterMetadata, 28>& getParameterMetadataTable() {
+    static const std::array<ParameterMetadata, 28> table {{
         { "input_trim_db",      "inputTrimDb",      "Input Trim",            "dB",   -18.0f,  18.0f,    0.0f,   false, false },
         { "pre_delay_ms",       "preDelayMs",       "Pre-Delay",             "ms",   0.0f,    500.0f,   24.0f,  false, false },
         { "dry_wet_mix",        "dryWetMix",        "Dry / Wet Mix",         "%",    0.0f,    1.0f,     0.40f,  false, false },
@@ -127,7 +156,8 @@ inline const std::array<ParameterMetadata, 27>& getParameterMetadataTable() {
         { "stereo_width",       "stereoWidth",      "Stereo Width",          "%",    0.0f,    2.0f,     1.0f,   false, false },
         { "output_trim_db",     "outputTrimDb",     "Output Trim",           "dB",   -24.0f,  12.0f,    0.0f,   false, false },
         { "limiter_enable",     "limiterEnable",    "Master Limiter",        "",     0.0f,    1.0f,     1.0f,   true,  false },
-        { "pitch_boost",        "pitchBoost",       "Pitch Booster",         "dB",   0.0f,    18.0f,    0.0f,   false, false }
+        { "pitch_boost",        "pitchBoost",       "Pitch Booster",         "dB",   0.0f,    18.0f,    0.0f,   false, false },
+        { "manifold_type",      "manifoldType",     "Geometry Manifold",     "",     0.0f,    3.0f,     0.0f,   false, true  }
     }};
     return table;
 }
@@ -163,6 +193,7 @@ struct alignas(16) Rb26ParameterSnapshot {
     float outputTrimDb     { 0.0f };
     bool  limiterEnable    { true };
     float pitchBoost       { 0.0f };
+    ManifoldType manifold  { ManifoldType::PoincareHyperbolic };
 
     [[nodiscard]] Rb26Parameters toDspParams() const noexcept {
         Rb26Parameters p;
@@ -193,6 +224,7 @@ struct alignas(16) Rb26ParameterSnapshot {
         p.outputTrimDb     = outputTrimDb;
         p.limiterEnable    = limiterEnable;
         p.pitchBoostDb     = pitchBoost;
+        p.manifold         = manifold;
         return p;
     }
 };
@@ -228,6 +260,7 @@ struct Rb26AtomicPointers {
     std::atomic<float>* outputTrimDb     { nullptr };
     std::atomic<float>* limiterEnable    { nullptr };
     std::atomic<float>* pitchBoost       { nullptr };
+    std::atomic<float>* manifoldType     { nullptr };
 
     void initialize(juce::AudioProcessorValueTreeState& apvts) noexcept {
         inputTrimDb       = apvts.getRawParameterValue(ParamIDs::inputTrimDb.getParamID());
@@ -257,6 +290,7 @@ struct Rb26AtomicPointers {
         outputTrimDb      = apvts.getRawParameterValue(ParamIDs::outputTrimDb.getParamID());
         limiterEnable     = apvts.getRawParameterValue(ParamIDs::limiterEnable.getParamID());
         pitchBoost        = apvts.getRawParameterValue(ParamIDs::pitchBoost.getParamID());
+        manifoldType      = apvts.getRawParameterValue(ParamIDs::manifoldType.getParamID());
     }
 
     [[nodiscard]] Rb26ParameterSnapshot loadSnapshot() const noexcept {
@@ -296,6 +330,11 @@ struct Rb26AtomicPointers {
         if (outputTrimDb)      s.outputTrimDb      = outputTrimDb->load(std::memory_order_relaxed);
         if (limiterEnable)     s.limiterEnable     = (limiterEnable->load(std::memory_order_relaxed) > 0.5f);
         if (pitchBoost)        s.pitchBoost        = pitchBoost->load(std::memory_order_relaxed);
+        if (manifoldType) {
+            const float val = manifoldType->load(std::memory_order_relaxed);
+            const int idx = static_cast<int>(std::round(val));
+            s.manifold = (idx >= 0 && idx <= 3) ? manifoldTypeFromIndex(idx) : ManifoldType::PoincareHyperbolic;
+        }
         return s;
     }
 };
@@ -513,6 +552,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::NormalisableRange<float>(0.0f, 18.0f, 0.1f, 1.0f),
         0.0f,
         juce::AudioParameterFloatAttributes().withLabel("dB")));
+
+    // 26. Geometry Manifold (0 = Poincaré Hyperbolic, 1 = Whispering Gallery, 2 = Anharmonic Plate, 3 = Stockhausen Klangdom)
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        ParamIDs::manifoldType,
+        "Geometry Manifold",
+        getManifoldTypeChoices(),
+        0));
 
     return { params.begin(), params.end() };
 }

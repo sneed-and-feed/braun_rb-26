@@ -85,8 +85,8 @@ private:
     std::unique_ptr<juce::WebBrowserComponent> webComponent;
     bool initialSyncDone { false };
 
-    // Coalescing array for all 27 APVTS parameters (prevents Win32 message loop stalls)
-    static constexpr size_t kNumParams = 27;
+    // Coalescing array for all 28 APVTS parameters (prevents Win32 message loop stalls)
+    static constexpr size_t kNumParams = 28;
     std::atomic<float> pendingParamValues[kNumParams] {};
     std::atomic<bool> paramDirty[kNumParams] {};
 

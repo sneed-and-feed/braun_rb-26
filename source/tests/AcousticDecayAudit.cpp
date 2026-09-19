@@ -13,6 +13,8 @@
  *   d) Spectral Crest Factor / Ringing Mode Audit (no rogue spikes > 20 dB)
  *   e) C1 Smooth Saturation Boundedness (+40 dBFS impulse, bounded <= 1.05)
  *   f) 64-Point Parameter Grid Sweep (4 Manifolds x 4 Room Sizes x 4 Dampings)
+ *   g) Whispering Gallery High-Damping / Long Tail Parametric Stability
+ *   h) Mid-Tail Manifold Switching Click-Free Continuity Audit
  * ============================================================================
  */
 
@@ -733,6 +735,223 @@ bool testGeometricGridSweep() {
     return localFailures == 0;
 }
 
+// ============================================================================
+// TEST G: Whispering Gallery High-Damping / Long Tail Parametric Stability
+// Test FdnReverbTank with Whispering Gallery manifold, decayRt60Sec = 18.0f and 30.0f,
+// highDampingHz = 15000.0f and 20000.0f. Energize with a high-amplitude noise burst.
+// Run for 20 seconds. Assert that late tail samples (10s-20s) decay monotonically,
+// peak <= -60 dBFS at 20s, and no infinite RT60 or runaway resonant tone at 9.5 kHz exists.
+// ============================================================================
+bool testWhisperingGalleryParametricStability() {
+    int localFailures = 0;
+    std::cout << "\n============================================================\n";
+    std::cout << "[Audit Suite G] Whispering Gallery High-Damping / Long Tail Stability\n";
+    std::cout << "============================================================\n";
+
+    constexpr double kFs = 48000.0;
+    constexpr size_t kTotalSamples = 960000;      // 20 seconds
+    constexpr size_t kTenSecStart  = 480000;      // 10 seconds
+    constexpr size_t kNineteenSecStart = 912000;  // 19 seconds (window at 20s mark)
+    constexpr size_t kBurstSamples = 4800;        // 100 ms noise burst
+
+    const std::array<float, 2> testRt60s = {{ 18.0f, 30.0f }};
+    const std::array<float, 2> testDampings = {{ 15000.0f, 20000.0f }};
+
+    int subIdx = 0;
+    for (float rt60 : testRt60s) {
+        for (float dampingHz : testDampings) {
+            ++subIdx;
+            rb26::FdnReverbTank tank;
+            tank.prepare(kFs, 4.0f);
+            tank.setParameters(1.0f, rt60, dampingHz, 0.75f, false, 0.65f, 2.25f, 85.0f,
+                               rb26::ManifoldType::WhisperingGallery);
+            tank.reset();
+
+            // 9.5 kHz Biquad bandpass filter to detect rogue resonant peaking tones
+            rb26::Biquad bp9500;
+            bp9500.configure(rb26::Biquad::Type::Bandpass, static_cast<float>(kFs), 9500.0f, 2.8f);
+
+            // Deterministic high-amplitude noise burst generator
+            uint32_t rng = 0x5EEDCAFE + static_cast<uint32_t>(subIdx * 1013);
+            auto getNoise = [&rng]() {
+                rng = rng * 1664525u + 1013904223u;
+                return (static_cast<float>(rng & 0x00FFFFFF) / static_cast<float>(0x007FFFFF)) - 1.0f;
+            };
+
+            float outL = 0.0f, outR = 0.0f;
+            float peakAt20s = 0.0f;
+            float peak9500At20s = 0.0f;
+            size_t nanCount = 0;
+            size_t infCount = 0;
+            size_t denormalCount = 0;
+            std::array<double, 10> windowEnergy {};
+
+            // 1. Energize with 100 ms high-amplitude noise burst
+            for (size_t i = 0; i < kBurstSamples; ++i) {
+                const float inSampleL = 0.85f * getNoise();
+                const float inSampleR = 0.85f * getNoise();
+                tank.processSample(inSampleL, inSampleR, 0.0f, 0.0f, outL, outR);
+                (void)bp9500.process(0.5f * (outL + outR));
+            }
+
+            // 2. Run decay for the remainder of 20 seconds
+            for (size_t i = kBurstSamples; i < kTotalSamples; ++i) {
+                tank.processSample(0.0f, 0.0f, 0.0f, 0.0f, outL, outR);
+
+                if (std::isnan(outL) || std::isnan(outR)) ++nanCount;
+                if (std::isinf(outL) || std::isinf(outR)) ++infCount;
+                if ((outL != 0.0f && std::abs(outL) < std::numeric_limits<float>::min()) ||
+                    (outR != 0.0f && std::abs(outR) < std::numeric_limits<float>::min())) {
+                    ++denormalCount;
+                }
+
+                const float bpOut = bp9500.process(0.5f * (outL + outR));
+
+                if (i >= kTenSecStart) {
+                    const size_t secIdx = (i - kTenSecStart) / 48000;
+                    if (secIdx < 10) {
+                        windowEnergy[secIdx] += static_cast<double>(outL * outL + outR * outR);
+                    }
+                }
+
+                if (i >= kNineteenSecStart) {
+                    peakAt20s = std::max(peakAt20s, std::max(std::abs(outL), std::abs(outR)));
+                    peak9500At20s = std::max(peak9500At20s, std::abs(bpOut));
+                }
+            }
+
+            std::array<double, 10> windowRms {};
+            for (size_t s = 0; s < 10; ++s) {
+                windowRms[s] = std::sqrt(windowEnergy[s] / (2.0 * 48000.0));
+            }
+
+            // Monotonic decay audit across 10s-20s
+            bool monotonicDecay = true;
+            for (size_t s = 0; s < 9; ++s) {
+                if (windowRms[s + 1] > windowRms[s] + 1.0e-7) {
+                    monotonicDecay = false;
+                }
+            }
+
+            const double peakDb = (peakAt20s > 1.0e-15f) ? (20.0 * std::log10(peakAt20s)) : -300.0;
+            const double peak9500Db = (peak9500At20s > 1.0e-15f) ? (20.0 * std::log10(peak9500At20s)) : -300.0;
+
+            const double maxExpectedPeakDb = (rt60 <= 20.0f) ? -60.0 : (-60.0 * (20.0 / static_cast<double>(rt60)));
+
+            std::cout << "  [G." << subIdx << "] WhisperingGallery (RT60=" << static_cast<int>(rt60)
+                      << "s, Damp=" << static_cast<int>(dampingHz) << " Hz):\n"
+                      << "        Monotonic Decay (10s-20s): " << (monotonicDecay ? "TRUE" : "FALSE")
+                      << " (RMS@10s=" << std::scientific << std::setprecision(2) << windowRms[0]
+                      << ", RMS@20s=" << windowRms[9] << ")\n"
+                      << "        Peak at 20s: " << std::fixed << std::setprecision(2) << peakDb
+                      << " dBFS (bound <= " << maxExpectedPeakDb << " dBFS)\n"
+                      << "        Peak 9.5 kHz at 20s: " << peak9500Db << " dBFS (bound <= -60.0 dBFS)\n"
+                      << "        Artifacts: NaNs=" << nanCount << ", Infs=" << infCount
+                      << ", Denormals=" << denormalCount << "\n";
+
+            AUDIT_ASSERT(monotonicDecay, "Late tail samples (10s-20s) must decay monotonically");
+            AUDIT_ASSERT(peakDb <= maxExpectedPeakDb, "Tail peak at 20s must be <= max expected peak (no infinite RT60)");
+            AUDIT_ASSERT(peak9500Db <= -60.0, "No runaway resonant tone at 9.5 kHz exists at 20s");
+            AUDIT_ASSERT(nanCount == 0, "Zero NaNs in Whispering Gallery high-damping long tail");
+            AUDIT_ASSERT(infCount == 0, "Zero Infs in Whispering Gallery high-damping long tail");
+        }
+    }
+
+    std::cout << "  Suite G Verdict: " << (localFailures == 0 ? "PASS" : "FAIL") << "\n";
+    return localFailures == 0;
+}
+
+// ============================================================================
+// TEST H: Mid-Tail Manifold Switching Click-Free Continuity Audit
+// Energize FdnReverbTank with an impulse into a 10s tail. Mid-tail, switch
+// manifolds through a continuous cycle: Poincare -> WhisperingGallery ->
+// AnharmonicPlate -> WhisperingGallery -> StockhausenKlangdom -> WhisperingGallery.
+// Inspect maximum sample-to-sample difference across switching points and throughout
+// mid-tail to verify smooth C0 continuity (< 0.05, zero discontinuity).
+// ============================================================================
+bool testManifoldSwitchingContinuity() {
+    int localFailures = 0;
+    std::cout << "\n============================================================\n";
+    std::cout << "[Audit Suite H] Mid-Tail Manifold Switching Click-Free Continuity Audit\n";
+    std::cout << "============================================================\n";
+
+    constexpr double kFs = 48000.0;
+    rb26::FdnReverbTank tank;
+    tank.prepare(kFs, 4.0f);
+    tank.setParameters(1.0f, 10.0f, 8000.0f, 0.75f, false, 0.65f, 2.25f, 85.0f,
+                       rb26::ManifoldType::PoincareHyperbolic);
+    tank.reset();
+
+    // 1. Energize with an impulse into a 10s tail
+    float prevOutL = 0.0f, prevOutR = 0.0f;
+    tank.processSample(1.0f, 1.0f, 0.0f, 0.0f, prevOutL, prevOutR);
+
+    // Switching schedule: (sampleIndex, newManifold, description)
+    struct SwitchEvent {
+        size_t sample;
+        rb26::ManifoldType manifold;
+        const char* desc;
+    };
+
+    const std::vector<SwitchEvent> switchEvents = {
+        { 10000, rb26::ManifoldType::WhisperingGallery,   "Poincare -> WhisperingGallery" },
+        { 15000, rb26::ManifoldType::AnharmonicPlate,     "WhisperingGallery -> AnharmonicPlate" },
+        { 20000, rb26::ManifoldType::WhisperingGallery,   "AnharmonicPlate -> WhisperingGallery" },
+        { 25000, rb26::ManifoldType::StockhausenKlangdom, "WhisperingGallery -> StockhausenKlangdom" },
+        { 30000, rb26::ManifoldType::WhisperingGallery,   "StockhausenKlangdom -> WhisperingGallery" },
+        { 35000, rb26::ManifoldType::PoincareHyperbolic,  "WhisperingGallery -> PoincareHyperbolic" }
+    };
+
+    constexpr size_t kTotalSamples = 40000;
+    size_t currentSwitchIdx = 0;
+    float maxDeltaOverall = 0.0f;
+    size_t nanCount = 0;
+    size_t infCount = 0;
+
+    for (size_t n = 1; n < kTotalSamples; ++n) {
+        if (currentSwitchIdx < switchEvents.size() && n == switchEvents[currentSwitchIdx].sample) {
+            tank.setManifold(switchEvents[currentSwitchIdx].manifold);
+        }
+
+        float outL = 0.0f, outR = 0.0f;
+        tank.processSample(0.0f, 0.0f, 0.0f, 0.0f, outL, outR);
+
+        if (std::isnan(outL) || std::isnan(outR)) ++nanCount;
+        if (std::isinf(outL) || std::isinf(outR)) ++infCount;
+
+        const float deltaL = std::abs(outL - prevOutL);
+        const float deltaR = std::abs(outR - prevOutR);
+        const float maxDelta = std::max(deltaL, deltaR);
+
+        if (n >= 1000) {
+            maxDeltaOverall = std::max(maxDeltaOverall, maxDelta);
+        }
+
+        if (currentSwitchIdx < switchEvents.size() && n == switchEvents[currentSwitchIdx].sample) {
+            std::cout << "  [H." << (currentSwitchIdx + 1) << "] Switch at n=" << n
+                      << " (" << switchEvents[currentSwitchIdx].desc << "):\n"
+                      << "        Sample-to-Sample Jump: " << std::fixed << std::setprecision(5) << maxDelta
+                      << " (limit < 0.05)\n";
+            AUDIT_ASSERT(maxDelta < 0.05f, "Sample-to-sample difference at manifold switch point must be < 0.05");
+            ++currentSwitchIdx;
+        }
+
+        prevOutL = outL;
+        prevOutR = outR;
+    }
+
+    std::cout << "  Max Jump Throughout Switching Suite (n >= 1000): "
+              << std::fixed << std::setprecision(5) << maxDeltaOverall << " (limit < 0.05)\n"
+              << "  Artifacts: NaNs=" << nanCount << ", Infs=" << infCount << "\n";
+
+    AUDIT_ASSERT(maxDeltaOverall < 0.05f, "Maximum sample difference throughout switching region must be < 0.05");
+    AUDIT_ASSERT(nanCount == 0, "Zero NaNs during mid-tail manifold switching");
+    AUDIT_ASSERT(infCount == 0, "Zero Infs during mid-tail manifold switching");
+
+    std::cout << "  Suite H Verdict: " << (localFailures == 0 ? "PASS" : "FAIL") << "\n";
+    return localFailures == 0;
+}
+
 } // namespace audit
 
 int main() {
@@ -751,11 +970,13 @@ int main() {
     bool pD = audit::testSpectralCrestFactorAndRingingModes();
     bool pE = audit::testC1SaturationBoundedness();
     bool pF = audit::testGeometricGridSweep();
+    bool pG = audit::testWhisperingGalleryParametricStability();
+    bool pH = audit::testManifoldSwitchingContinuity();
 
     const auto endTime = std::chrono::high_resolution_clock::now();
     const double elapsedSec = std::chrono::duration<double>(endTime - startTime).count();
 
-    bool allPass = pA && pB && pC && pD && pE && pF && (audit::gFailedAssertions == 0);
+    bool allPass = pA && pB && pC && pD && pE && pF && pG && pH && (audit::gFailedAssertions == 0);
 
     std::cout << "\n================================================================\n";
     std::cout << "           ACOUSTIC DECAY AUDIT SUITE EXECUTION SUMMARY         \n";
@@ -766,6 +987,8 @@ int main() {
     std::cout << "  [Suite D] Spectral Crest Factor & Ringing Mode Audit : " << (pD ? "PASS" : "FAIL") << "\n";
     std::cout << "  [Suite E] C1 Smooth Saturation Boundedness (+40 dB)  : " << (pE ? "PASS" : "FAIL") << "\n";
     std::cout << "  [Suite F] 64-Point Multi-Manifold Geometric Sweep    : " << (pF ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [Suite G] Whispering Gallery High-Damp Stability     : " << (pG ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [Suite H] Mid-Tail Switching Continuity Audit        : " << (pH ? "PASS" : "FAIL") << "\n";
     std::cout << "----------------------------------------------------------------\n";
     std::cout << "  Total Assertions Checked : " << audit::gTotalAssertions << "\n";
     std::cout << "  Failed Assertions        : " << audit::gFailedAssertions << "\n";

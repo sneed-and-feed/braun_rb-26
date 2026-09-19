@@ -131,7 +131,7 @@ public:
         0.8247938941507753
     }};
 
-    // Precomputed Anharmonic Plate inverse mode factors: 1.0 / sqrt(m^2 + 0.08 * n^2)
+    // Precomputed Anharmonic Sitka Spruce anisotropic membrane mode factors: 1.0 / sqrt(m^2 + 0.08 * n^2)
     static constexpr std::array<double, 8> kPlateInvLambda = {{
         0.9622504486493761,
         0.8703882797784892,
@@ -216,14 +216,15 @@ private:
     std::array<float, kNumLines> mDampingStates {};
     float mDampingAlpha { 0.5f };
 
-    // 2. Whispering Gallery Caustic Peaking Filter (9.5 kHz, +3.5 dB, Q = 2.8) + ultrasonic lowpass
-    std::array<BiquadDirectForm2T, kNumLines> mCausticPeaking;
-    std::array<OnePoleLowpass, kNumLines> mUltrasonicLowpass;
+    // Post-extraction feedforward stereo coloration filters (Channel 0 = L, Channel 1 = R)
+    // 1. Whispering Gallery Caustic Peaking Filter (9.5 kHz, +3.5 dB, Q = 2.8) + ultrasonic lowpass
+    std::array<BiquadDirectForm2T, 2> mCausticPeaking;
+    std::array<OnePoleLowpass, 2> mUltrasonicLowpass;
 
-    // 3. Anharmonic Plate Sitka Spruce Formants (A0: 95 Hz, T1: 320 Hz, Wood: 2400 Hz)
-    std::array<BiquadDirectForm2T, kNumLines> mSpruceA0;
-    std::array<BiquadDirectForm2T, kNumLines> mSpruceT1;
-    std::array<BiquadDirectForm2T, kNumLines> mSpruceWood;
+    // 2. Anharmonic Plate Sitka Spruce Formants (A0: 95 Hz, T1: 320 Hz, Wood: 2400 Hz)
+    std::array<BiquadDirectForm2T, 2> mSpruceA0;
+    std::array<BiquadDirectForm2T, 2> mSpruceT1;
+    std::array<BiquadDirectForm2T, 2> mSpruceWood;
 
     // Spatial Panning / Extraction
     // Whispering Gallery: Rotating circular spatial vector

@@ -18,10 +18,10 @@ static constexpr std::array<size_t, 8> kPoincarePrimeOffsets = {{
 
 // Prime decorrelation offsets for Whispering Gallery
 static constexpr std::array<size_t, 8> kWhisperingPrimeOffsets = {{
-    0, 13, 29, 43, 61, 79, 97, 113
+    0, 47, 103, 167, 239, 311, 389, 467
 }};
 
-// Biharmonic plate mode indices (m_k, n_k) for Anharmonic Plate
+// Anisotropic membrane (Helmholtz nabla^2) dispersion modes (m_k, n_k) for Anharmonic Plate
 struct PlateMode { float m; float n; };
 static constexpr std::array<PlateMode, 8> kPlateModes = {{
     {1.0f, 1.0f}, {1.0f, 2.0f}, {2.0f, 1.0f}, {2.0f, 2.0f},
@@ -54,8 +54,8 @@ void ManifoldDelayNetwork::prepare(double sampleRate, float maxRoomSize) noexcep
     mMaxRoomSize = std::max(1.0f, maxRoomSize);
     const float fs = static_cast<float>(mSampleRate);
 
-    // 0.25 Hz circular spatial rotation for Whispering Gallery
-    mCausticRotationDelta = (kTwoPi * 0.25f) / fs;
+    // 0.35 Hz circular spatial rotation for Whispering Gallery (~2.85 second period)
+    mCausticRotationDelta = (kTwoPi * 0.35f) / fs;
     mCausticRotationAngle = 0.0f;
     mLastGeometryRoom = -1.0f;
     mLastDampingHz = -1.0f;
@@ -79,13 +79,15 @@ void ManifoldDelayNetwork::prepare(double sampleRate, float maxRoomSize) noexcep
         mDispersionStage1[k].reset();
         mDispersionStage2[k].reset();
         mLoopDiffusers[k].prepare(kLoopDiffuserLengths[k], mSampleRate);
+    }
 
-        mCausticPeaking[k].reset();
-        mUltrasonicLowpass[k].reset();
+    for (size_t ch = 0; ch < 2; ++ch) {
+        mCausticPeaking[ch].reset();
+        mUltrasonicLowpass[ch].reset();
 
-        mSpruceA0[k].reset();
-        mSpruceT1[k].reset();
-        mSpruceWood[k].reset();
+        mSpruceA0[ch].reset();
+        mSpruceT1[ch].reset();
+        mSpruceWood[ch].reset();
     }
 
     updateManifoldGeometry();
@@ -110,16 +112,18 @@ void ManifoldDelayNetwork::reset() noexcept {
         mDispersionStage2[k].reset();
         mLoopDiffusers[k].reset();
 
-        mCausticPeaking[k].reset();
-        mUltrasonicLowpass[k].reset();
-
-        mSpruceA0[k].reset();
-        mSpruceT1[k].reset();
-        mSpruceWood[k].reset();
-
         mLengthSmoothers[k].reset(static_cast<float>(mNominalLengths[k]));
         mSpatialWeightsL[k].reset(mSpatialWeightsL[k].getTarget());
         mSpatialWeightsR[k].reset(mSpatialWeightsR[k].getTarget());
+    }
+
+    for (size_t ch = 0; ch < 2; ++ch) {
+        mCausticPeaking[ch].reset();
+        mUltrasonicLowpass[ch].reset();
+
+        mSpruceA0[ch].reset();
+        mSpruceT1[ch].reset();
+        mSpruceWood[ch].reset();
     }
     mCausticRotationAngle = 0.0f;
 }
@@ -205,7 +209,7 @@ void ManifoldDelayNetwork::computeWhisperingLengths(std::array<size_t, kNumLines
 }
 
 void ManifoldDelayNetwork::computePlateLengths(std::array<size_t, kNumLines>& lengths) const noexcept {
-    // Biharmonic plate dispersion modes: L_k = round(L_base / sqrt(m^2 + 0.08 * n^2)) + primeOffset
+    // Anisotropic membrane (Helmholtz nabla^2) dispersion modes: L_k = round(L_base / sqrt(m^2 + 0.08 * n^2)) + primeOffset
     const double rateScale = mSampleRate / 48000.0;
     const double safeRoom = std::clamp(static_cast<double>(mRoomSize), 0.05, static_cast<double>(mMaxRoomSize));
     const double lBase = 3400.0 * rateScale * safeRoom;
@@ -264,7 +268,7 @@ void ManifoldDelayNetwork::updateFilterCoefficients() noexcept {
         baseA1 = -0.45f; // Negative curvature dispersion: low frequencies lead
         baseA2 = 0.0f;
     } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
-        baseA1 = +0.55f; // Plate biharmonic dispersion: high frequencies lead
+        baseA1 = +0.55f; // Anisotropic membrane (Helmholtz nabla^2) dispersion modes: high frequencies lead
         baseA2 = +0.55f; // 2 cascaded stages
     } else if (mCurrentManifold == ManifoldType::StockhausenKlangdom) {
         baseA1 = +0.40f;
@@ -288,16 +292,16 @@ void ManifoldDelayNetwork::updateFilterCoefficients() noexcept {
     }
 
     // 3. Whispering Gallery Caustic Peaking (+3.5 dB at 9.5 kHz, Q = 2.8) + ultrasonic lowpass
-    for (size_t k = 0; k < kNumLines; ++k) {
-        mCausticPeaking[k].configure(BiquadDirectForm2T::Type::Peaking, fs, 9500.0f, 2.8f, +3.5f);
-        mUltrasonicLowpass[k].setCutoff(fs, std::min(18000.0f, fs * 0.45f));
+    for (size_t ch = 0; ch < 2; ++ch) {
+        mCausticPeaking[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 9500.0f, 2.8f, +3.5f);
+        mUltrasonicLowpass[ch].setCutoff(fs, std::min(18000.0f, fs * 0.45f));
     }
 
     // 4. Anharmonic Plate Sitka Spruce Formants (A0: 95 Hz, T1: 320 Hz, Wood: 2400 Hz)
-    for (size_t k = 0; k < kNumLines; ++k) {
-        mSpruceA0[k].configure(BiquadDirectForm2T::Type::Peaking, fs, 95.0f, 3.2f, +4.0f);
-        mSpruceT1[k].configure(BiquadDirectForm2T::Type::Peaking, fs, 320.0f, 2.5f, +5.5f);
-        mSpruceWood[k].configure(BiquadDirectForm2T::Type::Peaking, fs, 2400.0f, 1.8f, +3.0f);
+    for (size_t ch = 0; ch < 2; ++ch) {
+        mSpruceA0[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 95.0f, 3.2f, +4.0f);
+        mSpruceT1[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 320.0f, 2.5f, +5.5f);
+        mSpruceWood[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 2400.0f, 1.8f, +3.0f);
     }
 }
 
@@ -315,13 +319,19 @@ void ManifoldDelayNetwork::updateSpatialWeights() noexcept {
             mSpatialWeightsL[7].setTarget( 0.00f); mSpatialWeightsR[7].setTarget(-0.25f);
             break;
 
-        case ManifoldType::WhisperingGallery:
-            // Default target for Whispering Gallery (runtime uses rotating circular spatial vector)
+        case ManifoldType::WhisperingGallery: {
+            static constexpr float kNorm = 0.35355339f; // 1 / sqrt(8)
             for (size_t k = 0; k < kNumLines; ++k) {
-                mSpatialWeightsL[k].setTarget(0.35355339f);
-                mSpatialWeightsR[k].setTarget(0.35355339f);
+                const float theta = (kTwoPi * static_cast<float>(k) / 8.0f) + mCausticRotationAngle;
+                const float sinVal = FastSinTable::sin(theta);
+                const float panAngle = kHalfPi * 0.5f * (sinVal + 1.0f); // maps [-1, 1] to [0, pi/2]
+                const float panL = kNorm * FastSinTable::cos(panAngle);
+                const float panR = kNorm * FastSinTable::sin(panAngle);
+                mSpatialWeightsL[k].setTarget(panL);
+                mSpatialWeightsR[k].setTarget(panR);
             }
             break;
+        }
 
         case ManifoldType::AnharmonicPlate: {
             // Virtual contact pickups at (0.33, 0.42) and (0.67, 0.58)
@@ -394,17 +404,6 @@ void ManifoldDelayNetwork::readAndFilterLines(const std::array<float, kNumLines>
         // 5. Loop Decay Diffusers (Temporal echo density multiplication)
         s = mLoopDiffusers[k].process(s);
 
-        // 6. Manifold-specific resonant loop filtering (continuous filter tracking prevents click upon unfreezing)
-        if (mCurrentManifold == ManifoldType::WhisperingGallery) {
-            // High-frequency caustic peaking filter (+3.5 dB at 9.5 kHz) + ultrasonic lowpass with -0.9 dB trim to bound loop gain <= 1.0
-            const float pf = mUltrasonicLowpass[k].process(mCausticPeaking[k].process(s)) * 0.90f;
-            s = (1.0f - freeze) * pf + freeze * s;
-        } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
-            // Sitka spruce body formants (A0, T1, Wood fiber) with -6 dB loop trim to ensure max loop gain <= 0.95
-            const float plateFiltered = mSpruceWood[k].process(mSpruceT1[k].process(mSpruceA0[k].process(s))) * 0.50f;
-            s = (1.0f - freeze) * plateFiltered + freeze * s;
-        }
-
         outFiltered[k] = flushDenormal(s);
     }
 }
@@ -419,42 +418,49 @@ void ManifoldDelayNetwork::writeFeedback(const std::array<float, kNumLines>& inS
 void ManifoldDelayNetwork::extractStereo(const std::array<float, kNumLines>& lines,
                                         float& outLateL, float& outLateR) noexcept {
     if (mCurrentManifold == ManifoldType::WhisperingGallery) {
-        // Continuous circular spatial rotation at Omega_rot = 0.25 Hz
+        // Continuous circular spatial rotation at Omega_rot = 0.35 Hz (~2.85 second period)
         mCausticRotationAngle += mCausticRotationDelta;
         if (mCausticRotationAngle >= kTwoPi) {
             mCausticRotationAngle -= kTwoPi;
         }
 
-        float accL = 0.0f;
-        float accR = 0.0f;
         static constexpr float kNorm = 0.35355339f; // 1 / sqrt(8)
-
         for (size_t k = 0; k < kNumLines; ++k) {
             const float theta = (kTwoPi * static_cast<float>(k) / 8.0f) + mCausticRotationAngle;
-            const float halfTheta = theta * 0.5f;
-            const float panL = kNorm * FastSinTable::cos(halfTheta);
-            const float panR = kNorm * FastSinTable::sin(halfTheta);
-            accL += panL * lines[k];
-            accR += panR * lines[k];
+            const float sinVal = FastSinTable::sin(theta);
+            const float panAngle = kHalfPi * 0.5f * (sinVal + 1.0f); // maps [-1, 1] to [0, pi/2]
+            const float panL = kNorm * FastSinTable::cos(panAngle);
+            const float panR = kNorm * FastSinTable::sin(panAngle);
+            mSpatialWeightsL[k].setTarget(panL);
+            mSpatialWeightsR[k].setTarget(panR);
         }
-
-        outLateL = flushDenormal(accL);
-        outLateR = flushDenormal(accR);
-    } else {
-        // Smoothly slewed spatial extraction matrix
-        float accL = 0.0f;
-        float accR = 0.0f;
-
-        for (size_t k = 0; k < kNumLines; ++k) {
-            const float wL = mSpatialWeightsL[k].next();
-            const float wR = mSpatialWeightsR[k].next();
-            accL += wL * lines[k];
-            accR += wR * lines[k];
-        }
-
-        outLateL = flushDenormal(accL);
-        outLateR = flushDenormal(accR);
     }
+
+    // Smoothly slewed spatial extraction matrix across all manifolds (guarantees C0 continuity)
+    float accL = 0.0f;
+    float accR = 0.0f;
+
+    for (size_t k = 0; k < kNumLines; ++k) {
+        const float wL = mSpatialWeightsL[k].next();
+        const float wR = mSpatialWeightsR[k].next();
+        accL += wL * lines[k];
+        accR += wR * lines[k];
+    }
+
+    // Post-extraction feedforward coloration filters
+    if (mCurrentManifold == ManifoldType::WhisperingGallery) {
+        // Glassy high-frequency edge caustic (+3.5 dB at 9.5 kHz) + ultrasonic lowpass
+        accL = mUltrasonicLowpass[0].process(mCausticPeaking[0].process(accL));
+        accR = mUltrasonicLowpass[1].process(mCausticPeaking[1].process(accR));
+    } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
+        // Resonant Sitka spruce soundboard body formants (A0 95Hz, T1 320Hz, Wood 2400Hz)
+        // Scaled by 0.85f for overall loudness parity with Poincare
+        accL = mSpruceWood[0].process(mSpruceT1[0].process(mSpruceA0[0].process(accL))) * 0.85f;
+        accR = mSpruceWood[1].process(mSpruceT1[1].process(mSpruceA0[1].process(accR))) * 0.85f;
+    }
+
+    outLateL = flushDenormal(accL);
+    outLateR = flushDenormal(accR);
 }
 
 } // namespace rb26

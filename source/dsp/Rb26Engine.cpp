@@ -177,7 +177,8 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
                            params.freezeHold,
                            params.tailModRateHz,
                            params.tailModDepthMs,
-                           params.tailBloomMs);
+                           params.tailBloomMs,
+                           params.manifold);
 
     // Pass 0.0f internal feedback to pitch shifter: feedback loop is closed via FDN tank
     mPitchShifter.setParameters(params.shimmerSend,
@@ -561,6 +562,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.50f;
         p.params.dryWetMix = 0.40f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::PoincareHyperbolic;
         presets.push_back(p);
     }
 
@@ -595,6 +597,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.70f;
         p.params.dryWetMix = 0.55f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::WhisperingGallery;
         presets.push_back(p);
     }
 
@@ -629,6 +632,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.55f;
         p.params.dryWetMix = 0.45f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::AnharmonicPlate;
         presets.push_back(p);
     }
 
@@ -663,6 +667,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.45f;
         p.params.dryWetMix = 0.38f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::PoincareHyperbolic;
         presets.push_back(p);
     }
 
@@ -697,6 +702,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.40f;
         p.params.dryWetMix = 0.35f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::AnharmonicPlate;
         presets.push_back(p);
     }
 
@@ -731,6 +737,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.80f;
         p.params.dryWetMix = 0.65f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::StockhausenKlangdom;
         presets.push_back(p);
     }
 
@@ -765,6 +772,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.60f;
         p.params.dryWetMix = 0.50f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::StockhausenKlangdom;
         presets.push_back(p);
     }
 
@@ -799,6 +807,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.75f;
         p.params.dryWetMix = 0.60f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::WhisperingGallery;
         presets.push_back(p);
     }
 
@@ -833,6 +842,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.70f;
         p.params.dryWetMix = 0.55f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::PoincareHyperbolic;
         presets.push_back(p);
     }
 
@@ -867,6 +877,7 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.earlyLateMix = 0.45f;
         p.params.dryWetMix = 0.35f;
         p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::PoincareHyperbolic;
         presets.push_back(p);
     }
 

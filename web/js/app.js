@@ -104,8 +104,9 @@ export const FACTORY_PRESETS = {
       predelay: 24.0, diffusion: 75, input_trim: 0.0,
       low_crossover: 180, damping_low: 1.0, low_punch: 65, mono_bass: 120,
       rt60_decay: 6.5, room_size: 100, damping_high: 1800, decay_hold: false,
+      manifold_type: 0,
       shimmer_send: 40, dimmer_send: 35, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 0, pitch_regen: 45, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 0, pitch_regen: 45, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
       stereo_width: 100, early_late_mix: 50, dry_wet_mix: 40, output_trim: 0.0,
       soft_limiter: true
@@ -117,8 +118,9 @@ export const FACTORY_PRESETS = {
       predelay: 45.0, diffusion: 85, input_trim: 0.0,
       low_crossover: 200, damping_low: 0.85, low_punch: 50, mono_bass: 140,
       rt60_decay: 9.5, room_size: 130, damping_high: 9500, decay_hold: false,
+      manifold_type: 1,
       shimmer_send: 48, dimmer_send: 5, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 100, pitch_regen: 42, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 100, pitch_regen: 42, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.40, tail_mod_depth: 28, tail_bloom: 110,
       stereo_width: 140, early_late_mix: 70, dry_wet_mix: 55, output_trim: 0.0,
       soft_limiter: true
@@ -130,8 +132,9 @@ export const FACTORY_PRESETS = {
       predelay: 28.0, diffusion: 85, input_trim: 0.0,
       low_crossover: 180, damping_low: 1.0, low_punch: 60, mono_bass: 120,
       rt60_decay: 8.5, room_size: 115, damping_high: 6800, decay_hold: false,
+      manifold_type: 2,
       shimmer_send: 45, dimmer_send: 25, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 40, pitch_regen: 50, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 40, pitch_regen: 50, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.65, tail_mod_depth: 40, tail_bloom: 85,
       stereo_width: 120, early_late_mix: 55, dry_wet_mix: 45, output_trim: 0.0,
       soft_limiter: true
@@ -143,8 +146,9 @@ export const FACTORY_PRESETS = {
       predelay: 20.0, diffusion: 78, input_trim: 0.0,
       low_crossover: 160, damping_low: 0.95, low_punch: 55, mono_bass: 110,
       rt60_decay: 4.8, room_size: 90, damping_high: 5600, decay_hold: false,
+      manifold_type: 0,
       shimmer_send: 15, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.45, tail_mod_depth: 25, tail_bloom: 70,
       stereo_width: 110, early_late_mix: 45, dry_wet_mix: 38, output_trim: 0.0,
       soft_limiter: true
@@ -156,8 +160,9 @@ export const FACTORY_PRESETS = {
       predelay: 10.0, diffusion: 92, input_trim: 0.0,
       low_crossover: 220, damping_low: 0.8, low_punch: 70, mono_bass: 130,
       rt60_decay: 3.8, room_size: 85, damping_high: 8500, decay_hold: false,
+      manifold_type: 2,
       shimmer_send: 20, dimmer_send: 5, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 100, pitch_regen: 20, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 100, pitch_regen: 20, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.80, tail_mod_depth: 20, tail_bloom: 45,
       stereo_width: 130, early_late_mix: 40, dry_wet_mix: 35, output_trim: 0.0,
       soft_limiter: true
@@ -169,8 +174,9 @@ export const FACTORY_PRESETS = {
       predelay: 45.0, diffusion: 95, input_trim: -1.0,
       low_crossover: 180, damping_low: 0.9, low_punch: 45, mono_bass: 120,
       rt60_decay: 18.0, room_size: 175, damping_high: 10000, decay_hold: false,
+      manifold_type: 3,
       shimmer_send: 65, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 75, pitch_regen: 55, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 75, pitch_regen: 55, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.50, tail_mod_depth: 45, tail_bloom: 140,
       stereo_width: 160, early_late_mix: 80, dry_wet_mix: 65, output_trim: -2.0,
       soft_limiter: true
@@ -182,8 +188,9 @@ export const FACTORY_PRESETS = {
       predelay: 35.0, diffusion: 80, input_trim: 0.0,
       low_crossover: 160, damping_low: 0.9, low_punch: 50, mono_bass: 100,
       rt60_decay: 10.5, room_size: 120, damping_high: 8500, decay_hold: false,
+      manifold_type: 3,
       shimmer_send: 55, dimmer_send: 40, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 25, pitch_regen: 45, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 25, pitch_regen: 45, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.70, tail_mod_depth: 45, tail_bloom: 90,
       stereo_width: 140, early_late_mix: 60, dry_wet_mix: 50, output_trim: 0.0,
       soft_limiter: true
@@ -195,8 +202,9 @@ export const FACTORY_PRESETS = {
       predelay: 50.0, diffusion: 88, input_trim: -0.5,
       low_crossover: 190, damping_low: 0.85, low_punch: 45, mono_bass: 130,
       rt60_decay: 14.0, room_size: 150, damping_high: 9000, decay_hold: false,
+      manifold_type: 1,
       shimmer_send: 60, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 80, pitch_regen: 50, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 80, pitch_regen: 50, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.55, tail_mod_depth: 50, tail_bloom: 160,
       stereo_width: 150, early_late_mix: 75, dry_wet_mix: 60, output_trim: -1.0,
       soft_limiter: true
@@ -208,8 +216,9 @@ export const FACTORY_PRESETS = {
       predelay: 20.0, diffusion: 90, input_trim: 0.0,
       low_crossover: 180, damping_low: 1.0, low_punch: 50, mono_bass: 120,
       rt60_decay: 4.5, room_size: 120, damping_high: 8000, decay_hold: true,
+      manifold_type: 0,
       shimmer_send: 45, dimmer_send: 30, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
       stereo_width: 130, early_late_mix: 70, dry_wet_mix: 55, output_trim: -1.0,
       soft_limiter: true
@@ -221,8 +230,9 @@ export const FACTORY_PRESETS = {
       predelay: 15.0, diffusion: 70, input_trim: 0.0,
       low_crossover: 180, damping_low: 0.8, low_punch: 85, mono_bass: 150,
       rt60_decay: 4.5, room_size: 80, damping_high: 6500, decay_hold: false,
+      manifold_type: 0,
       shimmer_send: 25, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
-      shimmer_dimmer_blend: 10, pitch_regen: 35, pitch_boost: 0.0,
+      shimmer_dimmer_blend: 10, pitch_regen: 35, pitch_delay: 150, pitch_boost: 0.0,
       tail_mod_rate: 0.40, tail_mod_depth: 30, tail_bloom: 60,
       stereo_width: 100, early_late_mix: 45, dry_wet_mix: 35, output_trim: 0.0,
       soft_limiter: true
@@ -464,6 +474,12 @@ export class ReverbComparisonBuffer {
       } else if (this.app.engine && this.app.engine.dimmerInterval !== undefined) {
         snap.dimmer_interval = this.app.engine.dimmerInterval;
       }
+      const activeManifold = document.querySelector('#group-manifold .braun-segment-btn.active, #group-manifold .braun-segment-btn.is-active');
+      if (activeManifold) {
+        snap.manifold_type = parseInt(activeManifold.getAttribute('data-val') || activeManifold.dataset?.val, 10);
+      } else if (this.app.engine && this.app.engine.manifoldType !== undefined) {
+        snap.manifold_type = this.app.engine.manifoldType;
+      }
     }
     return snap;
   }
@@ -533,6 +549,18 @@ export class ReverbComparisonBuffer {
         const dimBtns = document.querySelectorAll('.dim-interval-btn');
         dimBtns.forEach((btn) => {
           btn.classList.toggle('is-active', parseInt(btn.getAttribute('data-interval') || btn.dataset?.interval, 10) === snapshot.dimmer_interval);
+        });
+      }
+      if (snapshot.manifold_type !== undefined) {
+        const mIdx = Math.round(snapshot.manifold_type);
+        if (this.app.engine) this.app.engine.setParam('manifoldType', mIdx);
+        this.app._emitJuceParam('manifoldType', mIdx);
+        this.app._emitJuceParam('manifold_type', mIdx);
+        const manifoldBtns = document.querySelectorAll('#group-manifold .braun-segment-btn');
+        manifoldBtns.forEach((btn) => {
+          const active = parseInt(btn.getAttribute('data-val') || btn.dataset?.val, 10) === mIdx;
+          btn.classList.toggle('active', active);
+          btn.classList.toggle('is-active', active);
         });
       }
     }
@@ -894,6 +922,18 @@ export class BraunRb26App {
             return;
           }
 
+          if (data.id === 'manifold_type' || data.id === 'manifoldType' || data.apvtsId === 'manifold_type' || data.apvtsId === 'manifoldType') {
+            const mIdx = Math.max(0, Math.min(3, Math.round(data.value)));
+            const manifoldBtns = document.querySelectorAll('#group-manifold .braun-segment-btn');
+            manifoldBtns.forEach((btn) => {
+              const active = parseInt(btn.getAttribute('data-val') || btn.dataset?.val, 10) === mIdx;
+              btn.classList.toggle('active', active);
+              btn.classList.toggle('is-active', active);
+            });
+            if (this.engine) this.engine.setParam('manifoldType', mIdx);
+            return;
+          }
+
           const apvtsToKnob = {
             input_trim_db: { key: 'input_trim', scale: 1 },
             inputTrimDb: { key: 'input_trim', scale: 1 },
@@ -923,6 +963,8 @@ export class BraunRb26App {
             pitchBlend: { key: 'shimmer_dimmer_blend', scale: 100 },
             pitch_feedback: { key: 'pitch_regen', scale: 100 },
             pitchFeedback: { key: 'pitch_regen', scale: 100 },
+            pitch_delay_ms: { key: 'pitch_delay', scale: 1 },
+            pitchDelayMs: { key: 'pitch_delay', scale: 1 },
             pitch_boost: { key: 'pitch_boost', scale: 1 },
             pitchBoost: { key: 'pitch_boost', scale: 1 },
             tail_mod_rate_hz: { key: 'tail_mod_rate', scale: 1 },
@@ -1236,6 +1278,11 @@ export class BraunRb26App {
       onChange: (v) => { this.engine.setParam('pitchFeedback', v / 100); this._emitJuceParam('pitchFeedback', v / 100); }
     });
 
+    this.knobs.pitch_delay = createKnob('knob-pitch-delay', {
+      label: 'PITCH DELAY', min: 20, max: 500, step: 1, unit: 'ms', value: 150, size: 'medium',
+      onChange: (v) => { this.engine.setParam('pitchDelayMs', v); this._emitJuceParam('pitchDelayMs', v); }
+    });
+
     this.knobs.pitch_boost = createKnob('knob-pitch-boost', {
       label: 'PITCH BOOST', min: 0, max: 18, step: 0.1, unit: 'dB', value: 0, size: 'medium',
       onChange: (v) => { this.engine.setParam('pitchBoost', v); this._emitJuceParam('pitchBoost', v); }
@@ -1426,6 +1473,23 @@ export class BraunRb26App {
         this.engine.setParam('dimmerInterval', interval);
         const choiceIdx = interval === -2 ? 0 : (interval === -7 ? 1 : 2);
         this._emitJuceParam('dimmerInterval', choiceIdx, true);
+      });
+    });
+
+    // Manifold Type Segments (4-way)
+    const manifoldBtns = document.querySelectorAll('#group-manifold .braun-segment-btn');
+    manifoldBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        manifoldBtns.forEach((b) => {
+          b.classList.remove('active');
+          b.classList.remove('is-active');
+        });
+        btn.classList.add('active');
+        btn.classList.add('is-active');
+        const val = parseInt(btn.getAttribute('data-val') || btn.dataset?.val, 10);
+        this.engine.setParam('manifoldType', val);
+        this._emitJuceParam('manifoldType', val, true);
+        this._emitJuceParam('manifold_type', val, true);
       });
     });
 
@@ -1774,6 +1838,21 @@ export class BraunRb26App {
         this._emitJuceParam('limiterEnable', isLim ? 1 : 0);
       }
     }
+
+    if (params.manifold_type !== undefined) {
+      const mIdx = Math.max(0, Math.min(3, Math.round(params.manifold_type)));
+      this.engine.setParam('manifoldType', mIdx);
+      this._emitJuceParam('manifoldType', mIdx);
+      this._emitJuceParam('manifold_type', mIdx);
+      if (typeof document !== 'undefined') {
+        const manifoldBtns = document.querySelectorAll('#group-manifold .braun-segment-btn');
+        manifoldBtns.forEach((btn) => {
+          const active = parseInt(btn.getAttribute('data-val') || btn.dataset?.val, 10) === mIdx;
+          btn.classList.toggle('active', active);
+          btn.classList.toggle('is-active', active);
+        });
+      }
+    }
   }
 
   loadPreset(presetKey) {
@@ -1860,6 +1939,21 @@ export class BraunRb26App {
       if (led) led.classList.toggle('is-active', isLim);
       this.engine.setParam('limiterEnable', isLim);
       this._emitJuceParam('limiterEnable', isLim ? 1 : 0);
+    }
+
+    if (preset.params.manifold_type !== undefined) {
+      const mIdx = Math.max(0, Math.min(3, Math.round(preset.params.manifold_type)));
+      this.engine.setParam('manifoldType', mIdx);
+      this._emitJuceParam('manifoldType', mIdx);
+      this._emitJuceParam('manifold_type', mIdx);
+      if (typeof document !== 'undefined') {
+        const manifoldBtns = document.querySelectorAll('#group-manifold .braun-segment-btn');
+        manifoldBtns.forEach((btn) => {
+          const active = parseInt(btn.getAttribute('data-val') || btn.dataset?.val, 10) === mIdx;
+          btn.classList.toggle('active', active);
+          btn.classList.toggle('is-active', active);
+        });
+      }
     }
   }
 
