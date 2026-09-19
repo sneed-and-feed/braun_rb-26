@@ -1162,6 +1162,7 @@ export class BraunRb26App {
       'knob-dimmer-send': 'dimmer_send',
       'knob-shim-dim-blend': 'pitch_blend',
       'knob-pitch-regen': 'pitch_feedback',
+      'knob-pitch-delay': 'pitch_delay_ms',
       'knob-pitch-boost': 'pitch_boost',
       'knob-tail-mod-rate': 'tail_mod_rate_hz',
       'knob-tail-mod-depth': 'tail_mod_depth_ms',
@@ -1279,6 +1280,7 @@ export class BraunRb26App {
     });
 
     this.knobs.pitch_delay = createKnob('knob-pitch-delay', {
+      paramId: 'pitch_delay_ms',
       label: 'PITCH DELAY', min: 20, max: 500, step: 1, unit: 'ms', value: 150, size: 'medium',
       onChange: (v) => { this.engine.setParam('pitchDelayMs', v); this._emitJuceParam('pitchDelayMs', v); }
     });

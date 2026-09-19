@@ -1,10 +1,10 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(389%2F389)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.4.8](https://img.shields.io/badge/Version-1.4.8-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.8)
+[![Version: 1.4.9](https://img.shields.io/badge/Version-1.4.9-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.9)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-macOS-Universal.zip)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.9/BRAUN_RB26-v1.4.9-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.9/BRAUN_RB26-v1.4.9-macOS-Universal.zip)
 [![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](#build-linux)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
@@ -17,9 +17,9 @@
 
 ---
 
-### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.8)
-* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.8-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
-* **Windows x64**: **[`BRAUN_RB26-v1.4.8-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-VST3-Windows-x64.zip)** (~3 MB).
+### [Download Precompiled Plugins (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.9)
+* **macOS (Universal - Apple Silicon & Intel)**: **[`BRAUN_RB26-v1.4.9-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.9/BRAUN_RB26-v1.4.9-macOS-Universal.zip)** (~23 MB). Includes AU (`.component`), VST3 (`.vst3`), CLAP, and Standalone (`.app`).
+* **Windows x64**: **[`BRAUN_RB26-v1.4.9-Windows-x64.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.9/BRAUN_RB26-v1.4.9-Windows-x64.zip)** (~10 MB) or **[VST3 Only (.zip)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.9/BRAUN_RB26-v1.4.9-VST3-Windows-x64.zip)** (~3 MB).
 * Direct DAW support for Ableton Live, Logic Pro, FL Studio, Reaper, Cubase, Studio One, and Bitwig. No compiler or CMake required.
 
 * **macOS (Apple Silicon & Intel)**: Precompiled release above, or build from source with a single command via [CMake](#build-macos-universal).
@@ -29,6 +29,13 @@
 
 > [!NOTE]
 > **Manual Release & Binary Asset Policy**: GitHub release tags, binary packaging archives, and release asset uploads for BRAUN RB-26 and BRAUN AS-42 are managed **manually by the user/repository owner**. Automated agents, CI scripts, and LLM subagents MUST NOT attempt to upload binaries, publish GitHub releases, or generate remote tags directly.
+
+> [!TIP]
+> **What's New in v1.4.9 (Pitch Delay Context Menu Fix, Robust Fuzzy Parameter Resolution & Automated Verification)**:
+> - **Pitch Delay Web Context Menu Fix**: Registered `'knob-pitch-delay': 'pitch_delay_ms'` in `knobParamMap` and explicitly assigned `paramId: 'pitch_delay_ms'` in `app.js`, ensuring right-click context menu invocations transmit the correct APVTS parameter identifier to the host rather than falling back to unmapped DOM IDs.
+> - **PluginEditor Robust Fuzzy Fallback**: Enhanced `BRAUN_RB26AudioProcessorEditor::findKnob()` with suffix matching (`_ms`, `_hz`, `_db`) after stripping DOM prefixes (`knob-` / `knob_`), guaranteeing that parameter IDs from frontend events or IPC calls resolve deterministically to their corresponding APVTS slots even without exact unit suffix naming.
+> - **Automated Knob-to-APVTS Audit**: Added automated verification test in `web/test-checklist.mjs` asserting that every knob container in `index.html` has an exact mapping in `knobParamMap` and maps to a valid APVTS parameter in `getParameterMetadataTable()`.
+> - **M4 Concurrency & Routing Tests**: Added assertions in `runTest10_NativeUIOcclusionAndContextMenu()` validating `findKnob` resolution for `pitch_delay_ms`, `pitchDelayMs`, `knob-pitch-delay`, and `pitch_delay`.
 
 > [!TIP]
 > **What's New in v1.4.8 (Early Reflections Calibration, Bounded Physical Room Scaling, Dry/Diffused Allpass Blending & Pitch Booster Anti-Bleed Filtering)**:
@@ -83,7 +90,7 @@ curl -fsSL https://raw.githubusercontent.com/sneed-and-feed/braun_rb-26/main/scr
 > Automatically downloads the latest Universal release, installs AU (`.component`), VST3 (`.vst3`), CLAP (`.clap`), and Standalone (`.app`) to your user library, clears macOS Gatekeeper quarantine (`xattr -cr`), and refreshes CoreAudio `AudioComponentRegistrar` cache so DAWs detect the plugin immediately.
 
 **Option 2: Double-Click Package (.zip)**
-1. Download **[`BRAUN_RB26-v1.4.8-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.8/BRAUN_RB26-v1.4.8-macOS-Universal.zip)**.
+1. Download **[`BRAUN_RB26-v1.4.9-macOS-Universal.zip`](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.9/BRAUN_RB26-v1.4.9-macOS-Universal.zip)**.
 2. Unzip the package in Finder.
 3. Double-click **`Install.command`** to automatically copy all plugins and clear Gatekeeper quarantine.
 4. *Or* double-click **`Run_Standalone.command`** to immediately launch the standalone reverb without installing.
@@ -458,10 +465,10 @@ braun_rb-26/
 │       ├── test.yml            # CI: Automated unit & DSP test runner (Node 22)
 ├── VERIFICATION_CHECKLIST.md   # Reproducible verification checklist & benchmarks (100% PASS)
 ├── package.json                # Project manifest (scripts: test, verify:all, start)
-├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.4.3)
+├── CMakeLists.txt              # Multi-platform JUCE 8 + CLAP build (v1.4.9)
 ├── server.js                   # Zero-dependency static HTTP server (port 3826)
 ├── start.bat                   # Windows launcher
-├── releases/                   # Distribution archives (BRAUN_RB26-v1.4.3-Windows-x64.zip)
+├── releases/                   # Distribution archives (BRAUN_RB26-v1.4.9-Windows-x64.zip)
 ├── source/
 │   ├── dsp/                    # Pure C++20 real-time DSP engine
 │   │   ├── Rb26Engine.h/cpp    # Master processor, parameter struct, telemetry

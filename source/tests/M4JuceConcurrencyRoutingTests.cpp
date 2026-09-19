@@ -878,6 +878,14 @@ void runTest10_NativeUIOcclusionAndContextMenu() {
     auto* roomKnob = editor->findKnob(rb26::ParamIDs::roomSize);
     RB26_TEST_ASSERT(roomKnob != nullptr);
 
+    // Verify pitch delay knob resolution via APVTS ID, Web ID, DOM ID, and clean ID
+    auto* pitchDelayKnob = editor->findKnob(juce::String("pitch_delay_ms"));
+    RB26_TEST_ASSERT(pitchDelayKnob != nullptr);
+    RB26_TEST_ASSERT(editor->findKnob(rb26::ParamIDs::pitchDelayMs) != nullptr);
+    RB26_TEST_ASSERT(editor->findKnob(juce::String("pitchDelayMs")) != nullptr);
+    RB26_TEST_ASSERT(editor->findKnob(juce::String("knob-pitch-delay")) != nullptr);
+    RB26_TEST_ASSERT(editor->findKnob(juce::String("pitch_delay")) != nullptr);
+
     roomKnob->slider.setValue(2.7, juce::sendNotificationSync);
     RB26_TEST_ASSERT(std::abs(roomKnob->slider.getValue() - 2.7) < 0.05);
 

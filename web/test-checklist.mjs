@@ -514,6 +514,38 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
           `Preset ${preset.id} manifold_type (${m}) must be an integer in range [0, 3]`);
       }
     });
+
+    it('verifies every knob container in index.html has a valid mapping in knobParamMap to an APVTS parameter', () => {
+      const appJsContent = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      const htmlContent = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+
+      const knobMatches = [...htmlContent.matchAll(/id="(knob-[^"]+)"/g)].map(m => m[1]);
+      assert.ok(knobMatches.length >= 23, `Expected at least 23 knob containers in index.html, found ${knobMatches.length}`);
+
+      const mapMatch = appJsContent.match(/const\s+knobParamMap\s*=\s*\{([\s\S]*?)\};/);
+      assert.ok(mapMatch, 'knobParamMap must be defined in app.js');
+
+      const knobParamMap = {};
+      for (const line of mapMatch[1].split('\n')) {
+        const lineMatch = line.match(/'([^']+)':\s*'([^']+)'/);
+        if (lineMatch) {
+          knobParamMap[lineMatch[1]] = lineMatch[2];
+        }
+      }
+
+      const validApvtsIds = new Set(expectedMetadataTable.map(p => p.apvtsId));
+
+      for (const knobId of knobMatches) {
+        assert.ok(knobId in knobParamMap, `Knob container "${knobId}" in index.html must have a valid mapping in knobParamMap`);
+        const apvtsParam = knobParamMap[knobId];
+        assert.ok(validApvtsIds.has(apvtsParam), `Knob "${knobId}" mapped to "${apvtsParam}" which must exist in getParameterMetadataTable()`);
+      }
+
+      // Explicitly verify pitch delay mapping and options
+      assert.strictEqual(knobParamMap['knob-pitch-delay'], 'pitch_delay_ms', 'knob-pitch-delay must map to pitch_delay_ms');
+      assert.ok(appJsContent.includes("'knob-pitch-delay': 'pitch_delay_ms'"), 'knobParamMap must map knob-pitch-delay');
+      assert.ok(appJsContent.includes("paramId: 'pitch_delay_ms'"), 'createKnob for pitch_delay must set paramId');
+    });
   });
 
 });

@@ -7,9 +7,9 @@
 [![C++20 & Web Audio](https://img.shields.io/badge/DSP%20Parity-Verified-EE592B?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 
 **Document ID**: `RB26-VERIFY-CHECKLIST-001`  
-**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer  
+**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.4.9)  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (389/389 E2E Headless Tests, 20/20 Checklist Tests, 36/36 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (389/389 E2E Headless Tests, 24/24 Checklist Tests, 36/36 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: RB-26 Lead Verification Specialist  
 
 ---
@@ -53,7 +53,7 @@ npm run test:browser
 | **Acoustic Decay Audit** | `rb26_acoustic_decay_audit.exe` (Suites A-H) | 8 / 8 Suites | ~8.5 s | **100% PASS** |
 | **Total Headless DSP Tests** | `rb26_headless_dsp_tests.exe` | **389 / 389** | **3,152.4 ms** | **100% PASS** |
 | **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 36 / 36 | 47.9 ms | **PASS** |
-| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets) | 20 / 20 | 66.8 ms | **PASS** |
+| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets, knob mappings) | 24 / 24 | 76.9 ms | **PASS** |
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 1M samples | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
 | **Numerical Stability** | +40 dBFS input bursts, infinite feedback | 0 NaNs / 0 Infs | Continuous | **0 NaNs** |
@@ -227,7 +227,7 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
   Acoustic Decay Audit Suites   : 8 / 8 (Suites A-H, 100%)
   Headless DSP Tests            : 389 / 389 (100%)
   Web Unit Tests                : 36 / 36 (100%)
-  Checklist Automated Tests     : 20 / 20 (100%)
+  Checklist Automated Tests     : 24 / 24 (100%)
   Total Assertions Evaluated    : > 1,180,000
   Memory Leaks                  : 0
   Denormal Stalls               : 0
@@ -235,5 +235,5 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.4.8)
+VERDICT: CERTIFIED PRODUCTION READY (v1.4.9)
 ```

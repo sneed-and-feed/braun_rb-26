@@ -1836,8 +1836,14 @@ BRAUN_RB26AudioProcessorEditor::KnobSlot* BRAUN_RB26AudioProcessorEditor::findKn
 
     for (auto& slot : knobSlots)
     {
-        if (slot->paramId.equalsIgnoreCase(cleanId))
+        if (slot->paramId.equalsIgnoreCase(cleanId) ||
+            slot->paramId.equalsIgnoreCase(cleanId + "_ms") ||
+            slot->paramId.equalsIgnoreCase(cleanId + "_hz") ||
+            slot->paramId.equalsIgnoreCase(cleanId + "_db") ||
+            (cleanId.endsWithIgnoreCase("_ms") && slot->paramId.equalsIgnoreCase(cleanId.dropLastCharacters(3))))
+        {
             return slot.get();
+        }
     }
     for (const auto& item : rb26::getParameterMetadataTable())
     {

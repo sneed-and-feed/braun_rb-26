@@ -15,7 +15,7 @@ if len(sys.argv) > 1 and sys.argv[1].strip():
 else:
     with open(os.path.join(root_dir, "package.json"), "r", encoding="utf-8") as f:
         pkg = json.load(f)
-    version = pkg.get("version", "1.4.8")
+    version = pkg.get("version", "1.4.9")
 
 # 1. Package Windows-x64 full zip
 zip_path = os.path.join(release_dir, f"BRAUN_RB26-v{version}-Windows-x64.zip")
