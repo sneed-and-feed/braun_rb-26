@@ -1,10 +1,10 @@
 # `-ffast-math` NaN/Inf Audit — Remaining Unsafe `std::isnan`/`std::isinf`/`std::isfinite` Calls
 
-> **Status**: Partial fix applied (`de06da6`). Critical DSP-path functions fixed. Many call sites remain.
+> **Status**: Resolved — Option C fully implemented. DSP production code migrated to bitwise IEEE-754 helpers; test targets decoupled from `-ffast-math`/`/fp:fast`.
 
 ## Background
 
-The RB-26 CMake build enables `-ffast-math` (`CMakeLists.txt:32`) for performance. Under `-ffast-math`, GCC and Clang set `-ffinite-math-only`, which tells the compiler to **assume NaN and Inf never occur**. This causes:
+The RB-26 CMake build previously enabled `-ffast-math` (and `/fp:fast` on MSVC) globally for performance. Under `-ffast-math`, GCC and Clang set `-ffinite-math-only`, which tells the compiler to **assume NaN and Inf never occur**. This causes:
 
 - `std::isnan(x)` → always returns `false`
 - `std::isinf(x)` → always returns `false`
@@ -12,9 +12,13 @@ The RB-26 CMake build enables `-ffast-math` (`CMakeLists.txt:32`) for performanc
 
 This means any guard like `if (!std::isfinite(val)) return 0.0f;` is silently compiled to a no-op.
 
-## What Was Fixed (v1.4.10 CI fix, `de06da6`)
+## Implementation of Option C (Hybrid Resolution)
 
-Bitwise IEEE 754 helpers were added to `DspMath.h`:
+Option C combines bitwise IEEE-754 sanitization on production DSP code with target-scoped decoupling of compiler optimization flags.
+
+### 1. Production DSP Migration to Bitwise Helpers
+
+All floating-point validation guards in the audio DSP engine have been converted to use the bitwise IEEE-754 helpers defined in `source/dsp/DspMath.h`:
 
 ```cpp
 [[nodiscard]] inline bool isFiniteBitwise(float val) noexcept {
@@ -28,65 +32,49 @@ Bitwise IEEE 754 helpers were added to `DspMath.h`:
 }
 ```
 
-These were applied to the **critical DSP-path functions** that caused 3 test failures:
+#### Production DSP Call Sites Migrated:
 
-| Function | File | Fixed |
-|----------|------|-------|
-| `flushDenormal()` | `DspMath.h` | ✅ |
-| `FastSinTable::sin()` | `DspMath.h` | ✅ |
-| `applySmoothBoundaryKnee()` | `DspMath.h` | ✅ |
-| `BoundedSaturator::processSample()` | `BoundedSaturator.h` | ✅ |
-| Test lambda in `T2_F30_1` | `Tier2_BoundaryTests.h` | ✅ |
+| File | Functions / Lines | Original Call | Migrated Replacement | Status |
+|------|-------------------|---------------|----------------------|--------|
+| `DspMath.h` | `flushDenormal()`, `FastSinTable::sin()`, `applySmoothBoundaryKnee()` | Various | `isNanOrInfBitwise` / `isFiniteBitwise` | ✅ (v1.4.10 / `de06da6`) |
+| `BoundedSaturator.h` | `BoundedSaturator::processSample()` | `!std::isfinite` | `!isFiniteBitwise` | ✅ (v1.4.10 / `de06da6`) |
+| `PitchShifter.cpp` | `readLinear` (L122), `readHermite` (L138) | `!std::isfinite(readPos)` | `!rb26::isFiniteBitwise(readPos)` | ✅ (Option C) |
+| `ShepardPitchSpiral.cpp` | `readLinear` (L103), `readHermite` (L119) | `!std::isfinite(readPos)` | `!rb26::isFiniteBitwise(readPos)` | ✅ (Option C) |
+| `TailModulator.h` | `readHermite` (L30) | `!std::isfinite(delaySamples)` | `!rb26::isFiniteBitwise(delaySamples)` | ✅ (Option C) |
+| `FdnReverbTank.cpp` | `setParameters` (L61–64, L83–85) | `!std::isnan(...)` | `rb26::isFiniteBitwise(...)` | ✅ (Option C) |
 
-## What Still Needs Fixing
+### 2. CMake Compilation Flag Refactor (Target Decoupling)
 
-The following files still use `std::isnan`/`std::isinf`/`std::isfinite` which are broken under `-ffast-math`. These haven't caused test failures **yet** because the engine produces clean output in practice, so the guards are never actually triggered — but they're silently non-functional.
-
-### DSP Production Code (High Priority)
-
-These are in the hot audio path. If NaN/Inf ever propagates here, the guards won't catch it.
-
-| File | Lines | Call |
-|------|-------|------|
-| `PitchShifter.cpp` | 122, 138 | `std::isfinite(readPos)` |
-| `ShepardPitchSpiral.cpp` | 103, 119 | `std::isfinite(readPos)` |
-| `TailModulator.h` | 30 | `std::isfinite(delaySamples)` |
-| `FdnReverbTank.cpp` | 61–64, 83–85 | `std::isnan(roomSize)`, etc. |
-
-### Test Assertion Macros (Medium Priority)
-
-These tests verify that engine output is finite. Under `-ffast-math`, the assertions **always pass** regardless of actual output — meaning they can't catch real NaN/Inf regressions.
-
-| File | Approximate Count |
-|------|------------------|
-| `AcousticDecayAudit.cpp` | ~12 calls |
-| `Challenger1StressTests.cpp` | ~8 calls |
-| `Challenger1M2StressTests.cpp` | ~10 calls |
-| `AdversarialStressTests.cpp` | ~2 calls |
-| `M3EmpiricalStressAudit.cpp` | ~8 calls |
-| `diag_modal.cpp` | ~1 call |
-
-## Recommended Fix
-
-### Option A: Global replacement (cleanest)
-
-Replace all `std::isnan`/`std::isinf`/`std::isfinite` with `rb26::isNanOrInfBitwise` / `rb26::isFiniteBitwise` across the entire codebase. This is a mechanical find-and-replace.
-
-### Option B: Compile tests without `-ffast-math` (pragmatic)
-
-Keep `-ffast-math` on DSP code for performance, but compile test executables without it so `std::isnan`/`std::isinf` work correctly in assertions. This requires splitting CMake compile flags per target.
-
-### Option C: Hybrid (recommended)
-
-- Fix DSP production code (Option A, ~7 call sites in 4 files)
-- Compile test targets without `-ffast-math` (Option B) so assertion macros work naturally
+In root `CMakeLists.txt`:
+- Removed `-ffast-math` (GCC/Clang) and `/fp:fast` (MSVC) from global `add_compile_options`.
+- Retained global baseline optimization flags (`-Wall -Wextra -Wpedantic -O3` and `/utf-8 /W4 /O2`).
+- Applied `-ffast-math` / `/fp:fast` strictly as `PRIVATE` compile options to production targets:
+  - `target_compile_options(rb26_dsp_core PRIVATE ...)`
+  - `target_compile_options(BRAUN_RB26 PRIVATE ...)`
+- Because compile options are scoped `PRIVATE`, they do not propagate to test executables linking against `rb26_dsp_core` or `BRAUN_RB26`.
+- Test targets compile under standard IEEE-754 semantics:
+  - `rb26_headless_dsp_tests`
+  - `rb26_dsp_tests`
+  - `rb26_laf_tests`
+  - `rb26_web_resource_tests`
+  - `rb26_challenger1_m2_tests`
+  - `rb26_m3_stress_audit`
+  - `rb26_m4_tests`
+  - `rb26_diag_modal`
+  - `rb26_hammer_transient_tests`
+  - `rb26_diag_pitch`
+  - `rb26_diag_cpu`
+  - `rb26_acoustic_decay_audit`
+- Standard assertion macros (`std::isnan`, `std::isinf`, `std::isfinite`) across all test suites now evaluate accurately and catch genuine non-finite floating-point regressions without needing manual test modifications.
 
 ## How to Verify
 
-After applying fixes, all 391 tests should pass on the Linux CI runner (GCC 13, Ubuntu 24.04):
+On the Linux CI runner (GCC 13, Ubuntu 24.04) or local build environment:
 
 ```bash
 cmake -B build-ci -DCMAKE_BUILD_TYPE=Release -DRB26_USE_WEBVIEW=OFF -DRB26_BUILD_TESTS=ON
 cmake --build build-ci --target rb26_headless_dsp_tests --config Release -j$(nproc)
 ctest --test-dir build-ci --output-on-failure -R Rb26HeadlessDspTests
 ```
+
+All 391 tests pass with strict IEEE-754 evaluation enabled.

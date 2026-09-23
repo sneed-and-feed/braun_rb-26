@@ -1,4 +1,5 @@
 #include "PitchShifter.h"
+#include "DspMath.h"
 #include <cmath>
 #include <algorithm>
 
@@ -119,7 +120,7 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
 }
 
 inline float DualTapDelayPitchShifter::readLinear(float readPos) const noexcept {
-    if (!std::isfinite(readPos)) [[unlikely]] {
+    if (!rb26::isFiniteBitwise(readPos)) [[unlikely]] {
         return 0.0f;
     }
     const int i0 = static_cast<int>(std::floor(readPos));
@@ -135,7 +136,7 @@ inline float DualTapDelayPitchShifter::readLinear(float readPos) const noexcept 
 }
 
 inline float DualTapDelayPitchShifter::readHermite(float readPos) const noexcept {
-    if (!std::isfinite(readPos)) [[unlikely]] {
+    if (!rb26::isFiniteBitwise(readPos)) [[unlikely]] {
         return 0.0f;
     }
     const int i0 = static_cast<int>(std::floor(readPos));

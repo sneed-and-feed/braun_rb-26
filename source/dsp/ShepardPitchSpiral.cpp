@@ -1,4 +1,5 @@
 #include "ShepardPitchSpiral.h"
+#include "DspMath.h"
 #include <cmath>
 #include <algorithm>
 
@@ -100,7 +101,7 @@ float ShepardPitchSpiral::getVoiceWeight(int voiceIdx) const noexcept {
 }
 
 inline float ShepardPitchSpiral::readLinear(const std::vector<float>& buffer, float readPos) const noexcept {
-    if (!std::isfinite(readPos)) [[unlikely]] {
+    if (!rb26::isFiniteBitwise(readPos)) [[unlikely]] {
         return 0.0f;
     }
     const int i0 = static_cast<int>(std::floor(readPos));
@@ -116,7 +117,7 @@ inline float ShepardPitchSpiral::readLinear(const std::vector<float>& buffer, fl
 }
 
 inline float ShepardPitchSpiral::readHermite(const std::vector<float>& buffer, float readPos) const noexcept {
-    if (!std::isfinite(readPos)) [[unlikely]] {
+    if (!rb26::isFiniteBitwise(readPos)) [[unlikely]] {
         return 0.0f;
     }
     const int i0 = static_cast<int>(std::floor(readPos));

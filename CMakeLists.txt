@@ -24,12 +24,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Real-Time Compiler Optimizations & Cross-Platform Warning Flags
 # ==============================================================================
 if(MSVC)
-    add_compile_options(/utf-8 /W4 /O2 /fp:fast)
+    add_compile_options(/utf-8 /W4 /O2)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|x64")
         add_compile_options(/arch:AVX2)
     endif()
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic -O3 -ffast-math)
+    add_compile_options(-Wall -Wextra -Wpedantic -O3)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # Ensure position independent code for audio plugin shared objects
         set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -172,6 +172,12 @@ add_library(rb26_dsp_core STATIC
     source/dsp/TailModulator.h
 )
 
+if(MSVC)
+    target_compile_options(rb26_dsp_core PRIVATE /fp:fast)
+else()
+    target_compile_options(rb26_dsp_core PRIVATE -ffast-math)
+endif()
+
 target_include_directories(rb26_dsp_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/source
     ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
@@ -259,6 +265,12 @@ target_sources(BRAUN_RB26 PRIVATE
     source/plugin/LookAndFeel/BraunLookAndFeel.cpp
     source/plugin/LookAndFeel/BraunLookAndFeel.h
 )
+
+if(MSVC)
+    target_compile_options(BRAUN_RB26 PRIVATE /fp:fast)
+else()
+    target_compile_options(BRAUN_RB26 PRIVATE -ffast-math)
+endif()
 
 target_include_directories(BRAUN_RB26 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source

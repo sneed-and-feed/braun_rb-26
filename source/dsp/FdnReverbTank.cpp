@@ -1,4 +1,5 @@
 #include "FdnReverbTank.h"
+#include "DspMath.h"
 #include <cmath>
 #include <algorithm>
 
@@ -58,10 +59,10 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
                                  float diffusionDensity, bool freezeHold,
                                  float tailModRateHz, float tailModDepthMs, float tailBloomMs,
                                  std::optional<ManifoldType> manifoldType) noexcept {
-    const float safeRoom = (!std::isnan(roomSize)) ? roomSize : mRoomSize;
-    const float safeRt60 = (!std::isnan(decayRt60Sec)) ? decayRt60Sec : mDecayRt60;
-    const float safeDamp = (!std::isnan(highDampingHz)) ? highDampingHz : mHighDampingHz;
-    const float safeDiff = (!std::isnan(diffusionDensity)) ? diffusionDensity : mDiffusionDensity;
+    const float safeRoom = (rb26::isFiniteBitwise(roomSize)) ? roomSize : mRoomSize;
+    const float safeRt60 = (rb26::isFiniteBitwise(decayRt60Sec)) ? decayRt60Sec : mDecayRt60;
+    const float safeDamp = (rb26::isFiniteBitwise(highDampingHz)) ? highDampingHz : mHighDampingHz;
+    const float safeDiff = (rb26::isFiniteBitwise(diffusionDensity)) ? diffusionDensity : mDiffusionDensity;
 
     mRoomSize = std::clamp(safeRoom, 0.1f, mMaxRoomSize);
     mDecayRt60 = std::clamp(safeRt60, 0.2f, 30.0f);
@@ -80,9 +81,9 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
         mFreezeLoopSmoother.setTarget(0.0f);
     }
 
-    const float safeModRate  = (!std::isnan(tailModRateHz))  ? tailModRateHz  : 0.65f;
-    const float safeModDepth = (!std::isnan(tailModDepthMs)) ? tailModDepthMs : 2.25f;
-    const float safeBloom    = (!std::isnan(tailBloomMs))    ? tailBloomMs    : 85.0f;
+    const float safeModRate  = (rb26::isFiniteBitwise(tailModRateHz))  ? tailModRateHz  : 0.65f;
+    const float safeModDepth = (rb26::isFiniteBitwise(tailModDepthMs)) ? tailModDepthMs : 2.25f;
+    const float safeBloom    = (rb26::isFiniteBitwise(tailBloomMs))    ? tailBloomMs    : 85.0f;
 
     mTailModulator.setParameters(safeModRate, safeModDepth, safeBloom);
     mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz, mDiffusionDensity);

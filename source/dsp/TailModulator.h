@@ -27,7 +27,7 @@ public:
     static inline float readHermite(const float* buffer, size_t bufferCapacity,
                                     size_t bufferMask, size_t writeIndex,
                                     float delaySamples) noexcept {
-        if (!std::isfinite(delaySamples)) [[unlikely]] {
+        if (!rb26::isFiniteBitwise(delaySamples)) [[unlikely]] {
             return 0.0f;
         }
         if (delaySamples <= 0.0f) [[unlikely]] {
