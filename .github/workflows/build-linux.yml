@@ -1,0 +1,149 @@
+name: Build Linux Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore: ['**.md', 'docs/**', 'wiki/**']
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux x64 (VST3, CLAP, Standalone)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            libasound2-dev \
+            libx11-dev \
+            libxinerama-dev \
+            libxext-dev \
+            libfreetype6-dev \
+            libgl1-mesa-dev \
+            libwebkit2gtk-4.1-dev \
+            libcurl4-openssl-dev
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DRB26_USE_WEBVIEW=ON \
+            -DRB26_BUILD_TESTS=OFF
+
+      - name: Compile Release Targets
+        run: |
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Determine Version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+            VERSION="${TAG_NAME#v}"
+          else
+            VERSION=$(grep '"version":' package.json | head -n 1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
+            TAG_NAME="v${VERSION}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+          echo "Building for Version: ${VERSION} (Tag: ${TAG_NAME})"
+
+      - name: Package Distribution Archive & Compute Checksum
+        run: |
+          STAGE_DIR="package/BRAUN_RB26-${TAG_NAME}-Linux-x64"
+          mkdir -p "${STAGE_DIR}/VST3" "${STAGE_DIR}/CLAP" "${STAGE_DIR}/Standalone"
+
+          echo "Locating built artifacts:"
+          find build -name "*.vst3" -o -name "*.clap" -o -name "BRAUN_RB26" -type f || true
+
+          for d in $(find build -type d -name "BRAUN_RB26.vst3"); do
+            echo "Copying VST3 from $d"
+            cp -R "$d" "${STAGE_DIR}/VST3/"
+            break
+          done
+
+          for f in $(find build -type f -name "BRAUN_RB26.clap"); do
+            echo "Copying CLAP from $f"
+            cp "$f" "${STAGE_DIR}/CLAP/"
+            break
+          done
+
+          STANDALONE_BIN=$(find build -name "BRAUN_RB26" -type f -executable | grep -v "CMakeFiles" | head -n 1)
+          if [ -n "${STANDALONE_BIN}" ]; then
+            echo "Copying Standalone from ${STANDALONE_BIN}"
+            cp "${STANDALONE_BIN}" "${STAGE_DIR}/Standalone/BRAUN_RB26"
+            chmod +x "${STAGE_DIR}/Standalone/BRAUN_RB26"
+          fi
+
+          [ -f LICENSE ] && cp LICENSE "${STAGE_DIR}/" || true
+          [ -f README.md ] && cp README.md "${STAGE_DIR}/" || true
+
+          cat << 'EOF' > "${STAGE_DIR}/INSTALL.txt"
+          BRAUN RB-26 MASTER STUDIO REVERBERATOR
+          LINUX X86_64 INSTALLATION GUIDE
+          Standard: DIN 1451 Technical Specification
+
+          1. VST3 PLUGIN INSTALLATION:
+             Copy the directory 'BRAUN_RB26.vst3' into:
+             ~/.vst3/
+             (or /usr/lib/vst3/ for system-wide availability)
+
+          2. CLAP PLUGIN INSTALLATION:
+             Copy 'BRAUN_RB26.clap' into:
+             ~/.clap/
+             (or /usr/lib/clap/ for system-wide availability)
+
+          3. STANDALONE APPLICATION:
+             Ensure executable permissions: chmod +x BRAUN_RB26
+             Launch with ALSA, JACK, or PipeWire audio server active.
+          EOF
+
+          ARCHIVE_NAME="BRAUN_RB26-${TAG_NAME}-Linux-x64.tar.gz"
+          tar -czvf "${ARCHIVE_NAME}" -C package "BRAUN_RB26-${TAG_NAME}-Linux-x64"
+          shasum -a 256 "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
+          cat "${ARCHIVE_NAME}.sha256"
+
+          echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $GITHUB_ENV
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BRAUN_RB26-${{ env.TAG_NAME }}-Linux-x64
+          path: |
+            ${{ env.ARCHIVE_NAME }}
+            ${{ env.ARCHIVE_NAME }}.sha256
+
+      - name: Attach to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARCHIVE="${{ env.ARCHIVE_NAME }}"
+          SHA_NAME="${ARCHIVE}.sha256"
+          if gh release view "${TAG_NAME}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${TAG_NAME} exists. Uploading Linux release assets..."
+            for attempt in 1 2 3; do
+              if gh release upload "${TAG_NAME}" "${ARCHIVE}" "${SHA_NAME}" --repo "${{ github.repository }}" --clobber; then
+                echo "Upload succeeded!"
+                exit 0
+              fi
+              echo "Attempt $attempt failed, retrying in 10s..."
+              sleep 10
+            done
+            exit 1
+          else
+            echo "Release ${TAG_NAME} does not exist yet on GitHub. Asset is preserved in workflow artifacts."
+          fi
