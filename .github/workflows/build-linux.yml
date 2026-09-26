@@ -89,6 +89,20 @@ jobs:
             chmod +x "${STAGE_DIR}/Standalone/BRAUN_RB26"
           fi
 
+          # Sanity check: Ensure required binaries were packaged
+          if [ ! -d "${STAGE_DIR}/VST3/BRAUN_RB26.vst3" ]; then
+            echo "Error: BRAUN_RB26.vst3 was not copied into package!" >&2
+            exit 1
+          fi
+          if [ ! -f "${STAGE_DIR}/CLAP/BRAUN_RB26.clap" ]; then
+            echo "Error: BRAUN_RB26.clap was not copied into package!" >&2
+            exit 1
+          fi
+          if [ ! -f "${STAGE_DIR}/Standalone/BRAUN_RB26" ]; then
+            echo "Error: BRAUN_RB26 standalone binary was not copied into package!" >&2
+            exit 1
+          fi
+
           [ -f LICENSE ] && cp LICENSE "${STAGE_DIR}/" || true
           [ -f README.md ] && cp README.md "${STAGE_DIR}/" || true
 
