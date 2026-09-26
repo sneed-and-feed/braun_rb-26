@@ -303,6 +303,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
                 mTelemetryDecimator = 0;
                 VisualizerFrame zeroFrame {};
                 zeroFrame.correlation = 1.0f;
+                zeroFrame.channelCount = mActiveChannelCount;
                 pushVisualizerFrame(zeroFrame);
             }
             return;
@@ -616,6 +617,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
                 frame.midEnergy = std::sqrt(0.5f * (lateMulti[0] * lateMulti[0] + lateMulti[1] * lateMulti[1]));
                 frame.highEnergy = std::sqrt(0.5f * (earlyL * earlyL + earlyR * earlyR));
                 frame.decayEnvelope = mDecayPeakFollower;
+                frame.channelCount = mActiveChannelCount;
 
                 pushVisualizerFrame(frame);
 
@@ -862,6 +864,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             frame.midEnergy = std::sqrt(0.5f * (lateL * lateL + lateR * lateR));
             frame.highEnergy = std::sqrt(0.5f * (earlyL * earlyL + earlyR * earlyR));
             frame.decayEnvelope = mDecayPeakFollower;
+            frame.channelCount = mActiveChannelCount;
 
             pushVisualizerFrame(frame);
 

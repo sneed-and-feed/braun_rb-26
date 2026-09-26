@@ -1125,6 +1125,16 @@ export class BraunRb26App {
           if (frame && this.display) {
             this.display.pushTelemetry(frame.lowEnergy || 0, frame.midEnergy || 0, frame.highEnergy || 0);
           }
+          if (frame && frame.channelLayout) {
+            const badge = document.getElementById('channel-layout-badge');
+            if (badge && badge.textContent !== frame.channelLayout) {
+              badge.textContent = frame.channelLayout;
+            }
+            const deckBadge = document.getElementById('deck-channel-layout');
+            if (deckBadge && deckBadge.textContent !== frame.channelLayout) {
+              deckBadge.textContent = frame.channelLayout;
+            }
+          }
         });
 
         // Listen for recordingSaved event from JUCE C++ WAV recorder

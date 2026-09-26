@@ -123,6 +123,7 @@ public:
         float correlation { 0.0f };
         float lowEnergy { 0.0f }, midEnergy { 0.0f }, highEnergy { 0.0f };
         float decayEnvelope { 0.0f };
+        int channelCount { 2 };
     };
     bool popVisualizerFrame(VisualizerFrame& frame) noexcept;
 

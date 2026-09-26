@@ -175,6 +175,7 @@ static const char* kEmbeddedBraunFallbackHtml = R"html(<!DOCTYPE html>
   </div>
   <div style="display:flex; gap:8px; align-items:center;">
     <button id="btnPower" style="background:var(--knob-cap); color:var(--text-main); padding:4px 10px; font-size:11px; font-weight:700; border-radius:2px; cursor:pointer; border:1px solid var(--border-color); letter-spacing:1px;">STANDBY</button>
+    <div id="layoutBadge" class="badge">STEREO</div>
     <div class="badge">STANDBY</div>
   </div>
 </header>
@@ -467,6 +468,10 @@ if (window.__JUCE__ && window.__JUCE__.backend) {
 
   window.__JUCE__.backend.addEventListener('telemetryFrame', (frame) => {
     if (!frame) return;
+    if (frame.channelLayout) {
+      const b = document.getElementById('layoutBadge');
+      if (b && b.textContent !== frame.channelLayout) b.textContent = frame.channelLayout;
+    }
     const setM = (barId, valId, rms) => {
       const db = 20 * Math.log10(Math.max(1e-5, rms));
       const pct = Math.max(0, Math.min(100, (db + 60) * (100 / 60)));
@@ -809,6 +814,8 @@ void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
     obj->setProperty("midEnergy", latestTelemetryFrame.midEnergy);
     obj->setProperty("highEnergy", latestTelemetryFrame.highEnergy);
     obj->setProperty("decayEnvelope", latestTelemetryFrame.decayEnvelope);
+    obj->setProperty("channelLayout", processorRef.getActiveChannelLayoutName());
+    obj->setProperty("channelCount", processorRef.getTotalNumOutputChannels());
 
     webComponent->emitEventIfBrowserIsVisible("telemetryFrame", juce::var(obj));
 }
@@ -1239,6 +1246,14 @@ void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::R
     g.setFont(juce::FontOptions(10.0f, juce::Font::plain));
     g.drawText(juce::String("STUDIO REVERBERATOR ") + juce::String::charToString(0x00B7) + " DIN 1451", headerArea.removeFromLeft(220).reduced(4, 0), juce::Justification::centredLeft);
 
+    // Active Channel Layout Status Badge
+    auto badgeArea = headerArea.removeFromLeft(110).reduced(4, 16);
+    g.setColour(braunLookAndFeel.findColour(rb26::BraunColours::braunOrangeColourId));
+    g.fillRoundedRectangle(badgeArea.toFloat(), 2.0f);
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::FontOptions(9.5f, juce::Font::bold));
+    g.drawText(processorRef.getActiveChannelLayoutName(), badgeArea, juce::Justification::centred);
+
     g.setFont(juce::FontOptions(9.0f, juce::Font::plain));
     g.drawText("Sneed's Feed & Seed Ltd. " + juce::String::charToString(0x00B7) + " Not affiliated with Braun GmbH. Dieter Rams inspired design homage.", headerArea.reduced(16, 0), juce::Justification::centredRight);
 
@@ -1265,13 +1280,14 @@ void BRAUN_RB26AudioProcessorEditor::drawBraunChassis(juce::Graphics& g, juce::R
     const int colWidth = gridArea.getWidth() / numCols;
     const int rowHeight = gridArea.getHeight() / numRows;
 
+    const juce::String deck6Title = "6. MASTER BUS [" + processorRef.getActiveChannelLayoutName() + "]";
     const char* deckTitles[6] = {
         "1. INPUT & PRE-DELAY",
         "2. LOW MODAL MATRIX",
         "3. REVERB TANK (FDN)",
         "4. PITCH DIFFUSION",
         "5. TAIL MODULATION",
-        "6. MASTER BUS"
+        deck6Title.toRawUTF8()
     };
 
     for (int r = 0; r < numRows; ++r)
@@ -1306,6 +1322,12 @@ void BRAUN_RB26AudioProcessorEditor::drawCrtDisplay(juce::Graphics& g, juce::Rec
     auto inner = bounds.reduced(8);
     auto scopeArea = inner.removeFromLeft(inner.getWidth() / 2);
     auto meterArea = inner.reduced(8, 0);
+
+    // Channel Layout Readout in CRT Scope top-right
+    auto crtHeader = scopeArea.removeFromTop(14);
+    g.setColour(juce::Colour(rb26::BraunColours::PhosphorGreen));
+    g.setFont(juce::FontOptions(8.5f, juce::Font::bold));
+    g.drawText(processorRef.getActiveChannelLayoutName(), crtHeader.removeFromRight(95).reduced(2, 0), juce::Justification::centredRight);
 
     // Phosphor Grid lines
     g.setColour(juce::Colour(0xff162419));

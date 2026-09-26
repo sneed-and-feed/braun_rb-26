@@ -61,6 +61,9 @@ public:
         return reverbEngine.popVisualizerFrame(frame);
     }
 
+    // Active Channel Layout Name query
+    juce::String getActiveChannelLayoutName() const noexcept;
+
     // Lock-Free Oscilloscope / Lissajous Visualizer Buffer
     static constexpr int kScopeBufferSize = 2048;
     void pushScopeSamples(const float* left, const float* right, int numSamples) noexcept;

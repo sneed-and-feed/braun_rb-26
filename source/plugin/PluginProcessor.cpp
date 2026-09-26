@@ -174,18 +174,51 @@ bool BRAUN_RB26AudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts
     if (!validOutput)
         return false;
 
-    // Input layout: can be disabled, mono, stereo, or match output layout
-    if (!mainInput.isDisabled())
+    if (mainInput.isDisabled())
+        return true;
+
+    if (mainOutput == juce::AudioChannelSet::mono())
+        return (mainInput == juce::AudioChannelSet::mono());
+
+    // Input layout: can be mono, stereo, or match output layout
+    return (mainInput == mainOutput
+         || mainInput == juce::AudioChannelSet::stereo()
+         || mainInput == juce::AudioChannelSet::mono());
+}
+
+juce::String BRAUN_RB26AudioProcessor::getActiveChannelLayoutName() const noexcept
+{
+    if (auto* outBus = getBus(false, 0))
     {
-        if (mainInput != juce::AudioChannelSet::mono()
-            && mainInput != juce::AudioChannelSet::stereo()
-            && mainInput != mainOutput)
-        {
-            return false;
-        }
+        const auto layout = outBus->getCurrentLayout();
+        if (layout == juce::AudioChannelSet::mono())
+            return "MONO";
+        if (layout == juce::AudioChannelSet::stereo())
+            return "STEREO";
+        if (layout == juce::AudioChannelSet::quadraphonic())
+            return "QUAD";
+        if (layout == juce::AudioChannelSet::create5point1())
+            return "5.1 SURROUND";
+        if (layout == juce::AudioChannelSet::create7point1())
+            return "7.1 SURROUND";
+        if (layout == juce::AudioChannelSet::create7point1point2())
+            return "7.1.2 ATMOS";
+        if (layout == juce::AudioChannelSet::create7point1point4())
+            return "7.1.4 ATMOS";
     }
 
-    return true;
+    const int ch = (reverbEngine.getActiveChannelCount() > 0) ? reverbEngine.getActiveChannelCount() : getTotalNumOutputChannels();
+    switch (ch)
+    {
+        case 1:  return "MONO";
+        case 2:  return "STEREO";
+        case 4:  return "QUAD";
+        case 6:  return "5.1 SURROUND";
+        case 8:  return "7.1 SURROUND";
+        case 10: return "7.1.2 ATMOS";
+        case 12: return "7.1.4 ATMOS";
+        default: return (ch > 2) ? "7.1.4 ATMOS" : "STEREO";
+    }
 }
 
 void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -195,6 +228,8 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
     const int numSamples = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
+    const int numInputChannels = getTotalNumInputChannels();
+
     if (numSamples <= 0 || numChannels <= 0)
         return;
 
@@ -227,16 +262,7 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
     }
 
-    constexpr int kMaxChannels = 12;
-    const int effectiveChannels = std::min(numChannels, kMaxChannels);
-    const int totalInChannels = getTotalNumInputChannels();
-
-    float* outChannels[kMaxChannels] = { nullptr };
-    for (int ch = 0; ch < effectiveChannels; ++ch)
-        outChannels[ch] = buffer.getWritePointer(ch);
-
     // Standby Power: When powered off, start safe and ready to go with transparent unity-gain bypass.
-    // Rectifies overactive protection: does NOT silence track or require prepackaged sounds to turn on.
     if (!isPoweredOn.load(std::memory_order_relaxed))
     {
         if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
@@ -244,24 +270,32 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             reverbEngine.reset();
         }
 
-        if (totalInChannels == 0)
+        if (numInputChannels == 0)
         {
             buffer.clear();
         }
-        else if (totalInChannels == 1 && numChannels > 1)
+        else if (numInputChannels == 1 && numChannels > 1)
         {
-            // Mono-in / stereo/surround-out: replicate clean channel 0 onto channel 1 (safely ignoring any host Ch1 garbage)
+            // Mono-in: replicate clean channel 0 onto channel 1 (safely ignoring any host Ch1 garbage)
             buffer.copyFrom(1, 0, buffer, 0, 0, numSamples);
             for (int ch = 2; ch < numChannels; ++ch)
+            {
                 buffer.clear(ch, 0, numSamples);
+            }
         }
-        else if (totalInChannels < numChannels)
+        else
         {
-            for (int ch = totalInChannels; ch < numChannels; ++ch)
+            // Inputs < numInputChannels are passed through cleanly.
+            // Clear any auxiliary/height channels where output has no corresponding input.
+            for (int ch = numInputChannels; ch < numChannels; ++ch)
+            {
                 buffer.clear(ch, 0, numSamples);
+            }
         }
 
-        pushScopeSamples(outChannels[0], (effectiveChannels > 1) ? outChannels[1] : outChannels[0], numSamples);
+        const float* scopeL = buffer.getReadPointer(0);
+        const float* scopeR = (numChannels > 1) ? buffer.getReadPointer(1) : scopeL;
+        pushScopeSamples(scopeL, scopeR, numSamples);
         midiMessages.clear();
         return;
     }
@@ -275,20 +309,21 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         reverbEngine.reset();
     }
 
-    // Prepare non-allocating stack pointers for channel routing
-    const float* inChannels[kMaxChannels] = { nullptr };
-    for (int ch = 0; ch < effectiveChannels; ++ch)
+    // Zero heap allocations! Stack-allocated pointer arrays sized for max 16 channels
+    std::array<float*, 16> outChannelPtrs {};
+    std::array<const float*, 16> inChannelPtrs {};
+
+    // Clear any channels beyond 12 if buffer channel count exceeds engine capacity
+    for (int ch = 12; ch < numChannels; ++ch)
     {
-        if (ch < totalInChannels)
-            inChannels[ch] = buffer.getReadPointer(ch);
-        else if (totalInChannels == 1 && ch == 1)
-            inChannels[1] = buffer.getReadPointer(0);
-        else
-            inChannels[ch] = nullptr;
+        buffer.clear(ch, 0, numSamples);
     }
+
+    const int activeChannels = std::min(numChannels, 12);
 
     // Real-time block chunking for acoustic exciter + reverb integration (0 heap allocs)
     constexpr int kMaxChunk = 512;
+    alignas(16) static constexpr float kSilenceBuffer[kMaxChunk] = { 0.0f };
     int samplesProcessed = 0;
 
     while (samplesProcessed < numSamples)
@@ -311,45 +346,65 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         float combinedInL[kMaxChunk];
         float combinedInR[kMaxChunk];
 
-        const float* extInL = (inChannels[0] != nullptr) ? (inChannels[0] + samplesProcessed) : nullptr;
-        const float* extInR = (inChannels[1] != nullptr) ? (inChannels[1] + samplesProcessed) : extInL;
+        const float* extInL = (numInputChannels > 0) ? (buffer.getReadPointer(0) + samplesProcessed) : kSilenceBuffer;
+        const float* extInR = (numInputChannels > 1) ? (buffer.getReadPointer(1) + samplesProcessed) : extInL;
 
         for (int i = 0; i < chunkSize; ++i)
         {
             // If ReverbAndDirect: route exciter into primary input bus for unified dry/wet mixing
-            combinedInL[i] = (extInL ? extInL[i] : 0.0f) + (isReverbAndDirect ? exciterDirectL[i] : 0.0f);
-            combinedInR[i] = (extInR ? extInR[i] : 0.0f) + (isReverbAndDirect ? exciterDirectR[i] : 0.0f);
+            combinedInL[i] = extInL[i] + (isReverbAndDirect ? exciterDirectL[i] : 0.0f);
+            combinedInR[i] = extInR[i] + (isReverbAndDirect ? exciterDirectR[i] : 0.0f);
         }
 
-        const float* chunkIn[kMaxChannels] = { nullptr };
-        chunkIn[0] = combinedInL;
-        chunkIn[1] = combinedInR;
-        for (int ch = 2; ch < effectiveChannels; ++ch)
+        // Populate inChannelPtrs (size 16)
+        inChannelPtrs[0] = combinedInL;
+        if (activeChannels > 1)
         {
-            chunkIn[ch] = (inChannels[ch] != nullptr) ? (inChannels[ch] + samplesProcessed) : nullptr;
+            inChannelPtrs[1] = combinedInR;
         }
 
-        float* chunkOut[kMaxChannels] = { nullptr };
-        for (int ch = 0; ch < effectiveChannels; ++ch)
+        for (int ch = 2; ch < activeChannels; ++ch)
         {
-            chunkOut[ch] = (outChannels[ch] != nullptr) ? (outChannels[ch] + samplesProcessed) : nullptr;
+            if (ch < numInputChannels)
+            {
+                inChannelPtrs[ch] = buffer.getReadPointer(ch) + samplesProcessed;
+            }
+            else
+            {
+                // Auxiliary / height channels receive silence as input when inputs < outputs
+                inChannelPtrs[ch] = kSilenceBuffer;
+            }
+        }
+        for (int ch = activeChannels; ch < 16; ++ch)
+        {
+            inChannelPtrs[ch] = nullptr;
+        }
+
+        // Populate outChannelPtrs (size 16)
+        for (int ch = 0; ch < activeChannels; ++ch)
+        {
+            outChannelPtrs[ch] = buffer.getWritePointer(ch) + samplesProcessed;
+        }
+        for (int ch = activeChannels; ch < 16; ++ch)
+        {
+            outChannelPtrs[ch] = nullptr;
         }
 
         // If ReverbOnly: route exciter directly into reverb tank aux input, bypassing dry path
         const float* auxReverb[2] = { exciterReverbL, exciterReverbR };
         const float* const* auxPtr = isReverbAndDirect ? nullptr : auxReverb;
 
-        // Process core reverb engine
-        reverbEngine.process(chunkIn, chunkOut, effectiveChannels, chunkSize, auxPtr);
+        // Process core reverb engine across all active channels (up to 12)
+        reverbEngine.process(inChannelPtrs.data(), outChannelPtrs.data(), activeChannels, chunkSize, auxPtr);
 
-        // Ensure denormals are flushed without duplicate soft limiting (handled by reverbEngine when limiter_enable is active)
-        for (int ch = 0; ch < effectiveChannels; ++ch)
+        // Ensure denormals are flushed
+        for (int ch = 0; ch < activeChannels; ++ch)
         {
-            if (outChannels[ch] != nullptr)
+            if (outChannelPtrs[ch] != nullptr)
             {
                 for (int i = 0; i < chunkSize; ++i)
                 {
-                    outChannels[ch][samplesProcessed + i] = rb26::flushDenormal(outChannels[ch][samplesProcessed + i]);
+                    outChannelPtrs[ch][i] = rb26::flushDenormal(outChannelPtrs[ch][i]);
                 }
             }
         }
@@ -357,8 +412,10 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         samplesProcessed += chunkSize;
     }
 
-    // Push processed audio frames to wait-free visualizer oscilloscope buffer
-    pushScopeSamples(outChannels[0], (effectiveChannels > 1) ? outChannels[1] : outChannels[0], numSamples);
+    // Push processed audio frames to wait-free visualizer oscilloscope buffer (Left and Right)
+    const float* scopeL = buffer.getReadPointer(0);
+    const float* scopeR = (numChannels > 1) ? buffer.getReadPointer(1) : scopeL;
+    pushScopeSamples(scopeL, scopeR, numSamples);
 
     // Push processed audio to lossless WAV recorder if active (lock-free)
     if (activeWriter.load(std::memory_order_acquire) != nullptr)
@@ -366,7 +423,7 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         activeWriterWorkers.fetch_add(1, std::memory_order_acquire);
         if (auto* writer = activeWriter.load(std::memory_order_acquire))
         {
-            const float* channels[] = { outChannels[0], outChannels[1] };
+            const float* channels[] = { buffer.getReadPointer(0), (numChannels > 1 ? buffer.getReadPointer(1) : buffer.getReadPointer(0)) };
             writer->write(channels, numSamples);
         }
         activeWriterWorkers.fetch_sub(1, std::memory_order_release);
