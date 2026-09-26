@@ -64,9 +64,9 @@ jobs:
             break
           done
 
-          for f in $(find build -type f -name "BRAUN_RB26.clap"); do
-            echo "Copying CLAP from $f"
-            cp "$f" package/CLAP/
+          for item in $(find build -name "BRAUN_RB26.clap"); do
+            echo "Copying CLAP from $item"
+            cp -R "$item" package/CLAP/
             break
           done
 
@@ -85,7 +85,7 @@ jobs:
             echo "Error: BRAUN_RB26.component was not copied into package!" >&2
             exit 1
           fi
-          if [ ! -f "package/CLAP/BRAUN_RB26.clap" ]; then
+          if [ ! -e "package/CLAP/BRAUN_RB26.clap" ]; then
             echo "Error: BRAUN_RB26.clap was not copied into package!" >&2
             exit 1
           fi

@@ -112,11 +112,11 @@ if [ -n "$VST3_SRC" ]; then
 fi
 
 # Install CLAP
-CLAP_SRC=$(find "$TMP_DIR/extracted" -type f -name "BRAUN_RB26.clap" | head -n 1 || true)
+CLAP_SRC=$(find "$TMP_DIR/extracted" -name "BRAUN_RB26.clap" | head -n 1 || true)
 if [ -n "$CLAP_SRC" ]; then
     echo -e "Installing ${BOLD}CLAP${RESET} -> $CLAP_DIR/..."
-    rm -f "$CLAP_DIR/BRAUN_RB26.clap"
-    cp "$CLAP_SRC" "$CLAP_DIR/"
+    rm -rf "$CLAP_DIR/BRAUN_RB26.clap"
+    cp -R "$CLAP_SRC" "$CLAP_DIR/"
     xattr -d com.apple.quarantine "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
     echo -e "${GREEN}  ✓ CLAP installed & Gatekeeper unquarantined${RESET}"
 fi

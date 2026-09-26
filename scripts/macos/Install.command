@@ -54,10 +54,10 @@ if [ -d "$DIR/VST3/BRAUN_RB26.vst3" ]; then
 fi
 
 # 3. Install CLAP (.clap)
-if [ -f "$DIR/CLAP/BRAUN_RB26.clap" ]; then
+if [ -e "$DIR/CLAP/BRAUN_RB26.clap" ]; then
     echo -e "Installing ${BOLD}CLAP${RESET} -> $CLAP_DIR/BRAUN_RB26.clap..."
-    rm -f "$CLAP_DIR/BRAUN_RB26.clap"
-    cp "$DIR/CLAP/BRAUN_RB26.clap" "$CLAP_DIR/"
+    rm -rf "$CLAP_DIR/BRAUN_RB26.clap"
+    cp -R "$DIR/CLAP/BRAUN_RB26.clap" "$CLAP_DIR/"
     xattr -cr "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
     echo -e "${GREEN}  ✓ CLAP installed and unquarantined${RESET}"
 fi

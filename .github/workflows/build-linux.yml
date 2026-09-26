@@ -76,9 +76,9 @@ jobs:
             break
           done
 
-          for f in $(find build -type f -name "BRAUN_RB26.clap"); do
+          for f in $(find build -name "BRAUN_RB26.clap"); do
             echo "Copying CLAP from $f"
-            cp "$f" "${STAGE_DIR}/CLAP/"
+            cp -R "$f" "${STAGE_DIR}/CLAP/"
             break
           done
 
@@ -94,7 +94,7 @@ jobs:
             echo "Error: BRAUN_RB26.vst3 was not copied into package!" >&2
             exit 1
           fi
-          if [ ! -f "${STAGE_DIR}/CLAP/BRAUN_RB26.clap" ]; then
+          if [ ! -e "${STAGE_DIR}/CLAP/BRAUN_RB26.clap" ]; then
             echo "Error: BRAUN_RB26.clap was not copied into package!" >&2
             exit 1
           fi

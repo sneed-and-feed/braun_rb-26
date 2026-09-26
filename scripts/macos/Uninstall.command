@@ -18,7 +18,7 @@ fi
 echo "Removing components..."
 rm -rf "$HOME/Library/Audio/Plug-Ins/Components/BRAUN_RB26.component"
 rm -rf "$HOME/Library/Audio/Plug-Ins/VST3/BRAUN_RB26.vst3"
-rm -f  "$HOME/Library/Audio/Plug-Ins/CLAP/BRAUN_RB26.clap"
+rm -rf "$HOME/Library/Audio/Plug-Ins/CLAP/BRAUN_RB26.clap"
 rm -rf "$HOME/Applications/BRAUN_RB26.app"
 
 echo "Flushing AudioComponentRegistrar cache..."
