@@ -348,7 +348,7 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
       const raw = fs.readFileSync(presetsPath, 'utf8');
       const data = JSON.parse(raw);
       assert.strictEqual(data.device, 'BRAUN_RB26', 'Device token must match BRAUN_RB26');
-      assert.strictEqual(data.presets.length, 10, 'Must provide exactly 10 curated studio presets');
+      assert.strictEqual(data.presets.length, 15, 'Must provide 15 curated studio presets');
     });
 
     it('verifies all 10 preset IDs match expected studio presets', () => {
@@ -471,18 +471,19 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
       { apvtsId: "output_trim_db",     webId: "outputTrimDb",     isChoice: false, isBool: false },
       { apvtsId: "limiter_enable",     webId: "limiterEnable",    isChoice: false, isBool: true  },
       { apvtsId: "pitch_boost",        webId: "pitchBoost",       isChoice: false, isBool: false },
-      { apvtsId: "manifold_type",      webId: "manifoldType",     isChoice: true,  isBool: false }
+      { apvtsId: "manifold_type",      webId: "manifoldType",     isChoice: true,  isBool: false },
+      { apvtsId: "pitch_warp",         webId: "pitchWarp",        isChoice: false, isBool: true  }
     ];
 
-    it('verifies metadata table contains exactly 28 unique parameters', () => {
-      assert.strictEqual(expectedMetadataTable.length, 28, 'Metadata table must have exactly 28 parameters');
+    it('verifies metadata table contains exactly 29 unique parameters', () => {
+      assert.strictEqual(expectedMetadataTable.length, 29, 'Metadata table must have exactly 29 parameters');
       const apvtsIds = new Set(expectedMetadataTable.map(p => p.apvtsId));
       const webIds = new Set(expectedMetadataTable.map(p => p.webId));
-      assert.strictEqual(apvtsIds.size, 28, 'All 28 APVTS IDs must be unique');
-      assert.strictEqual(webIds.size, 28, 'All 28 Web IDs must be unique');
+      assert.strictEqual(apvtsIds.size, 29, 'All 29 APVTS IDs must be unique');
+      assert.strictEqual(webIds.size, 29, 'All 29 Web IDs must be unique');
     });
 
-    it('verifies all 28 parameters are bound in index.html, app.js and IPC bridge', () => {
+    it('verifies all 29 parameters are bound in index.html, app.js and IPC bridge', () => {
       const appJsContent = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
       const htmlContent = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 

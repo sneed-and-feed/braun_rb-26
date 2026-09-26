@@ -40,6 +40,7 @@ namespace ParamIDs {
     inline const juce::ParameterID limiterEnable     { "limiter_enable", 1 };
     inline const juce::ParameterID pitchBoost        { "pitch_boost", 1 };
     inline const juce::ParameterID manifoldType      { "manifold_type", 1 };
+    inline const juce::ParameterID pitchWarp         { "pitch_warp", 1 };
 }
 
 // ============================================================================
@@ -128,8 +129,8 @@ struct ParameterMetadata {
     bool isChoice;
 };
 
-inline const std::array<ParameterMetadata, 28>& getParameterMetadataTable() {
-    static const std::array<ParameterMetadata, 28> table {{
+inline const std::array<ParameterMetadata, 29>& getParameterMetadataTable() {
+    static const std::array<ParameterMetadata, 29> table {{
         { "input_trim_db",      "inputTrimDb",      "Input Trim",            "dB",   -18.0f,  18.0f,    0.0f,   false, false },
         { "pre_delay_ms",       "preDelayMs",       "Pre-Delay",             "ms",   0.0f,    500.0f,   24.0f,  false, false },
         { "dry_wet_mix",        "dryWetMix",        "Dry / Wet Mix",         "%",    0.0f,    1.0f,     0.40f,  false, false },
@@ -157,7 +158,8 @@ inline const std::array<ParameterMetadata, 28>& getParameterMetadataTable() {
         { "output_trim_db",     "outputTrimDb",     "Output Trim",           "dB",   -24.0f,  12.0f,    0.0f,   false, false },
         { "limiter_enable",     "limiterEnable",    "Master Limiter",        "",     0.0f,    1.0f,     1.0f,   true,  false },
         { "pitch_boost",        "pitchBoost",       "Pitch Booster",         "dB",   0.0f,    18.0f,    0.0f,   false, false },
-        { "manifold_type",      "manifoldType",     "Geometry Manifold",     "",     0.0f,    3.0f,     0.0f,   false, true  }
+        { "manifold_type",      "manifoldType",     "Geometry Manifold",     "",     0.0f,    3.0f,     0.0f,   false, true  },
+        { "pitch_warp",         "pitchWarp",        "Shimmer Warp Mode",     "",     0.0f,    1.0f,     0.0f,   true,  false }
     }};
     return table;
 }
@@ -194,6 +196,7 @@ struct alignas(16) Rb26ParameterSnapshot {
     bool  limiterEnable    { true };
     float pitchBoost       { 0.0f };
     ManifoldType manifold  { ManifoldType::PoincareHyperbolic };
+    bool  pitchWarp        { false };
 
     [[nodiscard]] Rb26Parameters toDspParams() const noexcept {
         Rb26Parameters p;
@@ -225,6 +228,7 @@ struct alignas(16) Rb26ParameterSnapshot {
         p.limiterEnable    = limiterEnable;
         p.pitchBoostDb     = pitchBoost;
         p.manifold         = manifold;
+        p.pitchWarp        = pitchWarp;
         return p;
     }
 };
@@ -261,6 +265,7 @@ struct Rb26AtomicPointers {
     std::atomic<float>* limiterEnable    { nullptr };
     std::atomic<float>* pitchBoost       { nullptr };
     std::atomic<float>* manifoldType     { nullptr };
+    std::atomic<float>* pitchWarp        { nullptr };
 
     void initialize(juce::AudioProcessorValueTreeState& apvts) noexcept {
         inputTrimDb       = apvts.getRawParameterValue(ParamIDs::inputTrimDb.getParamID());
@@ -291,6 +296,7 @@ struct Rb26AtomicPointers {
         limiterEnable     = apvts.getRawParameterValue(ParamIDs::limiterEnable.getParamID());
         pitchBoost        = apvts.getRawParameterValue(ParamIDs::pitchBoost.getParamID());
         manifoldType      = apvts.getRawParameterValue(ParamIDs::manifoldType.getParamID());
+        pitchWarp         = apvts.getRawParameterValue(ParamIDs::pitchWarp.getParamID());
     }
 
     [[nodiscard]] Rb26ParameterSnapshot loadSnapshot() const noexcept {
@@ -335,6 +341,7 @@ struct Rb26AtomicPointers {
             const int idx = static_cast<int>(std::round(val));
             s.manifold = (idx >= 0 && idx <= 3) ? manifoldTypeFromIndex(idx) : ManifoldType::PoincareHyperbolic;
         }
+        if (pitchWarp)         s.pitchWarp         = (pitchWarp->load(std::memory_order_relaxed) > 0.5f);
         return s;
     }
 };
@@ -559,6 +566,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Geometry Manifold",
         getManifoldTypeChoices(),
         0));
+
+    // 27. Shimmer Warp Mode (bool, default false)
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        ParamIDs::pitchWarp,
+        "Shimmer Warp Mode",
+        false));
 
     return { params.begin(), params.end() };
 }

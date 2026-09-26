@@ -23,6 +23,7 @@ void DualTapDelayPitchShifter::reset() noexcept {
     std::fill(mDelayBuffer.begin(), mDelayBuffer.end(), 0.0f);
     mWriteIndex = 0;
     mPhase = 0.0f;
+    updateWindowTarget();
     mWindowSamples = mTargetWindowSamples;
     const float slope = 1.0f - mRatio;
     const float absSlope = std::abs(slope);
@@ -34,23 +35,49 @@ void DualTapDelayPitchShifter::setInterval(int semitones) noexcept {
     mRatio = std::pow(2.0f, static_cast<float>(semitones) / 12.0f);
 
     if (mRatio >= 1.0f) {
-        mWindowSec = 0.050f; // 50 ms for Shimmer (+7, +12, +24) -> 0.00% error
+        mBaseWindowSec = 0.050f; // 50 ms for Shimmer (+7, +12, +24) -> 0.00% error
     } else if (mRatio >= 0.85f) {
-        mWindowSec = 0.070f; // 70 ms for Dimmer -2st (Dark Chorus)
+        mBaseWindowSec = 0.070f; // 70 ms for Dimmer -2st (Dark Chorus)
     } else if (mRatio >= 0.60f) {
-        mWindowSec = 0.085f; // 85 ms for Dimmer -7st (Sub-Fifth Drone)
+        mBaseWindowSec = 0.085f; // 85 ms for Dimmer -7st (Sub-Fifth Drone)
     } else if (mRatio >= 0.45f) {
-        mWindowSec = 0.100f; // 100 ms for Dimmer -12st (Sub-Octave Bloom) -> 0.02% error
+        mBaseWindowSec = 0.100f; // 100 ms for Dimmer -12st (Sub-Octave Bloom) -> 0.02% error
     } else {
-        mWindowSec = 0.200f; // 200 ms for Dimmer -24st -> 0.04% error
+        mBaseWindowSec = 0.200f; // 200 ms for Dimmer -24st -> 0.04% error
     }
-    mTargetWindowSamples = std::max(64.0f, mWindowSec * mSampleRate);
+    updateWindowTarget();
+}
+
+void DualTapDelayPitchShifter::updateWindowTarget() noexcept {
+    float winSec = mBaseWindowSec;
+    if (mWarpEnabled && mWarpAmount > 0.001f) {
+        // Dynamic grain window modulation in WARP mode (10 ms to 150 ms)
+        // Modulated by blend/boost state (mWarpModulation in [-1.0, 1.0])
+        const float normMod = std::clamp((mWarpModulation + 1.0f) * 0.5f, 0.0f, 1.0f);
+        const float warpedWinSec = 0.010f + normMod * (0.150f - 0.010f);
+        winSec = (1.0f - mWarpAmount) * mBaseWindowSec + mWarpAmount * warpedWinSec;
+    }
+    mWindowSec = winSec;
+    mTargetWindowSamples = std::clamp(mWindowSec * mSampleRate, 64.0f, static_cast<float>(kMaxCapacity / 2));
     if (mWriteIndex == 0) {
         mWindowSamples = mTargetWindowSamples;
     }
     const float slope = 1.0f - mRatio;
     const float absSlope = std::abs(slope);
     mPhaseInc = (absSlope > 1.0e-5f && mWindowSamples > 0.0f) ? (absSlope / mWindowSamples) : 0.0f;
+}
+
+void DualTapDelayPitchShifter::setWarpMode(bool enabled, float warpAmount) noexcept {
+    mWarpEnabled = enabled;
+    mWarpAmount = enabled ? std::clamp(warpAmount, 0.0f, 1.0f) : 0.0f;
+    updateWindowTarget();
+}
+
+void DualTapDelayPitchShifter::setWarpModulation(float modulation) noexcept {
+    mWarpModulation = modulation;
+    if (mWarpEnabled && mWarpAmount > 0.001f) {
+        updateWindowTarget();
+    }
 }
 
 float DualTapDelayPitchShifter::processSample(float input) noexcept {
@@ -169,6 +196,7 @@ PitchShifter::PitchShifter() noexcept
     mPitchFeedbackSmoother.setTimeConstant(0.025f); // 25 ms
     mSpiralDepthSmoother.setTimeConstant(0.025f);   // 25 ms
     mSpiralRateSmoother.setTimeConstant(0.030f);    // 30 ms
+    mWarpSmoother.setTimeConstant(0.050f);          // 50 ms
     prepare(48000.0, 512);
 }
 
@@ -194,6 +222,7 @@ void PitchShifter::prepare(double sampleRate, int /*maxBlockSize*/) noexcept {
     mPitchFeedbackSmoother.setSampleRate(mSampleRate);
     mSpiralDepthSmoother.setSampleRate(mSampleRate);
     mSpiralRateSmoother.setSampleRate(mSampleRate);
+    mWarpSmoother.setSampleRate(mSampleRate);
 
     mShimmerShifterL.setInterval(mCurrentShimmerInterval);
     mShimmerShifterR.setInterval(mCurrentShimmerInterval);
@@ -202,6 +231,7 @@ void PitchShifter::prepare(double sampleRate, int /*maxBlockSize*/) noexcept {
 
     mSpiralDepthSmoother.reset(mSpiralDepth);
     mSpiralRateSmoother.reset(mSpiralRateHz);
+    mWarpSmoother.reset(mWarpEnabled ? mWarpAmount : 0.0f);
 
     mShimmerCircBufferL.assign(kCircCapacity, 0.0f);
     mShimmerCircBufferR.assign(kCircCapacity, 0.0f);
@@ -242,6 +272,18 @@ void PitchShifter::reset() noexcept {
     mPitchFeedbackSmoother.reset(mPitchFeedbackSmoother.getTarget());
     mSpiralDepthSmoother.reset(mSpiralDepthSmoother.getTarget());
     mSpiralRateSmoother.reset(mSpiralRateSmoother.getTarget());
+    mWarpSmoother.reset(mWarpSmoother.getTarget());
+}
+
+void PitchShifter::setWarpMode(bool enabled, float warpAmount) noexcept {
+    mWarpEnabled = enabled;
+    mWarpAmount = enabled ? std::clamp(warpAmount, 0.0f, 1.0f) : 0.0f;
+    mWarpSmoother.setTarget(mWarpAmount);
+
+    mShimmerShifterL.setWarpMode(enabled, mWarpAmount);
+    mShimmerShifterR.setWarpMode(enabled, mWarpAmount);
+    mDimmerShifterL.setWarpMode(enabled, mWarpAmount);
+    mDimmerShifterR.setWarpMode(enabled, mWarpAmount);
 }
 
 void PitchShifter::setParameters(float shimmerSend,
@@ -314,9 +356,11 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     const float blend = mPitchBlendSmoother.next();
     const float fb = mPitchFeedbackSmoother.next();
     const float spiralDepth = mSpiralDepthSmoother.next();
+    const float curWarp = mWarpSmoother.next();
 
     // Fast path: when both shimmer and dimmer sends are bypassed or below threshold
     if (sSend <= 0.001f && dSend <= 0.001f) {
+        mWarpSmoother.snapTo(mWarpSmoother.getTarget());
         mRecircShimmerL = 0.0f;
         mRecircShimmerR = 0.0f;
         mRecircDimmerL = 0.0f;
@@ -331,6 +375,13 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
         return;
     }
 
+    if (curWarp > 0.001f) {
+        mShimmerShifterL.setWarpModulation(blend);
+        mShimmerShifterR.setWarpModulation(blend);
+        mDimmerShifterL.setWarpModulation(-blend);
+        mDimmerShifterR.setWarpModulation(-blend);
+    }
+
     // Equal-power crossfade weighting based on blend beta in [-1.0, +1.0]
     const float blendAngle = (kPi * 0.25f) * (1.0f - blend);
     const float blendShim = FastSinTable::cos(blendAngle);
@@ -339,8 +390,9 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     const float effShimmerSend = (sSend > 1.0e-5f && blendShim > 1.0e-5f) ? (sSend * blendShim) : 0.0f;
     const float effDimmerSend  = (dSend > 1.0e-5f && blendDim > 1.0e-5f) ? (dSend * blendDim) : 0.0f;
 
-    // Bounded internal feedback gain strictly avoiding dual-closed-loop runaway
+    // Internal loop feedback gain respecting warp mode (0.35x when calibrated, scales up to 1.25x in WARP)
     const float safeFb = std::clamp(fb * 0.35f, 0.0f, 0.35f);
+    const float effInternalFb = (1.0f - curWarp) * safeFb + curWarp * (fb * 1.25f);
 
     // 1. Shimmer Loop: Scale input by send weight, inject bounded feedback, filter, shift, saturate
     float shimSatL = 0.0f;
@@ -352,8 +404,8 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
         const float delayedShimFbL = mShimmerCircBufferL[readShimIdx];
         const float delayedShimFbR = mShimmerCircBufferR[readShimIdx];
 
-        const float shimInL = inL * effShimmerSend + safeFb * delayedShimFbL;
-        const float shimInR = inR * effShimmerSend + safeFb * delayedShimFbR;
+        const float shimInL = inL * effShimmerSend + effInternalFb * delayedShimFbL;
+        const float shimInR = inR * effShimmerSend + effInternalFb * delayedShimFbR;
 
         const float shimFiltL = mShimmerFilterL.process(shimInL);
         const float shimFiltR = mShimmerFilterR.process(shimInR);
@@ -395,8 +447,8 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
         const float delayedDimFbL = mDimmerCircBufferL[readDimIdx];
         const float delayedDimFbR = mDimmerCircBufferR[readDimIdx];
 
-        const float dimInL = inL * effDimmerSend + safeFb * delayedDimFbL;
-        const float dimInR = inR * effDimmerSend + safeFb * delayedDimFbR;
+        const float dimInL = inL * effDimmerSend + effInternalFb * delayedDimFbL;
+        const float dimInR = inR * effDimmerSend + effInternalFb * delayedDimFbR;
 
         const float dimFiltL = mDimmerFilterL.process(dimInL);
         const float dimFiltR = mDimmerFilterR.process(dimInR);

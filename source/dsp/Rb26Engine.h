@@ -57,6 +57,7 @@ struct Rb26Parameters {
     float outputTrimDb = 0.0f;      // -24.0 - +12.0 dB
     bool limiterEnable = true;      // true/false
     ManifoldType manifold = ManifoldType::PoincareHyperbolic;
+    bool pitchWarp = false;         // Shimmer Warp Mode (unbounded feedback, micro-flutter, wideband)
 };
 
 struct PresetDefinition {
@@ -134,6 +135,12 @@ private:
     OnePoleSmoother mPitchDelaySmoother;
     OnePoleSmoother mPitchBlendSmoother;
     OnePoleSmoother mPitchBoostSmoother;
+    OnePoleSmoother mPitchWarpSmoother;
+
+    // Warp mode state
+    float mLastFilterWarp { -1.0f };
+    float mFlutterPhase1 { 0.0f };
+    float mFlutterPhase2 { 0.0f };
 
     // Master bus sub-bass mono collapse filter
     SubBassEllipticalFilter mMasterSubMono;

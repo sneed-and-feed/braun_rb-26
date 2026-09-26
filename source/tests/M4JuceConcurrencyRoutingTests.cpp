@@ -383,14 +383,14 @@ void runTest5_HostDawPresetsExposure() {
     BRAUN_RB26AudioProcessor processor;
 
     // 1. Program count
-    RB26_TEST_ASSERT(processor.getNumPrograms() == 10);
+    RB26_TEST_ASSERT(processor.getNumPrograms() == 15);
     RB26_TEST_ASSERT(processor.getCurrentProgram() == 0);
 
     // 2. Program names
     const auto factoryPresets = rb26::Rb26ReverbEngine::getFactoryPresets();
-    RB26_TEST_ASSERT(factoryPresets.size() == 10);
+    RB26_TEST_ASSERT(factoryPresets.size() == 15);
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 15; ++i) {
         juce::String pName = processor.getProgramName(i);
         RB26_TEST_ASSERT(pName == factoryPresets[static_cast<size_t>(i)].name);
     }
@@ -455,7 +455,7 @@ void runTest6_ApvtsPrepareSnapshot() {
 }
 
 void runTest7_ParameterReachabilityAndEnumImpact() {
-    std::cout << "[Test 7] Parameter Reachability (All 28 Params) & Enum Choice Impact...\n";
+    std::cout << "[Test 7] Parameter Reachability (All 29 Params) & Enum Choice Impact...\n";
     juce::ScopedJuceInitialiser_GUI guiInit;
 
     BRAUN_RB26AudioProcessor processor;
@@ -463,7 +463,7 @@ void runTest7_ParameterReachabilityAndEnumImpact() {
     processor.setPower(true);
 
     const auto& metaTable = rb26::getParameterMetadataTable();
-    RB26_TEST_ASSERT(metaTable.size() == 28);
+    RB26_TEST_ASSERT(metaTable.size() == 29);
 
     // 1. Verify every single parameter ID is reachable in APVTS
     for (const auto& meta : metaTable) {
@@ -650,7 +650,7 @@ void runTest7_ParameterReachabilityAndEnumImpact() {
     RB26_TEST_ASSERT(dDiff01 > 0.001f);
     RB26_TEST_ASSERT(dDiff12 > 0.001f);
 
-    std::cout << "  -> PASS: All 28 parameters reachable in APVTS; manifold, shimmer, and dimmer choices exhibit measurable DSP impact.\n";
+    std::cout << "  -> PASS: All 29 parameters reachable in APVTS; manifold, shimmer, and dimmer choices exhibit measurable DSP impact.\n";
 }
 
 void runTest8_UserPathManifoldSwitchingContinuity() {

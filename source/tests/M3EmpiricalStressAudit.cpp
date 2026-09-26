@@ -449,9 +449,9 @@ bool testFullReverbRegressionInvariance() {
     rb26::Rb26ReverbEngine engine;
     engine.prepare(48000.0, 256);
 
-    // Verify all 10 factory presets can be loaded and rendered without audio anomalies
+    // Verify all 15 factory presets can be loaded and rendered without audio anomalies
     const auto& presets = rb26::Rb26ReverbEngine::getFactoryPresets();
-    AUDIT_ASSERT(presets.size() == 10, "Must have exactly 10 factory presets");
+    AUDIT_ASSERT(presets.size() == 15, "Must have exactly 15 factory presets");
 
     const int bs = 256;
     std::vector<float> inL(bs), inR(bs), outL(bs), outR(bs);

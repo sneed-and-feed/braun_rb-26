@@ -12,6 +12,7 @@ Rb26ReverbEngine::Rb26ReverbEngine() noexcept {
     mStereoWidthSmoother.setTimeConstant(0.030f);
     mOutputTrimSmoother.setTimeConstant(0.030f);
     mPitchBoostSmoother.setTimeConstant(0.020f);
+    mPitchWarpSmoother.setTimeConstant(0.050f);
 
     mPitchFeedbackHpL.configure(Biquad::Type::Highpass, 48000.0f, 150.0f, 0.70710678f);
     mPitchFeedbackHpR.configure(Biquad::Type::Highpass, 48000.0f, 150.0f, 0.70710678f);
@@ -37,11 +38,17 @@ void Rb26ReverbEngine::prepare(double sampleRate, int maxBlockSize) noexcept {
     mPitchShifter.prepare(mSampleRate, mMaxBlockSize);
     mMasterSubMono.prepare(mSampleRate);
 
-    // Band-limit pitch feedback path: 150 Hz HPF + 6 kHz LPF Butterworth filters
-    mPitchFeedbackHpL.configure(Biquad::Type::Highpass, fs, 150.0f, 0.70710678f);
-    mPitchFeedbackHpR.configure(Biquad::Type::Highpass, fs, 150.0f, 0.70710678f);
-    mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, fs, 6000.0f, 0.70710678f);
-    mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, fs, 6000.0f, 0.70710678f);
+    // Initial feedback filter bandwidth: HPF 150 Hz -> 40 Hz, LPF 6 kHz -> 16 kHz with pitchWarp
+    const float initWarp = mParams.pitchWarp ? 1.0f : 0.0f;
+    const float initHp = (1.0f - initWarp) * 150.0f + initWarp * 40.0f;
+    const float initLp = (1.0f - initWarp) * 6000.0f + initWarp * 16000.0f;
+    mPitchFeedbackHpL.configure(Biquad::Type::Highpass, fs, initHp, 0.70710678f);
+    mPitchFeedbackHpR.configure(Biquad::Type::Highpass, fs, initHp, 0.70710678f);
+    mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, fs, initLp, 0.70710678f);
+    mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, fs, initLp, 0.70710678f);
+    mLastFilterWarp = initWarp;
+    mFlutterPhase1 = 0.0f;
+    mFlutterPhase2 = 0.0f;
 
     mInputTrimSmoother.setSampleRate(fs);
     mInputTrimSmoother.reset(dbToGain(mParams.inputTrimDb));
@@ -75,6 +82,10 @@ void Rb26ReverbEngine::prepare(double sampleRate, int maxBlockSize) noexcept {
     mPitchBoostSmoother.setSampleRate(fs);
     mPitchBoostSmoother.setTimeConstant(0.020f);
     mPitchBoostSmoother.reset(mParams.pitchBoostDb);
+
+    mPitchWarpSmoother.setSampleRate(fs);
+    mPitchWarpSmoother.setTimeConstant(0.050f);
+    mPitchWarpSmoother.reset(initWarp);
 
     mPreDelayBufferL.assign(kPreDelayBufferCapacity, 0.0f);
     mPreDelayBufferR.assign(kPreDelayBufferCapacity, 0.0f);
@@ -120,6 +131,10 @@ void Rb26ReverbEngine::reset() noexcept {
     mPitchDelaySmoother.reset(mParams.pitchDelayMs);
     mPitchBlendSmoother.reset(mParams.pitchBlend);
     mPitchBoostSmoother.reset(mParams.pitchBoostDb);
+    mPitchWarpSmoother.reset(mParams.pitchWarp ? 1.0f : 0.0f);
+    mLastFilterWarp = -1.0f;
+    mFlutterPhase1 = 0.0f;
+    mFlutterPhase2 = 0.0f;
 
     mMasterSubMono.reset();
     mLowBandMatrix.reset();
@@ -187,6 +202,7 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
                                 params.dimmerInterval,
                                 params.pitchBlend,
                                 0.0f);
+    mPitchShifter.setWarpMode(params.pitchWarp, params.pitchWarp ? 1.0f : 0.0f);
 
     mInputTrimSmoother.setTarget(dbToGain(params.inputTrimDb));
     mPreDelaySmoother.setTarget(params.preDelayMs);
@@ -198,6 +214,7 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
     mPitchDelaySmoother.setTarget(std::clamp(params.pitchDelayMs, 20.0f, 500.0f));
     mPitchBlendSmoother.setTarget(std::clamp(params.pitchBlend, -1.0f, 1.0f));
     mPitchBoostSmoother.setTarget(std::clamp(params.pitchBoostDb, 0.0f, 18.0f));
+    mPitchWarpSmoother.setTarget(params.pitchWarp ? 1.0f : 0.0f);
 
     if (params.shimmerSend <= 1.0e-4f && params.dimmerSend <= 1.0e-4f) {
         mPitchFeedbackSmoother.snapTo(0.0f);
@@ -263,6 +280,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             mPitchDelaySmoother.snapTo(mPitchDelaySmoother.getTarget());
             mPitchBlendSmoother.snapTo(mPitchBlendSmoother.getTarget());
             mPitchBoostSmoother.snapTo(mPitchBoostSmoother.getTarget());
+            mPitchWarpSmoother.snapTo(mPitchWarpSmoother.getTarget());
 
             // Decimate telemetry
             mTelemetryDecimator += numSamples;
@@ -288,9 +306,24 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mPitchBlendSmoother.snapTo(mPitchBlendSmoother.getTarget());
         mPitchFeedbackSmoother.snapTo(mPitchFeedbackSmoother.getTarget());
         mPitchBoostSmoother.snapTo(mPitchBoostSmoother.getTarget());
+        mPitchWarpSmoother.snapTo(mPitchWarpSmoother.getTarget());
     }
 
     for (int n = 0; n < numSamples; ++n) {
+        const float warpAmount = mPitchWarpSmoother.next();
+
+        // Feedback filter bandwidth dynamically widens with warpAmount:
+        // HPF sweeps from 150 Hz down to 40 Hz, LPF sweeps from 6,000 Hz up to 16,000 Hz.
+        if (((n & 31) == 0 || n == 0) && std::abs(warpAmount - mLastFilterWarp) > 0.002f) {
+            mLastFilterWarp = warpAmount;
+            const float hpfCutoff = (1.0f - warpAmount) * 150.0f + warpAmount * 40.0f;
+            const float lpfCutoff = (1.0f - warpAmount) * 6000.0f + warpAmount * 16000.0f;
+            mPitchFeedbackHpL.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
+            mPitchFeedbackHpR.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
+            mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
+            mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
+        }
+
         const float inTrim = mInputTrimSmoother.next();
         const float xL = inL[n];
         const float xR = inR[n];
@@ -340,8 +373,28 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             const float pBlend = mPitchBlendSmoother.next();
             const float delayMult = 1.0f + 0.35f * std::max(0.0f, -pBlend);
             const float effDelayMs = curPitchDelayMs * delayMult;
-            const float delaySamplesL = std::clamp((effDelayMs * 0.001f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
-            const float delaySamplesR = std::clamp((effDelayMs * 0.001f * 1.07f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
+
+            // Micro-flutter on delayedPitch in WARP mode:
+            // Add subtle tape capstan wow & flutter (+/- 1.5 ms) when warpAmount > 0.01f
+            float flutterMsL = 0.0f;
+            float flutterMsR = 0.0f;
+            if (warpAmount > 0.01f) {
+                mFlutterPhase1 += (kTwoPi * 1.25f) / fs;
+                if (mFlutterPhase1 >= kTwoPi) mFlutterPhase1 -= kTwoPi;
+                mFlutterPhase2 += (kTwoPi * 2.85f) / fs;
+                if (mFlutterPhase2 >= kTwoPi) mFlutterPhase2 -= kTwoPi;
+
+                const float s1 = FastSinTable::sin(mFlutterPhase1);
+                const float s2 = FastSinTable::sin(mFlutterPhase2);
+                const float c1 = FastSinTable::cos(mFlutterPhase1);
+
+                const float sharedFlutter = 1.0f * s1 + 0.5f * s2;
+                flutterMsL = std::clamp(warpAmount * sharedFlutter, -1.5f, 1.5f);
+                flutterMsR = std::clamp(warpAmount * (sharedFlutter + 0.35f * c1), -1.5f, 1.5f);
+            }
+
+            const float delaySamplesL = std::clamp(((effDelayMs + flutterMsL) * 0.001f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
+            const float delaySamplesR = std::clamp(((effDelayMs * 1.07f + flutterMsR) * 0.001f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
 
             const float delayedPitchL = TailModulator::readHermite(mPitchDelayBufferL.data(),
                                                                   kPitchDelayCapacity,
@@ -355,15 +408,31 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
                                                                   delaySamplesR);
 
             const float fb = mPitchFeedbackSmoother.next();
-            const float safePitchFb = fb * 0.30f;
+            // Feedback gain: safePitchFb = fb * 0.30f when calibrated, scaling smoothly up to fb * 1.30f in WARP
+            const float effFbGain = (1.0f - warpAmount) * (fb * 0.30f) + warpAmount * (fb * 1.30f);
+
+            // Feedback loop bandpass filtering with DC blocking HPF
             const float filteredPitchL = mPitchFeedbackLpL.process(mPitchFeedbackHpL.process(delayedPitchL));
             const float filteredPitchR = mPitchFeedbackLpR.process(mPitchFeedbackHpR.process(delayedPitchR));
-            const float injPitchL = filteredPitchL * safePitchFb;
-            const float injPitchR = filteredPitchR * safePitchFb;
+
+            // Scaled feedback audio
+            const float rawFbL = filteredPitchL * effFbGain;
+            const float rawFbR = filteredPitchR * effFbGain;
+
+            // Asymmetrical / soft-knee saturation: feedback audio passes through an internal soft saturator
+            // capping energy at -1 dBFS (<= 1.05) to guarantee strict mathematical boundedness and safety even at 1.30x feedback.
+            // DC blocking: HPF in loop guarantees complete DC suppression.
+            const float asym = 0.08f * warpAmount;
+            const float drivenL = (rawFbL > 0.0f) ? (rawFbL / (1.0f + asym * rawFbL)) : rawFbL;
+            const float drivenR = (rawFbR > 0.0f) ? (rawFbR / (1.0f + asym * rawFbR)) : rawFbR;
+            const float injPitchL = applySmoothBoundaryKnee(drivenL, 0.72f, 1.05f);
+            const float injPitchR = applySmoothBoundaryKnee(drivenR, 0.72f, 1.05f);
 
             mFdnTank.processSample(highInL, highInR, injPitchL, injPitchR, lateL, lateR);
 
             // Feed late reverberation into PitchShifter to calculate next shifted sample
+            // Propagate dynamic warp amount into PitchShifter
+            mPitchShifter.setWarpMode(warpAmount > 0.001f, warpAmount);
             float shiftedL = 0.0f, shiftedR = 0.0f;
             mPitchShifter.processSample(lateL, lateR, shiftedL, shiftedR);
 
@@ -879,6 +948,197 @@ std::vector<PresetDefinition> Rb26ReverbEngine::getFactoryPresets() {
         p.params.dryWetMix = 0.35f;
         p.params.limiterEnable = true;
         p.params.manifold = ManifoldType::PoincareHyperbolic;
+        p.params.pitchWarp = false;
+        presets.push_back(p);
+    }
+
+    // 11. WARP_CELESTIAL_OVERDRIVE
+    {
+        PresetDefinition p;
+        p.id = "WARP_CELESTIAL_OVERDRIVE";
+        p.name = "WARP CELESTIAL OVERDRIVE";
+        p.category = "Warp / Unbounded";
+        p.description = "Unbounded feedback shimmer cascading beyond unity gain into warm saturated tape harmonic overdrive.";
+        p.params.preDelayMs = 28.0f;
+        p.params.diffusionDensity = 0.85f;
+        p.params.outputTrimDb = -2.0f;
+        p.params.lowCrossoverHz = 160.0f;
+        p.params.bassRt60Mult = 0.90f;
+        p.params.punchDucking = 0.60f;
+        p.params.subMonoHz = 120.0f;
+        p.params.decayRt60Sec = 16.0f;
+        p.params.roomSize = 1.80f;
+        p.params.highDampingHz = 12000.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.85f;
+        p.params.dimmerSend = 0.20f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = 0.75f;
+        p.params.pitchFeedback = 0.85f;
+        p.params.pitchDelayMs = 180.0f;
+        p.params.pitchBoostDb = 4.5f;
+        p.params.pitchWarp = true;
+        p.params.tailModRateHz = 0.45f;
+        p.params.tailModDepthMs = 3.20f;
+        p.params.tailBloomMs = 120.0f;
+        p.params.stereoWidth = 1.45f;
+        p.params.earlyLateMix = 0.70f;
+        p.params.dryWetMix = 0.55f;
+        p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::PoincareHyperbolic;
+        presets.push_back(p);
+    }
+
+    // 12. HAUNTED_TAPE_BEATING
+    {
+        PresetDefinition p;
+        p.id = "HAUNTED_TAPE_BEATING";
+        p.name = "HAUNTED TAPE BEATING";
+        p.category = "Warp / Unbounded";
+        p.description = "Deep micro-fluttered pitch echoes with rich tape wow beating and dense analog chorusing.";
+        p.params.preDelayMs = 45.0f;
+        p.params.diffusionDensity = 0.78f;
+        p.params.outputTrimDb = -1.5f;
+        p.params.lowCrossoverHz = 200.0f;
+        p.params.bassRt60Mult = 1.10f;
+        p.params.punchDucking = 0.50f;
+        p.params.subMonoHz = 140.0f;
+        p.params.decayRt60Sec = 12.0f;
+        p.params.roomSize = 1.40f;
+        p.params.highDampingHz = 7500.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.65f;
+        p.params.dimmerSend = 0.55f;
+        p.params.shimmerInterval = 7;
+        p.params.dimmerInterval = -7;
+        p.params.pitchBlend = 0.10f;
+        p.params.pitchFeedback = 0.75f;
+        p.params.pitchDelayMs = 240.0f;
+        p.params.pitchBoostDb = 3.0f;
+        p.params.pitchWarp = true;
+        p.params.tailModRateHz = 1.20f;
+        p.params.tailModDepthMs = 4.0f;
+        p.params.tailBloomMs = 150.0f;
+        p.params.stereoWidth = 1.60f;
+        p.params.earlyLateMix = 0.65f;
+        p.params.dryWetMix = 0.50f;
+        p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::WhisperingGallery;
+        presets.push_back(p);
+    }
+
+    // 13. SUB_TRITONE_ABYSS
+    {
+        PresetDefinition p;
+        p.id = "SUB_TRITONE_ABYSS";
+        p.name = "SUB TRITONE ABYSS";
+        p.category = "Warp / Unbounded";
+        p.description = "Ominous descending sub-octave dimmer feedback opening into dark subterranean resonating chasms.";
+        p.params.preDelayMs = 30.0f;
+        p.params.diffusionDensity = 0.82f;
+        p.params.outputTrimDb = -2.5f;
+        p.params.lowCrossoverHz = 220.0f;
+        p.params.bassRt60Mult = 1.40f;
+        p.params.punchDucking = 0.70f;
+        p.params.subMonoHz = 160.0f;
+        p.params.decayRt60Sec = 18.0f;
+        p.params.roomSize = 2.20f;
+        p.params.highDampingHz = 5500.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.15f;
+        p.params.dimmerSend = 0.90f;
+        p.params.shimmerInterval = 7;
+        p.params.dimmerInterval = -12;
+        p.params.pitchBlend = -0.85f;
+        p.params.pitchFeedback = 0.80f;
+        p.params.pitchDelayMs = 320.0f;
+        p.params.pitchBoostDb = 6.0f;
+        p.params.pitchWarp = true;
+        p.params.tailModRateHz = 0.35f;
+        p.params.tailModDepthMs = 2.80f;
+        p.params.tailBloomMs = 200.0f;
+        p.params.stereoWidth = 1.30f;
+        p.params.earlyLateMix = 0.75f;
+        p.params.dryWetMix = 0.60f;
+        p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::PoincareHyperbolic;
+        presets.push_back(p);
+    }
+
+    // 14. METALLIC_COMB_DISINTEGRATION
+    {
+        PresetDefinition p;
+        p.id = "METALLIC_COMB_DISINTEGRATION";
+        p.name = "METALLIC COMB DISINTEGRATION";
+        p.category = "Warp / Unbounded";
+        p.description = "Short-grain metallic dispersion with aggressive feedback saturation and disintegrating comb reflections.";
+        p.params.preDelayMs = 12.0f;
+        p.params.diffusionDensity = 0.92f;
+        p.params.outputTrimDb = -3.0f;
+        p.params.lowCrossoverHz = 150.0f;
+        p.params.bassRt60Mult = 0.75f;
+        p.params.punchDucking = 0.55f;
+        p.params.subMonoHz = 110.0f;
+        p.params.decayRt60Sec = 8.5f;
+        p.params.roomSize = 0.65f;
+        p.params.highDampingHz = 15000.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.80f;
+        p.params.dimmerSend = 0.40f;
+        p.params.shimmerInterval = 24;
+        p.params.dimmerInterval = -2;
+        p.params.pitchBlend = 0.60f;
+        p.params.pitchFeedback = 0.90f;
+        p.params.pitchDelayMs = 65.0f;
+        p.params.pitchBoostDb = 8.0f;
+        p.params.pitchWarp = true;
+        p.params.tailModRateHz = 2.40f;
+        p.params.tailModDepthMs = 4.50f;
+        p.params.tailBloomMs = 50.0f;
+        p.params.stereoWidth = 1.70f;
+        p.params.earlyLateMix = 0.80f;
+        p.params.dryWetMix = 0.65f;
+        p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::AnharmonicPlate;
+        presets.push_back(p);
+    }
+
+    // 15. INFINITE_WARP_SINGULARITY
+    {
+        PresetDefinition p;
+        p.id = "INFINITE_WARP_SINGULARITY";
+        p.name = "INFINITE WARP SINGULARITY";
+        p.category = "Warp / Unbounded";
+        p.description = "Supercritical infinite self-oscillating shimmer sphere contained by C1 Hermite boundary saturation.";
+        p.params.preDelayMs = 60.0f;
+        p.params.diffusionDensity = 0.95f;
+        p.params.outputTrimDb = -3.5f;
+        p.params.lowCrossoverHz = 170.0f;
+        p.params.bassRt60Mult = 1.0f;
+        p.params.punchDucking = 0.65f;
+        p.params.subMonoHz = 130.0f;
+        p.params.decayRt60Sec = 25.0f;
+        p.params.roomSize = 2.50f;
+        p.params.highDampingHz = 16000.0f;
+        p.params.freezeHold = false;
+        p.params.shimmerSend = 0.95f;
+        p.params.dimmerSend = 0.70f;
+        p.params.shimmerInterval = 12;
+        p.params.dimmerInterval = -7;
+        p.params.pitchBlend = 0.40f;
+        p.params.pitchFeedback = 0.95f;
+        p.params.pitchDelayMs = 280.0f;
+        p.params.pitchBoostDb = 10.0f;
+        p.params.pitchWarp = true;
+        p.params.tailModRateHz = 0.80f;
+        p.params.tailModDepthMs = 3.50f;
+        p.params.tailBloomMs = 180.0f;
+        p.params.stereoWidth = 1.80f;
+        p.params.earlyLateMix = 0.85f;
+        p.params.dryWetMix = 0.70f;
+        p.params.limiterEnable = true;
+        p.params.manifold = ManifoldType::StockhausenKlangdom;
         presets.push_back(p);
     }
 

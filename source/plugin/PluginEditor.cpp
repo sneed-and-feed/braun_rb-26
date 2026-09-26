@@ -241,6 +241,7 @@ const paramsMeta = [
   { id: 'pitch_feedback', webId: 'pitchFeedback', label: 'Pitch FB', deck: 'Pitch Diffusion', min: 0, max: 0.95, def: 0.50, unit: '%' },
   { id: 'pitch_delay_ms', webId: 'pitchDelayMs', label: 'Pitch Delay', deck: 'Pitch Diffusion', min: 20, max: 500, def: 150, unit: 'ms' },
   { id: 'pitch_boost', webId: 'pitchBoost', label: 'Pitch Boost', deck: 'Pitch Diffusion', min: 0, max: 18, def: 0, unit: 'dB' },
+  { id: 'pitch_warp', webId: 'pitchWarp', label: 'Warp Mode', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
   { id: 'tail_mod_rate_hz', webId: 'tailModRateHz', label: 'Mod Rate', deck: 'Tail Bloom & Mod', min: 0.05, max: 5.0, def: 0.85, unit: 'Hz' },
   { id: 'tail_mod_depth_ms', webId: 'tailModDepthMs', label: 'Mod Depth', deck: 'Tail Bloom & Mod', min: 0, max: 5.0, def: 1.2, unit: 'ms' },
@@ -1754,8 +1755,13 @@ void BRAUN_RB26AudioProcessorEditor::layoutNativeControls()
         auto cell = getCellBounds(1, 0);
         cell.removeFromTop(22);
         
-        // Combos row at bottom
+        // Combos row and warp button at bottom
         auto comboRow = cell.removeFromBottom(42);
+        auto btnArea = comboRow.removeFromRight(comboRow.getWidth() / 3).reduced(2, 2);
+        if (auto* btn = findButton(rb26::ParamIDs::pitchWarp))
+        {
+            btn->button.setBounds(btnArea);
+        }
         layoutCombo(findCombo(rb26::ParamIDs::shimmerInterval), comboRow.removeFromLeft(comboRow.getWidth() / 2).reduced(2));
         layoutCombo(findCombo(rb26::ParamIDs::dimmerInterval), comboRow.reduced(2));
 

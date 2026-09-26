@@ -103,6 +103,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.ok(html.includes('id="scope-canvas"'), 'Canvas #scope-canvas must exist');
       assert.ok(html.includes('id="btn-decay-hold"'), 'Freeze hold button must exist');
       assert.ok(html.includes('id="btn-soft-limiter"'), 'Soft limiter button must exist');
+      assert.ok(html.includes('id="btn-pitch-warp"'), 'WARP button must exist in Deck 04');
       assert.ok(html.includes('id="select-preset"'), 'Preset selector must exist');
       assert.ok(html.includes('id="select-theme"'), 'Theme selector must exist');
       assert.ok(html.includes('id="btn-power"'), 'Power button must exist');
@@ -154,12 +155,12 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
 
   //----------------------------------------------------------------------------
   describe('4. Factory Presets and Sound Engine Integrity', () => {
-    it('verifies factory presets contain all 10 curated studio sound patches', () => {
+    it('verifies factory presets contain all curated studio sound patches and unbounded warp presets', () => {
       const presetsPath = path.join(__dirname, 'presets', 'factory_presets.json');
       const json = JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
 
       assert.strictEqual(json.device, 'BRAUN_RB26');
-      assert.strictEqual(json.presets.length, 10, 'Must contain exactly 10 curated studio presets');
+      assert.strictEqual(json.presets.length, 15, 'Must contain 15 curated studio presets including 5 Unbounded Warp patches');
 
       const ids = json.presets.map((p) => p.id);
       assert.ok(ids.includes('DEFAULT'), 'Must include DEFAULT');
@@ -172,6 +173,11 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       assert.ok(ids.includes('BLOOM_SHIMMER_VOID'), 'Must include BLOOM_SHIMMER_VOID');
       assert.ok(ids.includes('INFINITE_ETHEREAL_FREEZE'), 'Must include INFINITE_ETHEREAL_FREEZE');
       assert.ok(ids.includes('SUB_BASS_PRESERVER') || ids.includes('SUB-BASS_PRESERVER'), 'Must include SUB_BASS_PRESERVER');
+      assert.ok(ids.includes('WARP_CELESTIAL_OVERDRIVE'), 'Must include WARP_CELESTIAL_OVERDRIVE');
+      assert.ok(ids.includes('HAUNTED_TAPE_BEATING'), 'Must include HAUNTED_TAPE_BEATING');
+      assert.ok(ids.includes('SUB_TRITONE_ABYSS'), 'Must include SUB_TRITONE_ABYSS');
+      assert.ok(ids.includes('METALLIC_COMB_DISINTEGRATION'), 'Must include METALLIC_COMB_DISINTEGRATION');
+      assert.ok(ids.includes('INFINITE_WARP_SINGULARITY'), 'Must include INFINITE_WARP_SINGULARITY');
 
       for (const preset of json.presets) {
         assert.ok(typeof preset.params.rt60_decay === 'number');
@@ -287,6 +293,27 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
           assert.ok(Math.abs(diffG - 1.0) < 1e-6, 'Diffusion 1.0 must be 100% diffuse send');
         }
       }
+    });
+
+    it('verifies WARP / Unbounded Shimmer mode DSP parameters, feedback scaling, filters, Hermite feedback saturation, and tape flutter', async () => {
+      const { Rb26WebEngine } = await import('./js/audio/rb26_web_engine.js');
+      const engine = new Rb26WebEngine();
+
+      assert.strictEqual(engine.params.pitchWarp, false, 'pitchWarp must default to false');
+      assert.strictEqual(engine.params.pitchDelayMs, 150.0, 'pitchDelayMs must default to 150 ms');
+
+      // Test calibrated mode (warp off)
+      engine.setParam('pitchFeedback', 0.50);
+      assert.strictEqual(engine.params.pitchFeedback, 0.50);
+      assert.strictEqual(engine.params.pitchWarp, false);
+
+      // Test WARP mode activation
+      engine.setParam('pitchWarp', true);
+      assert.strictEqual(engine.params.pitchWarp, true);
+
+      // Test WARP mode deactivation
+      engine.setParam('pitchWarp', false);
+      assert.strictEqual(engine.params.pitchWarp, false);
     });
   });
 

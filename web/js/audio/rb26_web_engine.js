@@ -265,7 +265,9 @@ export class Rb26WebEngine {
       dimmerInterval: -12,
       pitchBlend: 0.0,
       pitchFeedback: 0.45,
+      pitchDelayMs: 150.0,
       pitchBoost: 0.0,
+      pitchWarp: false,
       tailModRateHz: 0.65,
       tailModDepthMs: 1.2,
       tailBloomMs: 85.0,
@@ -297,6 +299,13 @@ export class Rb26WebEngine {
     this.diffuserWetGain = null;
     this.erDiffDryGain = null;
     this.erDiffWetGain = null;
+
+    // Pitch Delay & WARP Flutter / Saturation Node References
+    this.pitchDelayNode = null;
+    this.pitchFlutterLfo1 = null;
+    this.pitchFlutterLfo2 = null;
+    this.pitchFlutterGain = null;
+    this.pitchFeedbackSaturator = null;
   }
 
   async init() {
@@ -688,27 +697,66 @@ export class Rb26WebEngine {
     this.pitchBlendGainShim.connect(this.pitchReturnBus);
     this.pitchBlendGainDim.connect(this.pitchReturnBus);
 
+    // Decoupled Pitch Delay Node
+    this.pitchDelayNode = ctx.createDelay(1.0);
+    const initialPitchDelaySec = (this.params.pitchDelayMs || 150.0) * 0.001;
+    this.pitchDelayNode.delayTime.setValueAtTime(initialPitchDelaySec, ctx.currentTime);
+
+    // Tape Flutter LFOs on Pitch Delay Time (active when pitchWarp is enabled)
+    // Primary capstan flutter (6.1 Hz) + secondary drift/wow (3.7 Hz)
+    this.pitchFlutterLfo1 = ctx.createOscillator();
+    this.pitchFlutterLfo1.type = 'sine';
+    this.pitchFlutterLfo1.frequency.setValueAtTime(6.1, ctx.currentTime);
+
+    this.pitchFlutterLfo2 = ctx.createOscillator();
+    this.pitchFlutterLfo2.type = 'sine';
+    this.pitchFlutterLfo2.frequency.setValueAtTime(3.7, ctx.currentTime);
+
+    this.pitchFlutterGain = ctx.createGain();
+    const initialFlutterSec = this.params.pitchWarp ? 0.0025 : 0.0;
+    this.pitchFlutterGain.gain.setValueAtTime(initialFlutterSec, ctx.currentTime);
+
+    this.pitchFlutterLfo1.connect(this.pitchFlutterGain);
+    this.pitchFlutterLfo2.connect(this.pitchFlutterGain);
+    this.pitchFlutterGain.connect(this.pitchDelayNode.delayTime);
+
+    this.pitchFlutterLfo1.start();
+    this.pitchFlutterLfo2.start();
+
+    // Pitch Return Bus feeds Decoupled Pitch Delay
+    this.pitchReturnBus.connect(this.pitchDelayNode);
+
     // Secondary Loop Isolation & Damping:
     // Filter pitch feedback return before injecting into FDN input bus
-    // Includes steep high-cut damping (6 kHz) and DC block (150 Hz) with strictly contractive scaling
+    // Calibrated mode: 150 Hz HPF / 6000 Hz LPF, 0.30x feedback gain
+    // WARP mode: 40 Hz HPF / 16000 Hz LPF, up to 1.30x feedback gain
     this.pitchFeedbackHp = ctx.createBiquadFilter();
     this.pitchFeedbackHp.type = 'highpass';
-    this.pitchFeedbackHp.frequency.setValueAtTime(150, ctx.currentTime);
+    const initHp = this.params.pitchWarp ? 40 : 150;
+    this.pitchFeedbackHp.frequency.setValueAtTime(initHp, ctx.currentTime);
     this.pitchFeedbackHp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.pitchFeedbackLp = ctx.createBiquadFilter();
     this.pitchFeedbackLp.type = 'lowpass';
-    this.pitchFeedbackLp.frequency.setValueAtTime(6000, ctx.currentTime);
+    const initLp = this.params.pitchWarp ? 16000 : 6000;
+    this.pitchFeedbackLp.frequency.setValueAtTime(initLp, ctx.currentTime);
     this.pitchFeedbackLp.Q.setValueAtTime(BUTTERWORTH_Q, ctx.currentTime);
 
     this.pitchFeedbackGain = ctx.createGain();
-    const safePitchFb = this.params.pitchFeedback * 0.30;
+    const fbScale = this.params.pitchWarp ? 1.30 : 0.30;
+    const safePitchFb = this.params.pitchFeedback * fbScale;
     this.pitchFeedbackGain.gain.setValueAtTime(safePitchFb, ctx.currentTime);
 
-    this.pitchReturnBus.connect(this.pitchFeedbackHp);
+    // Soft-Knee Hermite / Cubic Saturation in Feedback Path
+    this.pitchFeedbackSaturator = ctx.createWaveShaper();
+    this.pitchFeedbackSaturator.curve = this._generateHermiteCurve();
+    this.pitchFeedbackSaturator.oversample = '2x';
+
+    this.pitchDelayNode.connect(this.pitchFeedbackHp);
     this.pitchFeedbackHp.connect(this.pitchFeedbackLp);
     this.pitchFeedbackLp.connect(this.pitchFeedbackGain);
-    this.pitchFeedbackGain.connect(this.fdnInputBus);
+    this.pitchFeedbackGain.connect(this.pitchFeedbackSaturator);
+    this.pitchFeedbackSaturator.connect(this.fdnInputBus);
 
     // --- Master Bus & Summing ---
     this.earlyMixGain = ctx.createGain();
@@ -1149,9 +1197,20 @@ export class Rb26WebEngine {
       this._updateFdnDecayGains();
       this._updateModalDecayGains();
       if (this.pitchFeedbackGain) {
-        const pFb = this.params.pitchFeedback * 0.30;
+        const fbScale = this.params.pitchWarp ? 1.30 : 0.30;
+        const pFb = this.params.pitchFeedback * fbScale;
         this.pitchFeedbackGain.gain.value = pFb;
         try { this.pitchFeedbackGain.gain.setValueAtTime(pFb, now); } catch (_) {}
+      }
+      if (this.pitchDelayNode) {
+        const delaySec = (this.params.pitchDelayMs || 150.0) * 0.001;
+        this.pitchDelayNode.delayTime.value = delaySec;
+        try { this.pitchDelayNode.delayTime.setValueAtTime(delaySec, now); } catch (_) {}
+      }
+      if (this.pitchFlutterGain) {
+        const flutterSec = this.params.pitchWarp ? 0.0025 : 0.0;
+        this.pitchFlutterGain.gain.value = flutterSec;
+        try { this.pitchFlutterGain.gain.setValueAtTime(flutterSec, now); } catch (_) {}
       }
       if (this.pitchBoostGain) {
         const boostLinear = Math.pow(10, (this.params.pitchBoost || 0.0) / 20);
@@ -1381,10 +1440,45 @@ export class Rb26WebEngine {
         this._updatePitchBlendGains();
         break;
       case 'pitchFeedback':
+        this.params.pitchFeedback = value;
         if (this.pitchFeedbackGain) {
-          this.pitchFeedbackGain.gain.setTargetAtTime(value * 0.30, now, 0.02);
+          const fbScale = this.params.pitchWarp ? 1.30 : 0.30;
+          this.pitchFeedbackGain.gain.setTargetAtTime(value * fbScale, now, 0.02);
         }
         break;
+      case 'pitchDelayMs':
+      case 'pitchDelay':
+      case 'pitch_delay_ms':
+      case 'pitch_delay':
+        this.params.pitchDelayMs = value;
+        if (this.pitchDelayNode) {
+          this.pitchDelayNode.delayTime.setTargetAtTime(value * 0.001, now, 0.04);
+        }
+        break;
+      case 'pitchWarp':
+      case 'pitch_warp': {
+        const isWarp = Boolean(value);
+        this.params.pitchWarp = isWarp;
+        const fbScale = isWarp ? 1.30 : 0.30;
+        const targetHp = isWarp ? 40 : 150;
+        const targetLp = isWarp ? 16000 : 6000;
+        const targetFlutter = isWarp ? 0.0025 : 0.0;
+
+        // Smooth ~50 ms transition slew
+        if (this.pitchFeedbackGain) {
+          this.pitchFeedbackGain.gain.setTargetAtTime(this.params.pitchFeedback * fbScale, now, 0.05);
+        }
+        if (this.pitchFeedbackHp) {
+          this.pitchFeedbackHp.frequency.setTargetAtTime(targetHp, now, 0.05);
+        }
+        if (this.pitchFeedbackLp) {
+          this.pitchFeedbackLp.frequency.setTargetAtTime(targetLp, now, 0.05);
+        }
+        if (this.pitchFlutterGain) {
+          this.pitchFlutterGain.gain.setTargetAtTime(targetFlutter, now, 0.05);
+        }
+        break;
+      }
       case 'pitchBoost':
         if (this.pitchBoostGain) {
           const gainLin = Math.pow(10, value / 20);

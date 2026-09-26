@@ -33,14 +33,21 @@ public:
         return (mSampleRate >= 88200.0f);
     }
 
+    void setWarpMode(bool enabled, float warpAmount = 1.0f) noexcept;
+    void setWarpModulation(float modulation) noexcept;
+    [[nodiscard]] bool isWarpMode() const noexcept { return mWarpEnabled; }
+    [[nodiscard]] float getWarpAmount() const noexcept { return mWarpAmount; }
+
     [[nodiscard]] float processSample(float input) noexcept;
 
 private:
     [[nodiscard]] inline float readHermite(float readPos) const noexcept;
     [[nodiscard]] inline float readLinear(float readPos) const noexcept;
+    void updateWindowTarget() noexcept;
 
     PitchQualityMode mQualityMode { PitchQualityMode::Auto };
     float mSampleRate { 48000.0f };
+    float mBaseWindowSec { 0.050f };
     float mWindowSec { 0.050f };       // 50 ms default window
     float mWindowSamples { 2400.0f };
     float mTargetWindowSamples { 2400.0f };
@@ -48,6 +55,10 @@ private:
     float mRatio { 2.0f };             // 2^(semitones / 12)
     float mPhaseInc { 0.0f };
     float mPhase { 0.0f };             // Phase accumulator in [0, 1)
+
+    bool mWarpEnabled { false };
+    float mWarpAmount { 0.0f };
+    float mWarpModulation { 0.0f };
 
     std::vector<float> mDelayBuffer;   // Pre-allocated for 192 kHz (65536 samples)
     int mWriteIndex { 0 };
@@ -127,6 +138,11 @@ public:
                        int dimmerInterval,
                        float pitchBlend,
                        float pitchFeedback) noexcept;
+
+    // Warp mode configuration
+    void setWarpMode(bool enabled, float warpAmount = 1.0f) noexcept;
+    [[nodiscard]] bool isWarpMode() const noexcept { return mWarpEnabled; }
+    [[nodiscard]] float getWarpAmount() const noexcept { return mWarpAmount; }
 
     // Continuous Shepard-Risset pitch spiral & Partch lattice configuration
     void setSpiralParameters(int spiralMode,
@@ -228,6 +244,10 @@ private:
     OnePoleSmoother mPitchFeedbackSmoother;
     OnePoleSmoother mSpiralDepthSmoother;
     OnePoleSmoother mSpiralRateSmoother;
+    OnePoleSmoother mWarpSmoother;
+
+    bool mWarpEnabled { false };
+    float mWarpAmount { 0.0f };
 
     int mSpiralMode { 1 };         // 0: BarberDimmer, 1: BarberShimmer, 2: PartchLattice
     float mSpiralRateHz { 0.10f }; // 0.01 - 2.0 Hz

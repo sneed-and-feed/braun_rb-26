@@ -44,7 +44,7 @@ double BRAUN_RB26AudioProcessor::getTailLengthSeconds() const
 
 int BRAUN_RB26AudioProcessor::getNumPrograms()
 {
-    return 10;
+    return static_cast<int>(rb26::Rb26ReverbEngine::getFactoryPresets().size());
 }
 
 int BRAUN_RB26AudioProcessor::getCurrentProgram()
@@ -95,6 +95,7 @@ void BRAUN_RB26AudioProcessor::setPresetParameters(const rb26::Rb26Parameters& p
     setParamBool(rb26::ParamIDs::limiterEnable, p.limiterEnable);
     setParamFloat(rb26::ParamIDs::pitchBoost, p.pitchBoostDb);
     setParamChoice(rb26::ParamIDs::manifoldType, static_cast<float>(rb26::indexFromManifoldType(p.manifold)));
+    setParamBool(rb26::ParamIDs::pitchWarp, p.pitchWarp);
 }
 
 void BRAUN_RB26AudioProcessor::setCurrentProgram(int index)

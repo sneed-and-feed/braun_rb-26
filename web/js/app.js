@@ -107,6 +107,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 0,
       shimmer_send: 40, dimmer_send: 35, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 0, pitch_regen: 45, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
       stereo_width: 100, early_late_mix: 50, dry_wet_mix: 40, output_trim: 0.0,
       soft_limiter: true
@@ -121,6 +122,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 1,
       shimmer_send: 48, dimmer_send: 5, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 100, pitch_regen: 42, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.40, tail_mod_depth: 28, tail_bloom: 110,
       stereo_width: 140, early_late_mix: 70, dry_wet_mix: 55, output_trim: 0.0,
       soft_limiter: true
@@ -135,6 +137,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 2,
       shimmer_send: 45, dimmer_send: 25, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 40, pitch_regen: 50, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.65, tail_mod_depth: 40, tail_bloom: 85,
       stereo_width: 120, early_late_mix: 55, dry_wet_mix: 45, output_trim: 0.0,
       soft_limiter: true
@@ -149,6 +152,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 0,
       shimmer_send: 15, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.45, tail_mod_depth: 25, tail_bloom: 70,
       stereo_width: 110, early_late_mix: 45, dry_wet_mix: 38, output_trim: 0.0,
       soft_limiter: true
@@ -163,6 +167,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 2,
       shimmer_send: 20, dimmer_send: 5, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 100, pitch_regen: 20, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.80, tail_mod_depth: 20, tail_bloom: 45,
       stereo_width: 130, early_late_mix: 40, dry_wet_mix: 35, output_trim: 0.0,
       soft_limiter: true
@@ -177,6 +182,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 3,
       shimmer_send: 65, dimmer_send: 10, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 75, pitch_regen: 55, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.50, tail_mod_depth: 45, tail_bloom: 140,
       stereo_width: 160, early_late_mix: 80, dry_wet_mix: 65, output_trim: -2.0,
       soft_limiter: true
@@ -191,6 +197,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 3,
       shimmer_send: 55, dimmer_send: 40, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 25, pitch_regen: 45, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.70, tail_mod_depth: 45, tail_bloom: 90,
       stereo_width: 140, early_late_mix: 60, dry_wet_mix: 50, output_trim: 0.0,
       soft_limiter: true
@@ -205,6 +212,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 1,
       shimmer_send: 60, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 80, pitch_regen: 50, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.55, tail_mod_depth: 50, tail_bloom: 160,
       stereo_width: 150, early_late_mix: 75, dry_wet_mix: 60, output_trim: -1.0,
       soft_limiter: true
@@ -219,6 +227,7 @@ export const FACTORY_PRESETS = {
       manifold_type: 0,
       shimmer_send: 45, dimmer_send: 30, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 20, pitch_regen: 25, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.65, tail_mod_depth: 45, tail_bloom: 85,
       stereo_width: 130, early_late_mix: 70, dry_wet_mix: 55, output_trim: -1.0,
       soft_limiter: true
@@ -233,8 +242,84 @@ export const FACTORY_PRESETS = {
       manifold_type: 0,
       shimmer_send: 25, dimmer_send: 15, shimmer_interval: 12, dimmer_interval: -12,
       shimmer_dimmer_blend: 10, pitch_regen: 35, pitch_delay: 150, pitch_boost: 0.0,
+      pitch_warp: false,
       tail_mod_rate: 0.40, tail_mod_depth: 30, tail_bloom: 60,
       stereo_width: 100, early_late_mix: 45, dry_wet_mix: 35, output_trim: 0.0,
+      soft_limiter: true
+    }
+  },
+  WARP_CELESTIAL_OVERDRIVE: {
+    name: 'WARP CELESTIAL OVERDRIVE',
+    params: {
+      predelay: 32.0, diffusion: 90, input_trim: -2.0,
+      low_crossover: 160, damping_low: 0.9, low_punch: 45, mono_bass: 120,
+      rt60_decay: 12.0, room_size: 140, damping_high: 14000, decay_hold: false,
+      manifold_type: 3,
+      shimmer_send: 70, dimmer_send: 20, shimmer_interval: 12, dimmer_interval: -12,
+      shimmer_dimmer_blend: 80, pitch_regen: 85, pitch_delay: 95, pitch_boost: 6.0,
+      pitch_warp: true,
+      tail_mod_rate: 0.85, tail_mod_depth: 40, tail_bloom: 120,
+      stereo_width: 150, early_late_mix: 75, dry_wet_mix: 55, output_trim: -2.0,
+      soft_limiter: true
+    }
+  },
+  HAUNTED_TAPE_BEATING: {
+    name: 'HAUNTED TAPE BEATING',
+    params: {
+      predelay: 55.0, diffusion: 75, input_trim: 0.0,
+      low_crossover: 200, damping_low: 1.2, low_punch: 60, mono_bass: 130,
+      rt60_decay: 8.0, room_size: 110, damping_high: 4500, decay_hold: false,
+      manifold_type: 2,
+      shimmer_send: 35, dimmer_send: 45, shimmer_interval: 7, dimmer_interval: -7,
+      shimmer_dimmer_blend: -15, pitch_regen: 78, pitch_delay: 240, pitch_boost: 2.5,
+      pitch_warp: true,
+      tail_mod_rate: 1.45, tail_mod_depth: 65, tail_bloom: 95,
+      stereo_width: 135, early_late_mix: 60, dry_wet_mix: 50, output_trim: -1.0,
+      soft_limiter: true
+    }
+  },
+  SUB_TRITONE_ABYSS: {
+    name: 'SUB TRITONE ABYSS',
+    params: {
+      predelay: 40.0, diffusion: 82, input_trim: 0.0,
+      low_crossover: 250, damping_low: 1.5, low_punch: 75, mono_bass: 90,
+      rt60_decay: 15.0, room_size: 160, damping_high: 3800, decay_hold: false,
+      manifold_type: 0,
+      shimmer_send: 15, dimmer_send: 75, shimmer_interval: 12, dimmer_interval: -24,
+      shimmer_dimmer_blend: -85, pitch_regen: 82, pitch_delay: 180, pitch_boost: 3.0,
+      pitch_warp: true,
+      tail_mod_rate: 0.35, tail_mod_depth: 50, tail_bloom: 150,
+      stereo_width: 120, early_late_mix: 65, dry_wet_mix: 60, output_trim: -1.5,
+      soft_limiter: true
+    }
+  },
+  METALLIC_COMB_DISINTEGRATION: {
+    name: 'METALLIC COMB DISINTEGRATION',
+    params: {
+      predelay: 12.0, diffusion: 98, input_trim: -1.0,
+      low_crossover: 150, damping_low: 0.7, low_punch: 55, mono_bass: 140,
+      rt60_decay: 6.0, room_size: 75, damping_high: 16000, decay_hold: false,
+      manifold_type: 1,
+      shimmer_send: 60, dimmer_send: 40, shimmer_interval: 24, dimmer_interval: -2,
+      shimmer_dimmer_blend: 30, pitch_regen: 90, pitch_delay: 28, pitch_boost: 4.0,
+      pitch_warp: true,
+      tail_mod_rate: 2.10, tail_mod_depth: 35, tail_bloom: 40,
+      stereo_width: 170, early_late_mix: 80, dry_wet_mix: 48, output_trim: -2.5,
+      soft_limiter: true
+    }
+  },
+  INFINITE_WARP_SINGULARITY: {
+    name: 'INFINITE WARP SINGULARITY',
+    params: {
+      predelay: 60.0, diffusion: 95, input_trim: 0.0,
+      low_crossover: 170, damping_low: 1.0, low_punch: 65, mono_bass: 130,
+      rt60_decay: 25.0, room_size: 250, damping_high: 16000, decay_hold: false,
+      manifold_type: 3,
+      shimmer_send: 95, dimmer_send: 70, shimmer_interval: 12, dimmer_interval: -7,
+      shimmer_dimmer_blend: 40, pitch_regen: 95, pitch_delay: 280, pitch_boost: 10.0,
+      pitch_warp: true,
+      tail_mod_rate: 0.80, tail_mod_depth: 70, tail_bloom: 180,
+      stereo_width: 180, early_late_mix: 85, dry_wet_mix: 70, output_trim: -3.5,
       soft_limiter: true
     }
   }
@@ -462,6 +547,11 @@ export class ReverbComparisonBuffer {
       if (holdBtn) snap.decay_hold = holdBtn.classList.contains('is-active');
       const limBtn = document.getElementById('btn-soft-limiter');
       if (limBtn) snap.soft_limiter = limBtn.classList.contains('is-active');
+      const warpBtn = document.getElementById('btn-pitch-warp');
+      if (warpBtn) snap.pitch_warp = warpBtn.classList.contains('is-active');
+      else if (this.app.engine && this.app.engine.params.pitchWarp !== undefined) {
+        snap.pitch_warp = Boolean(this.app.engine.params.pitchWarp);
+      }
       const activeShim = document.querySelector('.shim-interval-btn.is-active');
       if (activeShim) {
         snap.shimmer_interval = parseInt(activeShim.getAttribute('data-interval') || activeShim.dataset?.interval, 10);
@@ -536,6 +626,16 @@ export class ReverbComparisonBuffer {
           if (led) led.classList.toggle('is-active', snapshot.soft_limiter);
           if (this.app.engine) this.app.engine.setParam('limiterEnable', snapshot.soft_limiter);
         }
+      }
+      if (snapshot.pitch_warp !== undefined || snapshot.pitchWarp !== undefined) {
+        const isWarp = Boolean(snapshot.pitch_warp ?? snapshot.pitchWarp);
+        const warpBtn = document.getElementById('btn-pitch-warp');
+        if (warpBtn) {
+          warpBtn.classList.toggle('is-active', isWarp);
+          const led = warpBtn.querySelector('.braun-led');
+          if (led) led.classList.toggle('is-active', isWarp);
+        }
+        if (this.app.engine) this.app.engine.setParam('pitchWarp', isWarp);
       }
       if (snapshot.shimmer_interval !== undefined) {
         if (this.app.engine) this.app.engine.setParam('shimmerInterval', snapshot.shimmer_interval);
@@ -895,6 +995,18 @@ export class BraunRb26App {
               if (led) led.classList.toggle('is-active', isLim);
             }
             if (this.engine) this.engine.setParam('limiterEnable', isLim);
+            return;
+          }
+
+          if (data.id === 'pitch_warp' || data.id === 'pitchWarp' || data.apvtsId === 'pitch_warp') {
+            const isWarp = data.value > 0.5;
+            const warpBtn = document.getElementById('btn-pitch-warp');
+            if (warpBtn) {
+              warpBtn.classList.toggle('is-active', isWarp);
+              const led = warpBtn.querySelector('.braun-led');
+              if (led) led.classList.toggle('is-active', isWarp);
+            }
+            if (this.engine) this.engine.setParam('pitchWarp', isWarp);
             return;
           }
 
@@ -1452,6 +1564,19 @@ export class BraunRb26App {
       });
     }
 
+    // WARP / Unbounded Shimmer rocker button
+    const warpBtn = document.getElementById('btn-pitch-warp');
+    if (warpBtn) {
+      warpBtn.addEventListener('click', () => {
+        const isWarp = warpBtn.classList.toggle('is-active');
+        const led = warpBtn.querySelector('.braun-led');
+        if (led) led.classList.toggle('is-active', isWarp);
+        this.engine.setParam('pitchWarp', isWarp);
+        this._emitJuceParam('pitchWarp', isWarp ? 1.0 : 0.0);
+        this._emitJuceParam('pitch_warp', isWarp ? 1.0 : 0.0);
+      });
+    }
+
     // Shimmer Interval Segments
     const shimBtns = document.querySelectorAll('.shim-interval-btn');
     shimBtns.forEach((btn) => {
@@ -1681,6 +1806,11 @@ export class BraunRb26App {
       if (holdBtn) snap.decay_hold = holdBtn.classList.contains('is-active');
       const limBtn = document.getElementById('btn-soft-limiter');
       if (limBtn) snap.soft_limiter = limBtn.classList.contains('is-active');
+      const warpBtn = document.getElementById('btn-pitch-warp');
+      if (warpBtn) snap.pitch_warp = warpBtn.classList.contains('is-active');
+      else if (this.engine && this.engine.params.pitchWarp !== undefined) {
+        snap.pitch_warp = Boolean(this.engine.params.pitchWarp);
+      }
       const activeShim = document.querySelector('.shim-interval-btn.is-active');
       if (activeShim) {
         snap.shimmer_interval = parseInt(activeShim.getAttribute('data-interval') || activeShim.dataset?.interval, 10);
@@ -1841,6 +1971,21 @@ export class BraunRb26App {
       }
     }
 
+    if (params.pitch_warp !== undefined || params.pitchWarp !== undefined) {
+      const isWarp = Boolean(params.pitch_warp ?? params.pitchWarp);
+      this.engine.setParam('pitchWarp', isWarp);
+      this._emitJuceParam('pitchWarp', isWarp ? 1.0 : 0.0);
+      this._emitJuceParam('pitch_warp', isWarp ? 1.0 : 0.0);
+      if (typeof document !== 'undefined') {
+        const warpBtn = document.getElementById('btn-pitch-warp');
+        if (warpBtn) {
+          warpBtn.classList.toggle('is-active', isWarp);
+          const led = warpBtn.querySelector('.braun-led');
+          if (led) led.classList.toggle('is-active', isWarp);
+        }
+      }
+    }
+
     if (params.manifold_type !== undefined) {
       const mIdx = Math.max(0, Math.min(3, Math.round(params.manifold_type)));
       this.engine.setParam('manifoldType', mIdx);
@@ -1942,6 +2087,17 @@ export class BraunRb26App {
       this.engine.setParam('limiterEnable', isLim);
       this._emitJuceParam('limiterEnable', isLim ? 1 : 0);
     }
+
+    const warpBtn = document.getElementById('btn-pitch-warp');
+    const isWarp = Boolean(preset.params.pitch_warp ?? preset.params.pitchWarp ?? false);
+    if (warpBtn) {
+      warpBtn.classList.toggle('is-active', isWarp);
+      const led = warpBtn.querySelector('.braun-led');
+      if (led) led.classList.toggle('is-active', isWarp);
+    }
+    this.engine.setParam('pitchWarp', isWarp);
+    this._emitJuceParam('pitchWarp', isWarp ? 1.0 : 0.0);
+    this._emitJuceParam('pitch_warp', isWarp ? 1.0 : 0.0);
 
     if (preset.params.manifold_type !== undefined) {
       const mIdx = Math.max(0, Math.min(3, Math.round(preset.params.manifold_type)));
