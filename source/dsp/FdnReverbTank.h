@@ -97,6 +97,26 @@ public:
                       float* outLateL, float* outLateR,
                       int numSamples) noexcept;
 
+    // Multi-channel processing: supports 1 (mono), 2 (stereo), 4 (quad), 6 (5.1), 8 (7.1), 10 (7.1.2), 12 (7.1.4 Atmos)
+    void processSampleMultiChannel(const float* inChannels,
+                                   int numInChannels,
+                                   const float* pitchFb,
+                                   float* const* outChannels,
+                                   int numOutChannels) noexcept;
+
+    void processSampleMultiChannel(const float* inChannels,
+                                   int numInChannels,
+                                   const float* pitchFb,
+                                   float* outChannels,
+                                   int numOutChannels) noexcept;
+
+    void processBlockMultiChannel(const float* const* inChannels,
+                                  int numInChannels,
+                                  const float* const* pitchFb,
+                                  float* const* outChannels,
+                                  int numOutChannels,
+                                  int numSamples) noexcept;
+
 private:
     double mSampleRate { 48000.0 };
     float mRoomSize { 0.65f };

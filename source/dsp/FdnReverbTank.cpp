@@ -212,4 +212,183 @@ void FdnReverbTank::processBlock(const float* inL, const float* inR,
     }
 }
 
+void FdnReverbTank::processSampleMultiChannel(const float* inChannels,
+                                             int numInChannels,
+                                             const float* pitchFb,
+                                             float* const* outChannels,
+                                             int numOutChannels) noexcept {
+    if (mAllpassBuffers[0].empty() || !outChannels || numOutChannels <= 0) [[unlikely]] {
+        return;
+    }
+
+    const float freezeIn = mFreezeInputSmoother.next();
+    const float freezeLoop = mFreezeLoopSmoother.next();
+
+    // 1. Input staging
+    float inL = 0.0f;
+    float inR = 0.0f;
+    if (inChannels && numInChannels > 0) {
+        if (numInChannels == 1) {
+            inL = inChannels[0] * 0.70710678f;
+            inR = inChannels[0] * 0.70710678f;
+        } else if (numInChannels == 2 || numInChannels == 4) {
+            inL = inChannels[0];
+            inR = inChannels[1];
+        } else if (numInChannels >= 6) {
+            // L/R from ch 0, 1; Center (ch 2) injected equally (-3 dB); LFE (ch 3) bypassed
+            inL = inChannels[0] + 0.70710678f * inChannels[2];
+            inR = inChannels[1] + 0.70710678f * inChannels[2];
+        }
+    }
+
+    // 2. Allpass input diffusion (cascaded dual allpasses for L and R)
+    const float diffL = processAllpass(1, processAllpass(0, inL, mDiffusionDensity), mDiffusionDensity);
+    const float diffR = processAllpass(3, processAllpass(2, inR, mDiffusionDensity), mDiffusionDensity);
+
+    // Sum diffused input and pitch feedback with contractive loop gain headroom; isolate both on freeze
+    const float fbL = pitchFb ? pitchFb[0] : 0.0f;
+    const float fbR = (pitchFb && numInChannels > 1) ? pitchFb[1] : fbL;
+    const float dryL = (diffL + fbL) * freezeIn;
+    const float dryR = (diffR + fbR) * freezeIn;
+    const float mid = 0.70710678f * (dryL + dryR);
+    const float side = 0.70710678f * (dryL - dryR);
+
+    // Distribute into 8 FDN lines with balanced spatial phase and 1/sqrt(8) normalization
+    constexpr float kNormFactor = 0.35355339f; // 1 / sqrt(8)
+    std::array<float, kNumLines> injection {};
+
+    if (numInChannels >= 8 && inChannels) {
+        // 7.1 / Atmos input: sides into y4, y5; rears into y6, y7
+        injection = {{
+            dryL * kNormFactor,
+            dryR * kNormFactor,
+            mid * kNormFactor,
+            side * kNormFactor,
+            inChannels[4] * freezeIn * kNormFactor, // Ls -> y4
+            inChannels[5] * freezeIn * kNormFactor, // Rs -> y5
+            inChannels[6] * freezeIn * kNormFactor, // Rls -> y6
+            inChannels[7] * freezeIn * kNormFactor  // Rrs -> y7
+        }};
+    } else if (numInChannels >= 6 && inChannels) {
+        // 5.1 input: surrounds into y4, y5, with rear pair distribution
+        const float inLs = inChannels[4] * freezeIn * kNormFactor;
+        const float inRs = inChannels[5] * freezeIn * kNormFactor;
+        injection = {{
+            dryL * kNormFactor,
+            dryR * kNormFactor,
+            mid * kNormFactor,
+            side * kNormFactor,
+            inLs,
+            inRs,
+            0.70710678f * (inLs - inRs),
+            0.70710678f * (inRs - inLs)
+        }};
+    } else if (numInChannels == 4 && inChannels) {
+        // Quad input: front into y0..y3, rear into y4..y7
+        const float inRL = inChannels[2] * freezeIn * kNormFactor;
+        const float inRR = inChannels[3] * freezeIn * kNormFactor;
+        const float rearMid = 0.70710678f * (inRL + inRR);
+        const float rearSide = 0.70710678f * (inRL - inRR);
+        injection = {{
+            dryL * kNormFactor,
+            dryR * kNormFactor,
+            mid * kNormFactor,
+            side * kNormFactor,
+            inRL,
+            inRR,
+            rearMid,
+            rearSide
+        }};
+    } else {
+        // Stereo / Mono input
+        injection = {{
+            dryL * kNormFactor,
+            dryR * kNormFactor,
+            mid * kNormFactor,
+            side * kNormFactor,
+            (dryL - 0.5f * dryR) * kNormFactor,
+            (dryR - 0.5f * dryL) * kNormFactor,
+            0.70710678f * (dryL - side) * kNormFactor,
+            0.70710678f * (dryR + side) * kNormFactor
+        }};
+    }
+
+    // 3. Tail modulation excursions
+    std::array<float, kNumLines> excursions {};
+    mTailModulator.processSample(0.5f * (std::abs(inL) + std::abs(inR)), excursions);
+
+    // 4. Read 8 delay lines with fractional Hermite cubic interpolation, HF damping & manifold filters
+    std::array<float, kNumLines> y {};
+    mManifoldNetwork.readAndFilterLines(excursions, y, freezeLoop);
+
+    // 5. Orthogonal Householder 8x8 reflection matrix: H_8 = I_8 - 0.25 * 1 * 1^T
+    float sum = 0.0f;
+    for (size_t k = 0; k < kNumLines; ++k) {
+        sum += y[k];
+    }
+    const float matrixOffset = flushDenormal(sum * 0.25f);
+
+    // 6. Matrix recirculation + saturation bounding
+    std::array<float, kNumLines> saturated {};
+    for (size_t k = 0; k < kNumLines; ++k) {
+        const float reflected = y[k] - matrixOffset;
+        const float effGain = (1.0f - freezeLoop) * mFeedbackGains[k] + freezeLoop * 1.0f;
+        const float dcBlocked = mDcBlockers[k].process(reflected);
+        const float feedback = dcBlocked * effGain;
+        const float nextIn = feedback + injection[k];
+        const float satNormal = applySmoothBoundaryKnee(nextIn, 0.72f, 1.05f);
+        const float satFreeze = applySmoothBoundaryKnee(nextIn, 0.90f, 1.05f);
+        saturated[k] = flushDenormal((1.0f - freezeLoop) * satNormal + freezeLoop * satFreeze);
+    }
+    mManifoldNetwork.writeFeedback(saturated);
+
+    // 7. Extract multi-channel output
+    mManifoldNetwork.extractMultiChannel(y, outChannels, numOutChannels);
+}
+
+void FdnReverbTank::processSampleMultiChannel(const float* inChannels,
+                                             int numInChannels,
+                                             const float* pitchFb,
+                                             float* outChannels,
+                                             int numOutChannels) noexcept {
+    if (mAllpassBuffers[0].empty() || !outChannels || numOutChannels <= 0) [[unlikely]] {
+        return;
+    }
+    const int effectiveChannels = std::min(numOutChannels, 12);
+    float* ptrs[12];
+    for (int ch = 0; ch < effectiveChannels; ++ch) {
+        ptrs[ch] = &outChannels[ch];
+    }
+    processSampleMultiChannel(inChannels, numInChannels, pitchFb, ptrs, effectiveChannels);
+}
+
+void FdnReverbTank::processBlockMultiChannel(const float* const* inChannels,
+                                            int numInChannels,
+                                            const float* const* pitchFb,
+                                            float* const* outChannels,
+                                            int numOutChannels,
+                                            int numSamples) noexcept {
+    ScopedNoDenormals noDenormals;
+    if (!outChannels || numOutChannels <= 0 || numSamples <= 0) return;
+
+    for (int i = 0; i < numSamples; ++i) {
+        float inSample[12] = {0.0f};
+        if (inChannels) {
+            for (int ch = 0; ch < numInChannels && ch < 12; ++ch) {
+                inSample[ch] = inChannels[ch] ? inChannels[ch][i] : 0.0f;
+            }
+        }
+        float pFb[2] = {0.0f, 0.0f};
+        if (pitchFb) {
+            pFb[0] = pitchFb[0] ? pitchFb[0][i] : 0.0f;
+            pFb[1] = (pitchFb[1] ? pitchFb[1][i] : pFb[0]);
+        }
+        float* sampleOutPtrs[12];
+        for (int ch = 0; ch < numOutChannels && ch < 12; ++ch) {
+            sampleOutPtrs[ch] = outChannels[ch] ? (outChannels[ch] + i) : nullptr;
+        }
+        processSampleMultiChannel(inSample, numInChannels, pitchFb ? pFb : nullptr, sampleOutPtrs, numOutChannels);
+    }
+}
+
 } // namespace rb26

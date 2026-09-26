@@ -81,7 +81,7 @@ void ManifoldDelayNetwork::prepare(double sampleRate, float maxRoomSize) noexcep
         mLoopDiffusers[k].prepare(kLoopDiffuserLengths[k], mSampleRate);
     }
 
-    for (size_t ch = 0; ch < 2; ++ch) {
+    for (size_t ch = 0; ch < kMaxChannels; ++ch) {
         mCausticPeaking[ch].reset();
         mUltrasonicLowpass[ch].reset();
 
@@ -117,7 +117,7 @@ void ManifoldDelayNetwork::reset() noexcept {
         mSpatialWeightsR[k].reset(mSpatialWeightsR[k].getTarget());
     }
 
-    for (size_t ch = 0; ch < 2; ++ch) {
+    for (size_t ch = 0; ch < kMaxChannels; ++ch) {
         mCausticPeaking[ch].reset();
         mUltrasonicLowpass[ch].reset();
 
@@ -292,13 +292,13 @@ void ManifoldDelayNetwork::updateFilterCoefficients() noexcept {
     }
 
     // 3. Whispering Gallery Caustic Peaking (+3.5 dB at 9.5 kHz, Q = 2.8) + ultrasonic lowpass
-    for (size_t ch = 0; ch < 2; ++ch) {
+    for (size_t ch = 0; ch < kMaxChannels; ++ch) {
         mCausticPeaking[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 9500.0f, 2.8f, +3.5f);
         mUltrasonicLowpass[ch].setCutoff(fs, std::min(18000.0f, fs * 0.45f));
     }
 
     // 4. Anharmonic Plate Sitka Spruce Formants (A0: 95 Hz, T1: 320 Hz, Wood: 2400 Hz)
-    for (size_t ch = 0; ch < 2; ++ch) {
+    for (size_t ch = 0; ch < kMaxChannels; ++ch) {
         mSpruceA0[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 95.0f, 3.2f, +4.0f);
         mSpruceT1[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 320.0f, 2.5f, +5.5f);
         mSpruceWood[ch].configure(BiquadDirectForm2T::Type::Peaking, fs, 2400.0f, 1.8f, +3.0f);
@@ -461,6 +461,148 @@ void ManifoldDelayNetwork::extractStereo(const std::array<float, kNumLines>& lin
 
     outLateL = flushDenormal(accL);
     outLateR = flushDenormal(accR);
+}
+
+void ManifoldDelayNetwork::extractMultiChannel(const std::array<float, kNumLines>& lines,
+                                              float* outChannels,
+                                              int numChannels,
+                                              int layoutType) noexcept {
+    if (!outChannels || numChannels <= 0) return;
+
+    const int targetLayout = (layoutType > 0) ? layoutType : numChannels;
+
+    // Zero all requested channels initially
+    for (int ch = 0; ch < numChannels; ++ch) {
+        outChannels[ch] = 0.0f;
+    }
+
+    if (targetLayout == 1) {
+        // 1 (Mono: (L+R)*0.707)
+        float lateL = 0.0f, lateR = 0.0f;
+        extractStereo(lines, lateL, lateR);
+        const float mono = applySmoothBoundaryKnee((lateL + lateR) * 0.70710678f, 0.95f, 1.05f);
+        outChannels[0] = flushDenormal(mono);
+        return;
+    }
+
+    if (targetLayout == 2) {
+        // 2 (Stereo: L, R)
+        float lateL = 0.0f, lateR = 0.0f;
+        extractStereo(lines, lateL, lateR);
+        outChannels[0] = flushDenormal(applySmoothBoundaryKnee(lateL, 0.95f, 1.05f));
+        if (numChannels > 1) {
+            outChannels[1] = flushDenormal(applySmoothBoundaryKnee(lateR, 0.95f, 1.05f));
+        }
+        return;
+    }
+
+    // For Whispering Gallery in multi-channel modes, update rotation angle
+    if (mCurrentManifold == ManifoldType::WhisperingGallery) {
+        mCausticRotationAngle += mCausticRotationDelta;
+        if (mCausticRotationAngle >= kTwoPi) {
+            mCausticRotationAngle -= kTwoPi;
+        }
+    }
+
+    const float y0 = lines[0];
+    const float y1 = lines[1];
+    const float y2 = lines[2];
+    const float y3 = lines[3];
+    const float y4 = lines[4];
+    const float y5 = lines[5];
+    const float y6 = lines[6];
+    const float y7 = lines[7];
+
+    constexpr float kNorm = 0.35355339f; // 1 / sqrt(8)
+
+    float raw[kMaxChannels] = {0.0f};
+
+    if (targetLayout == 4) {
+        // 4 (Quad: FL, FR, RL, RR using front pairs y0..y3 and rear pairs y4..y7)
+        raw[0] = kNorm * (y0 + y2);
+        raw[1] = kNorm * (y1 - y3);
+        raw[2] = kNorm * (y4 - y6);
+        raw[3] = kNorm * (y5 - y7);
+    } else if (targetLayout == 6) {
+        // 6 (5.1: L, R, C, LFE, Ls, Rs. Center is decorrelated mid; LFE is 0.0f wet reverb; Ls/Rs from rear pairs)
+        raw[0] = kNorm * (y0 + y2);
+        raw[1] = kNorm * (y1 - y3);
+        raw[2] = 0.25f * (y0 - y2 + y1 + y3);
+        raw[3] = 0.0f;
+        raw[4] = kNorm * (y4 - y6);
+        raw[5] = kNorm * (y5 - y7);
+    } else if (targetLayout == 8) {
+        // 8 (7.1: L, R, C, LFE, Ls, Rs, Rls, Rrs. Ls/Rs sides from y4, y5; Rls/Rrs back from y6, y7)
+        raw[0] = kNorm * (y0 + y2);
+        raw[1] = kNorm * (y1 - y3);
+        raw[2] = 0.25f * (y0 - y2 + y1 + y3);
+        raw[3] = 0.0f;
+        raw[4] = 0.50f * y4;
+        raw[5] = 0.50f * y5;
+        raw[6] = 0.50f * y6;
+        raw[7] = 0.50f * y7;
+    } else if (targetLayout == 10) {
+        // 10 (7.1.2: 7.1 bed + Top Left, Top Right height channels from vertical elevation modes)
+        raw[0] = kNorm * (y0 + y2);
+        raw[1] = kNorm * (y1 - y3);
+        raw[2] = 0.25f * (y0 - y2 + y1 + y3);
+        raw[3] = 0.0f;
+        raw[4] = 0.50f * y4;
+        raw[5] = 0.50f * y5;
+        raw[6] = 0.50f * y6;
+        raw[7] = 0.50f * y7;
+        raw[8] = 0.25f * (y0 - y2 - y4 + y6);
+        raw[9] = 0.25f * (y1 + y3 - y5 + y7);
+    } else {
+        // 12 (7.1.4 Dolby Atmos: 7.1 bed + Top Front Left, Top Front Right, Top Rear Left, Top Rear Right from 3D spherical elevation modes)
+        raw[0]  = kNorm * (y0 + y2);
+        raw[1]  = kNorm * (y1 - y3);
+        raw[2]  = 0.25f * (y0 - y2 + y1 + y3);
+        raw[3]  = 0.0f;
+        raw[4]  = 0.50f * y4;
+        raw[5]  = 0.50f * y5;
+        raw[6]  = 0.50f * y6;
+        raw[7]  = 0.50f * y7;
+        raw[8]  = kNorm * (y0 - y2);
+        raw[9]  = kNorm * (y1 + y3);
+        raw[10] = kNorm * (y4 + y6);
+        raw[11] = kNorm * (y5 + y7);
+    }
+
+    const int activeChannels = std::min(numChannels, targetLayout);
+    for (int ch = 0; ch < activeChannels; ++ch) {
+        float val = raw[ch];
+        if (targetLayout >= 6 && ch == 3) {
+            // LFE is strictly 0.0f wet reverb
+            outChannels[3] = 0.0f;
+            continue;
+        }
+
+        // Post-extraction feedforward coloration filters
+        if (mCurrentManifold == ManifoldType::WhisperingGallery) {
+            val = mUltrasonicLowpass[ch].process(mCausticPeaking[ch].process(val));
+        } else if (mCurrentManifold == ManifoldType::AnharmonicPlate) {
+            val = mSpruceWood[ch].process(mSpruceT1[ch].process(mSpruceA0[ch].process(val))) * 0.85f;
+        }
+
+        val = applySmoothBoundaryKnee(val, 0.95f, 1.05f);
+        outChannels[ch] = flushDenormal(val);
+    }
+}
+
+void ManifoldDelayNetwork::extractMultiChannel(const std::array<float, kNumLines>& lines,
+                                              float* const* outChannels,
+                                              int numChannels,
+                                              int layoutType) noexcept {
+    if (!outChannels || numChannels <= 0) return;
+    const int effectiveChannels = std::min(numChannels, static_cast<int>(kMaxChannels));
+    float temp[kMaxChannels] = {0.0f};
+    extractMultiChannel(lines, temp, effectiveChannels, layoutType);
+    for (int ch = 0; ch < effectiveChannels; ++ch) {
+        if (outChannels[ch]) {
+            *outChannels[ch] = temp[ch];
+        }
+    }
 }
 
 } // namespace rb26

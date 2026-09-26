@@ -68,6 +68,29 @@ struct PresetDefinition {
     Rb26Parameters params;
 };
 
+enum class ChannelLayout : int {
+    Mono       = 1,
+    Stereo     = 2,
+    Quad       = 4,
+    Surround51 = 6,
+    Surround71 = 8,
+    Atmos712   = 10,
+    Atmos714   = 12
+};
+
+[[nodiscard]] constexpr ChannelLayout getLayoutForChannelCount(int numChannels) noexcept {
+    switch (numChannels) {
+        case 1:  return ChannelLayout::Mono;
+        case 2:  return ChannelLayout::Stereo;
+        case 4:  return ChannelLayout::Quad;
+        case 6:  return ChannelLayout::Surround51;
+        case 8:  return ChannelLayout::Surround71;
+        case 10: return ChannelLayout::Atmos712;
+        case 12: return ChannelLayout::Atmos714;
+        default: return (numChannels <= 2) ? ChannelLayout::Stereo : ChannelLayout::Atmos714;
+    }
+}
+
 class Rb26ReverbEngine {
 public:
     Rb26ReverbEngine() noexcept;
@@ -90,6 +113,8 @@ public:
 
     // Status queries
     [[nodiscard]] bool isIdle() const noexcept { return mIsIdle; }
+    [[nodiscard]] int getActiveChannelCount() const noexcept { return mActiveChannelCount; }
+    [[nodiscard]] ChannelLayout getActiveChannelLayout() const noexcept { return getLayoutForChannelCount(mActiveChannelCount); }
 
     // Telemetry for CRT display (lock-free SPSC)
     struct VisualizerFrame {
@@ -105,6 +130,7 @@ private:
     double mSampleRate { 48000.0 };
     int mMaxBlockSize { 512 };
     Rb26Parameters mParams;
+    int mActiveChannelCount { 2 };
 
     // Idle Silence Gating State
     bool mIsIdle { false };

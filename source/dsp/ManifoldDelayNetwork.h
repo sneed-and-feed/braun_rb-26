@@ -175,11 +175,24 @@ public:
     void extractStereo(const std::array<float, kNumLines>& lines,
                        float& outLateL, float& outLateR) noexcept;
 
+    // Extract multi-channel late reverberation (supports 1..12 channels: Mono, Stereo, Quad, 5.1, 7.1, 7.1.2, 7.1.4 Atmos)
+    void extractMultiChannel(const std::array<float, kNumLines>& lines,
+                             float* const* outChannels,
+                             int numChannels,
+                             int layoutType = 0) noexcept;
+
+    void extractMultiChannel(const std::array<float, kNumLines>& lines,
+                             float* outChannels,
+                             int numChannels,
+                             int layoutType = 0) noexcept;
+
     [[nodiscard]] ManifoldType getActiveManifold() const noexcept { return mCurrentManifold; }
     [[nodiscard]] const std::array<size_t, kNumLines>& getNominalLengths() const noexcept { return mNominalLengths; }
     [[nodiscard]] float getRoomSize() const noexcept { return mRoomSize; }
     [[nodiscard]] float getMaxRoomSize() const noexcept { return mMaxRoomSize; }
     [[nodiscard]] float getDiffusionDensity() const noexcept { return mDiffusionDensity; }
+
+    static constexpr size_t kMaxChannels = 12;
 
 private:
     double mSampleRate { 48000.0 };
@@ -216,15 +229,15 @@ private:
     std::array<float, kNumLines> mDampingStates {};
     float mDampingAlpha { 0.5f };
 
-    // Post-extraction feedforward stereo coloration filters (Channel 0 = L, Channel 1 = R)
+    // Post-extraction feedforward coloration filters (up to 12 channels for 7.1.4 Atmos)
     // 1. Whispering Gallery Caustic Peaking Filter (9.5 kHz, +3.5 dB, Q = 2.8) + ultrasonic lowpass
-    std::array<BiquadDirectForm2T, 2> mCausticPeaking;
-    std::array<OnePoleLowpass, 2> mUltrasonicLowpass;
+    std::array<BiquadDirectForm2T, kMaxChannels> mCausticPeaking;
+    std::array<OnePoleLowpass, kMaxChannels> mUltrasonicLowpass;
 
     // 2. Anharmonic Plate Sitka Spruce Formants (A0: 95 Hz, T1: 320 Hz, Wood: 2400 Hz)
-    std::array<BiquadDirectForm2T, 2> mSpruceA0;
-    std::array<BiquadDirectForm2T, 2> mSpruceT1;
-    std::array<BiquadDirectForm2T, 2> mSpruceWood;
+    std::array<BiquadDirectForm2T, kMaxChannels> mSpruceA0;
+    std::array<BiquadDirectForm2T, kMaxChannels> mSpruceT1;
+    std::array<BiquadDirectForm2T, kMaxChannels> mSpruceWood;
 
     // Spatial Panning / Extraction
     // Whispering Gallery: Rotating circular spatial vector

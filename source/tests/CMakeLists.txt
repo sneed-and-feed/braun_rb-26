@@ -108,3 +108,10 @@ target_link_libraries(rb26_acoustic_decay_audit PRIVATE rb26_dsp_core)
 set_target_properties(rb26_acoustic_decay_audit PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME Rb26AcousticDecayAudit COMMAND rb26_acoustic_decay_audit)
 
+add_executable(rb26_multichannel_tests MultiChannelSurroundTests.cpp)
+target_include_directories(rb26_multichannel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../dsp)
+target_link_libraries(rb26_multichannel_tests PRIVATE rb26_dsp_core)
+set_target_properties(rb26_multichannel_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+add_test(NAME Rb26MultiChannelTests COMMAND rb26_multichannel_tests)
+
+

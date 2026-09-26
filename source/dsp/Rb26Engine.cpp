@@ -234,6 +234,8 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
     ScopedNoDenormals noDenormals;
 
+    mActiveChannelCount = numChannels;
+
     const float* inL = inputChannels[0];
     const float* inR = (numChannels > 1 && inputChannels[1]) ? inputChannels[1] : inL;
     const float* auxL = (auxReverbChannels && auxReverbChannels[0]) ? auxReverbChannels[0] : nullptr;
@@ -244,14 +246,26 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
 
     // Fast check: does incoming block contain any signal?
     bool blockHasSignal = false;
-    for (int n = 0; n < numSamples; ++n) {
-        const float peakL = std::abs(inL[n]);
-        const float peakR = std::abs(inR[n]);
-        const float auxPeakL = auxL ? std::abs(auxL[n]) : 0.0f;
-        const float auxPeakR = auxR ? std::abs(auxR[n]) : 0.0f;
-        if (peakL > 1.0e-7f || peakR > 1.0e-7f || auxPeakL > 1.0e-7f || auxPeakR > 1.0e-7f) {
-            blockHasSignal = true;
-            break;
+    for (int ch = 0; ch < numChannels && ch < 12; ++ch) {
+        if (!inputChannels[ch]) continue;
+        for (int n = 0; n < numSamples; ++n) {
+            if (std::abs(inputChannels[ch][n]) > 1.0e-7f) {
+                blockHasSignal = true;
+                break;
+            }
+        }
+        if (blockHasSignal) break;
+    }
+    if (!blockHasSignal && auxReverbChannels) {
+        for (int ch = 0; ch < 2; ++ch) {
+            if (!auxReverbChannels[ch]) continue;
+            for (int n = 0; n < numSamples; ++n) {
+                if (std::abs(auxReverbChannels[ch][n]) > 1.0e-7f) {
+                    blockHasSignal = true;
+                    break;
+                }
+            }
+            if (blockHasSignal) break;
         }
     }
 
@@ -264,9 +278,10 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
     // Fast path: Idle Silence Gating
     if (mIsIdle) {
         if (!blockHasSignal && !mParams.freezeHold) {
-            std::fill(outL, outL + numSamples, 0.0f);
-            if (outR) {
-                std::fill(outR, outR + numSamples, 0.0f);
+            for (int ch = 0; ch < numChannels; ++ch) {
+                if (outputChannels[ch]) {
+                    std::fill(outputChannels[ch], outputChannels[ch] + numSamples, 0.0f);
+                }
             }
 
             // Snap smoothers to targets so parameter updates while idle remain synchronized
@@ -309,24 +324,328 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mPitchWarpSmoother.snapTo(mPitchWarpSmoother.getTarget());
     }
 
-    for (int n = 0; n < numSamples; ++n) {
-        const float warpAmount = mPitchWarpSmoother.next();
+    if (numChannels > 2) {
+        for (int n = 0; n < numSamples; ++n) {
+            const float warpAmount = mPitchWarpSmoother.next();
 
-        // Feedback filter bandwidth dynamically widens with warpAmount:
-        // HPF sweeps from 150 Hz down to 40 Hz, LPF sweeps from 6,000 Hz up to 16,000 Hz.
-        if (((n & 31) == 0 || n == 0) && std::abs(warpAmount - mLastFilterWarp) > 0.002f) {
-            mLastFilterWarp = warpAmount;
-            const float hpfCutoff = (1.0f - warpAmount) * 150.0f + warpAmount * 40.0f;
-            const float lpfCutoff = (1.0f - warpAmount) * 6000.0f + warpAmount * 16000.0f;
-            mPitchFeedbackHpL.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
-            mPitchFeedbackHpR.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
-            mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
-            mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
+            // Feedback filter bandwidth dynamically widens with warpAmount:
+            // HPF sweeps from 150 Hz down to 40 Hz, LPF sweeps from 6,000 Hz up to 16,000 Hz.
+            if (((n & 31) == 0 || n == 0) && std::abs(warpAmount - mLastFilterWarp) > 0.002f) {
+                mLastFilterWarp = warpAmount;
+                const float hpfCutoff = (1.0f - warpAmount) * 150.0f + warpAmount * 40.0f;
+                const float lpfCutoff = (1.0f - warpAmount) * 6000.0f + warpAmount * 16000.0f;
+                mPitchFeedbackHpL.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
+                mPitchFeedbackHpR.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
+                mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
+                mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
+            }
+
+            const float inTrim = mInputTrimSmoother.next();
+
+            float inSample[12] = {0.0f};
+            for (int ch = 0; ch < numChannels && ch < 12; ++ch) {
+                inSample[ch] = inputChannels[ch] ? inputChannels[ch][n] : 0.0f;
+            }
+
+            // Input staging:
+            // If numChannels == 4: Quad FL, FR
+            // If numChannels >= 6: L/R from ch 0, 1; Center (ch 2) injected equally (-3 dB); LFE (ch 3) bypassed
+            float xL = 0.0f;
+            float xR = 0.0f;
+            if (numChannels >= 6) {
+                xL = inSample[0] + 0.70710678f * inSample[2];
+                xR = inSample[1] + 0.70710678f * inSample[2];
+            } else {
+                xL = inSample[0];
+                xR = inSample[1];
+            }
+
+            const float tankInL = (xL + (auxL ? auxL[n] : 0.0f)) * inTrim;
+            const float tankInR = (xR + (auxR ? auxR[n] : 0.0f)) * inTrim;
+
+            // 1. Pre-Delay
+            const float curPreMs = mPreDelaySmoother.next();
+            const float preDelaySamples = std::clamp((curPreMs * 0.001f) * fs, 0.0f, static_cast<float>(kPreDelayBufferCapacity - 64));
+
+            mPreDelayBufferL[mPreDelayWriteIndex] = flushDenormal(tankInL);
+            mPreDelayBufferR[mPreDelayWriteIndex] = flushDenormal(tankInR);
+
+            const float preL = TailModulator::readHermite(mPreDelayBufferL.data(),
+                                                          kPreDelayBufferCapacity,
+                                                          kPreDelayBufferMask,
+                                                          mPreDelayWriteIndex,
+                                                          preDelaySamples);
+            const float preR = TailModulator::readHermite(mPreDelayBufferR.data(),
+                                                          kPreDelayBufferCapacity,
+                                                          kPreDelayBufferMask,
+                                                          mPreDelayWriteIndex,
+                                                          preDelaySamples);
+            mPreDelayWriteIndex = (mPreDelayWriteIndex + 1) & kPreDelayBufferMask;
+
+            // 2. Decoupled LR4 Crossover & Low-Band Modal Matrix
+            float highInL = 0.0f, highInR = 0.0f;
+            float lowReverbL = 0.0f, lowReverbR = 0.0f;
+            mLowBandMatrix.processSample(preL, preR, highInL, highInR, lowReverbL, lowReverbR);
+
+            // 3. Early Reflections Matrix
+            float earlyL = 0.0f, earlyR = 0.0f;
+            mEarlyReflections.processSample(highInL, highInR, earlyL, earlyR);
+
+            // 4. Decoupled Pitch Delay & Bidirectional Pitch Shifting Feedback
+            const bool pitchActive = blockPitchActive;
+            const float elMix = mEarlyLateSmoother.next();
+            const float earlyGain = FastSinTable::cos(elMix * kHalfPi);
+            const float lateGain  = FastSinTable::sin(elMix * kHalfPi);
+
+            float injPitchL = 0.0f, injPitchR = 0.0f;
+            float pitchAddL = 0.0f, pitchAddR = 0.0f;
+
+            if (pitchActive) {
+                const float curPitchDelayMs = mPitchDelaySmoother.next();
+                const float pBlend = mPitchBlendSmoother.next();
+                const float delayMult = 1.0f + 0.35f * std::max(0.0f, -pBlend);
+                const float effDelayMs = curPitchDelayMs * delayMult;
+
+                float flutterMsL = 0.0f;
+                float flutterMsR = 0.0f;
+                if (warpAmount > 0.01f) {
+                    mFlutterPhase1 += (kTwoPi * 1.25f) / fs;
+                    if (mFlutterPhase1 >= kTwoPi) mFlutterPhase1 -= kTwoPi;
+                    mFlutterPhase2 += (kTwoPi * 2.85f) / fs;
+                    if (mFlutterPhase2 >= kTwoPi) mFlutterPhase2 -= kTwoPi;
+
+                    const float s1 = FastSinTable::sin(mFlutterPhase1);
+                    const float s2 = FastSinTable::sin(mFlutterPhase2);
+                    const float c1 = FastSinTable::cos(mFlutterPhase1);
+
+                    const float sharedFlutter = 1.0f * s1 + 0.5f * s2;
+                    flutterMsL = std::clamp(warpAmount * sharedFlutter, -1.5f, 1.5f);
+                    flutterMsR = std::clamp(warpAmount * (sharedFlutter + 0.35f * c1), -1.5f, 1.5f);
+                }
+
+                const float delaySamplesL = std::clamp(((effDelayMs + flutterMsL) * 0.001f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
+                const float delaySamplesR = std::clamp(((effDelayMs * 1.07f + flutterMsR) * 0.001f) * fs, 2.0f, static_cast<float>(kPitchDelayCapacity - 64));
+
+                const float delayedPitchL = TailModulator::readHermite(mPitchDelayBufferL.data(),
+                                                                      kPitchDelayCapacity,
+                                                                      kPitchDelayMask,
+                                                                      mPitchDelayWriteIndex,
+                                                                      delaySamplesL);
+                const float delayedPitchR = TailModulator::readHermite(mPitchDelayBufferR.data(),
+                                                                      kPitchDelayCapacity,
+                                                                      kPitchDelayMask,
+                                                                      mPitchDelayWriteIndex,
+                                                                      delaySamplesR);
+
+                const float fb = mPitchFeedbackSmoother.next();
+                const float effFbGain = (1.0f - warpAmount) * (fb * 0.30f) + warpAmount * (fb * 1.30f);
+
+                const float filteredPitchL = mPitchFeedbackLpL.process(mPitchFeedbackHpL.process(delayedPitchL));
+                const float filteredPitchR = mPitchFeedbackLpR.process(mPitchFeedbackHpR.process(delayedPitchR));
+
+                const float rawFbL = filteredPitchL * effFbGain;
+                const float rawFbR = filteredPitchR * effFbGain;
+
+                const float asym = 0.08f * warpAmount;
+                const float drivenL = (rawFbL > 0.0f) ? (rawFbL / (1.0f + asym * rawFbL)) : rawFbL;
+                const float drivenR = (rawFbR > 0.0f) ? (rawFbR / (1.0f + asym * rawFbR)) : rawFbR;
+                injPitchL = applySmoothBoundaryKnee(drivenL, 0.72f, 1.05f);
+                injPitchR = applySmoothBoundaryKnee(drivenR, 0.72f, 1.05f);
+
+                const float boostDb = mPitchBoostSmoother.next();
+                const float boostGain = dbToGain(boostDb);
+                const float rawPitchL = filteredPitchL * 0.50f * boostGain;
+                const float rawPitchR = filteredPitchR * 0.50f * boostGain;
+                pitchAddL = applySmoothBoundaryKnee(rawPitchL, 0.72f, 1.05f);
+                pitchAddR = applySmoothBoundaryKnee(rawPitchR, 0.72f, 1.05f);
+            }
+
+            // Assemble multi-channel tank inputs
+            float tankInputs[12] = {0.0f};
+            tankInputs[0] = highInL;
+            tankInputs[1] = highInR;
+            if (numChannels == 4) {
+                tankInputs[2] = inSample[2] * inTrim;
+                tankInputs[3] = inSample[3] * inTrim;
+            } else if (numChannels >= 6) {
+                tankInputs[2] = inSample[2] * inTrim; // Center
+                tankInputs[3] = 0.0f;                 // LFE bypassed
+                tankInputs[4] = inSample[4] * inTrim; // Ls
+                tankInputs[5] = inSample[5] * inTrim; // Rs
+                if (numChannels >= 8) {
+                    tankInputs[6] = inSample[6] * inTrim; // Rls
+                    tankInputs[7] = inSample[7] * inTrim; // Rrs
+                }
+                if (numChannels >= 10) {
+                    tankInputs[8] = inSample[8] * inTrim;
+                    tankInputs[9] = inSample[9] * inTrim;
+                }
+                if (numChannels >= 12) {
+                    tankInputs[10] = inSample[10] * inTrim;
+                    tankInputs[11] = inSample[11] * inTrim;
+                }
+            }
+
+            const float pitchFbArr[2] = { injPitchL, injPitchR };
+            float lateMulti[12] = {0.0f};
+            float* latePtrs[12];
+            for (int ch = 0; ch < numChannels && ch < 12; ++ch) {
+                latePtrs[ch] = &lateMulti[ch];
+            }
+
+            mFdnTank.processSampleMultiChannel(tankInputs,
+                                               numChannels,
+                                               pitchActive ? pitchFbArr : nullptr,
+                                               latePtrs,
+                                               numChannels);
+
+            if (pitchActive) {
+                mPitchShifter.setWarpMode(warpAmount > 0.001f, warpAmount);
+                float shiftedL = 0.0f, shiftedR = 0.0f;
+                mPitchShifter.processSample(lateMulti[0], lateMulti[1], shiftedL, shiftedR);
+
+                mPitchDelayBufferL[mPitchDelayWriteIndex] = flushDenormal(shiftedL);
+                mPitchDelayBufferR[mPitchDelayWriteIndex] = flushDenormal(shiftedR);
+                mPitchDelayWriteIndex = (mPitchDelayWriteIndex + 1) & kPitchDelayMask;
+
+                mLastPitchFbL = shiftedL;
+                mLastPitchFbR = shiftedR;
+            } else {
+                mLastPitchFbL = 0.0f;
+                mLastPitchFbR = 0.0f;
+            }
+
+            // 5. Early / Late combination across all channels
+            float wetMulti[12] = {0.0f};
+            wetMulti[0] = earlyGain * earlyL + lateGain * (lateMulti[0] + pitchAddL) + lowReverbL;
+            wetMulti[1] = earlyGain * earlyR + lateGain * (lateMulti[1] + pitchAddR) + lowReverbR;
+
+            mMasterSubMono.process(wetMulti[0], wetMulti[1], wetMulti[0], wetMulti[1]);
+
+            const float width = mStereoWidthSmoother.next();
+            const float wetMid  = 0.5f * (wetMulti[0] + wetMulti[1]);
+            const float wetSide = 0.5f * (wetMulti[0] - wetMulti[1]);
+            wetMulti[0] = wetMid + width * wetSide;
+            wetMulti[1] = wetMid - width * wetSide;
+
+            for (int ch = 2; ch < numChannels && ch < 12; ++ch) {
+                if (ch == 3 && numChannels >= 6) {
+                    wetMulti[ch] = 0.0f; // LFE has 0 wet reverb
+                } else {
+                    float earlyCh = 0.0f;
+                    if (numChannels == 4) {
+                        earlyCh = (ch == 2) ? (earlyL * 0.70710678f) : (earlyR * 0.70710678f);
+                    } else if (numChannels >= 6) {
+                        if (ch == 2) {
+                            earlyCh = 0.50f * (earlyL + earlyR);
+                        } else if (ch % 2 == 0) {
+                            earlyCh = earlyL * 0.70710678f;
+                        } else {
+                            earlyCh = earlyR * 0.70710678f;
+                        }
+                    }
+                    wetMulti[ch] = earlyGain * earlyCh + lateGain * lateMulti[ch];
+                }
+            }
+
+            // 6. Equal-power Dry/Wet crossfade, output trim & C1 Hermite limiter per channel
+            const float dwMix = mDryWetSmoother.next();
+            const float dryGain = FastSinTable::cos(dwMix * kHalfPi);
+            const float wetGain = FastSinTable::sin(dwMix * kHalfPi);
+            const float trim = mOutputTrimSmoother.next();
+
+            for (int ch = 0; ch < numChannels && ch < 12; ++ch) {
+                if (!outputChannels[ch]) continue;
+                float sampleOut = 0.0f;
+                if (ch == 3 && numChannels >= 6) {
+                    // LFE passed clean/dry
+                    sampleOut = inSample[3];
+                } else {
+                    sampleOut = dryGain * (inSample[ch] * inTrim) + wetGain * wetMulti[ch];
+                    sampleOut *= trim;
+                    if (mParams.limiterEnable) {
+                        sampleOut = softLimit(sampleOut);
+                    }
+                }
+                outputChannels[ch][n] = flushDenormal(sampleOut);
+            }
+
+            // Telemetry & silence tracking
+            float outPeak = 0.0f;
+            for (int ch = 0; ch < numChannels && ch < 12; ++ch) {
+                if (outputChannels[ch]) {
+                    outPeak = std::max(outPeak, std::abs(outputChannels[ch][n]));
+                }
+            }
+            const float sampleOutL = outputChannels[0] ? outputChannels[0][n] : 0.0f;
+            const float sampleOutR = (numChannels > 1 && outputChannels[1]) ? outputChannels[1][n] : sampleOutL;
+            mInputRmsSumL += xL * xL;
+            mInputRmsSumR += xR * xR;
+            mOutputRmsSumL += sampleOutL * sampleOutL;
+            mOutputRmsSumR += sampleOutR * sampleOutR;
+            mCorrelationSum += sampleOutL * sampleOutR;
+
+            mDecayPeakFollower = std::max(outPeak, mDecayPeakFollower * 0.999f);
+            mTailEnergyFollower = flushDenormal(0.999f * mTailEnergyFollower + 0.001f * outPeak);
+
+            float inPeak = 0.0f;
+            for (int ch = 0; ch < numChannels && ch < 12; ++ch) {
+                inPeak = std::max(inPeak, std::abs(inSample[ch]));
+            }
+            inPeak += (auxL ? std::abs(auxL[n]) : 0.0f) + (auxR ? std::abs(auxR[n]) : 0.0f);
+
+            if (inPeak < 1.0e-7f && outPeak < 1.0e-7f && mTailEnergyFollower < 1.0e-7f && !mParams.freezeHold) {
+                mSilentSamplesCount++;
+            } else {
+                mSilentSamplesCount = 0;
+            }
+
+            if (++mTelemetryDecimator >= 512) {
+                mTelemetryDecimator = 0;
+                VisualizerFrame frame;
+                const float invCount = 1.0f / 512.0f;
+                frame.inputRmsL = std::sqrt(mInputRmsSumL * invCount);
+                frame.inputRmsR = std::sqrt(mInputRmsSumR * invCount);
+                frame.outputRmsL = std::sqrt(mOutputRmsSumL * invCount);
+                frame.outputRmsR = std::sqrt(mOutputRmsSumR * invCount);
+
+                const float denom = (frame.outputRmsL * frame.outputRmsR);
+                frame.correlation = (denom > 1.0e-5f) ? std::clamp((mCorrelationSum * invCount) / denom, -1.0f, 1.0f) : 1.0f;
+
+                frame.lowEnergy = mLowBandMatrix.getLowBandEnergy();
+                frame.midEnergy = std::sqrt(0.5f * (lateMulti[0] * lateMulti[0] + lateMulti[1] * lateMulti[1]));
+                frame.highEnergy = std::sqrt(0.5f * (earlyL * earlyL + earlyR * earlyR));
+                frame.decayEnvelope = mDecayPeakFollower;
+
+                pushVisualizerFrame(frame);
+
+                mInputRmsSumL = 0.0f;
+                mInputRmsSumR = 0.0f;
+                mOutputRmsSumL = 0.0f;
+                mOutputRmsSumR = 0.0f;
+                mCorrelationSum = 0.0f;
+            }
         }
+    } else {
+        const float monoGain = (numChannels == 1) ? 0.70710678f : 1.0f;
+        for (int n = 0; n < numSamples; ++n) {
+            const float warpAmount = mPitchWarpSmoother.next();
 
-        const float inTrim = mInputTrimSmoother.next();
-        const float xL = inL[n];
-        const float xR = inR[n];
+            // Feedback filter bandwidth dynamically widens with warpAmount:
+            // HPF sweeps from 150 Hz down to 40 Hz, LPF sweeps from 6,000 Hz up to 16,000 Hz.
+            if (((n & 31) == 0 || n == 0) && std::abs(warpAmount - mLastFilterWarp) > 0.002f) {
+                mLastFilterWarp = warpAmount;
+                const float hpfCutoff = (1.0f - warpAmount) * 150.0f + warpAmount * 40.0f;
+                const float lpfCutoff = (1.0f - warpAmount) * 6000.0f + warpAmount * 16000.0f;
+                mPitchFeedbackHpL.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
+                mPitchFeedbackHpR.configure(Biquad::Type::Highpass, fs, hpfCutoff, 0.70710678f);
+                mPitchFeedbackLpL.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
+                mPitchFeedbackLpR.configure(Biquad::Type::Lowpass, fs, lpfCutoff, 0.70710678f);
+            }
+
+            const float inTrim = mInputTrimSmoother.next();
+            const float xL = inL[n] * monoGain;
+            const float xR = inR[n] * monoGain;
         const float tankInL = (xL + (auxL ? auxL[n] : 0.0f)) * inTrim;
         const float tankInR = (xR + (auxR ? auxR[n] : 0.0f)) * inTrim;
 
@@ -552,6 +871,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             mOutputRmsSumR = 0.0f;
             mCorrelationSum = 0.0f;
         }
+    }
     }
 
     // If silence sustained for > 2048 samples (approx 42ms after reaching sub -140dB), transition to idle
