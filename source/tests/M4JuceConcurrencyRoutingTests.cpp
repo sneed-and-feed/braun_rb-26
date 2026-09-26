@@ -55,17 +55,20 @@ void runTest1_ConcurrencyAndPowerReset() {
     buffer.setSample(1, 0, 0.5f);
     processor.processBlock(buffer, midi);
 
-    // Standby power gating should clear buffer to zero
-    RB26_TEST_ASSERT(buffer.getMagnitude(0, 512) == 0.0f);
+    // Standby power acts as safe transparent unity bypass (0.5f preserved, NOT cleared to zero)
+    RB26_TEST_ASSERT(std::abs(buffer.getSample(0, 0) - 0.5f) < 1.0e-5f);
+    RB26_TEST_ASSERT(std::abs(buffer.getSample(1, 0) - 0.5f) < 1.0e-5f);
+    RB26_TEST_ASSERT(!processor.isPower()); // Starts safe and stays in standby without requiring prepackaged sounds
 
-    // 4. Send MIDI Note-On to awaken processor
-    midi.clear();
-    const uint8_t noteOnBytes[] = { 0x90, 60, 100 };
-    midi.addEvent(noteOnBytes, sizeof(noteOnBytes), 0);
+    // 4. Verify explicit setPower(true) turns on reverb processing
+    processor.setPower(true);
+    RB26_TEST_ASSERT(processor.isPower());
 
     buffer.clear();
+    buffer.setSample(0, 0, 1.0f);
+    buffer.setSample(1, 0, 1.0f);
     processor.processBlock(buffer, midi);
-    RB26_TEST_ASSERT(processor.isPower()); // Awakened by MIDI Note-On
+    RB26_TEST_ASSERT(buffer.getMagnitude(0, 512) > 0.0f);
 
     // 5. Explicit reset() test (should set pending flag, executed safely on audio thread)
     processor.reset();

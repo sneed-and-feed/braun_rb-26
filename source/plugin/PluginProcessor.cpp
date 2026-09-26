@@ -214,38 +214,28 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     outChannels[0] = buffer.getWritePointer(0);
     outChannels[1] = (numChannels > 1) ? buffer.getWritePointer(1) : outChannels[0];
 
-    // Standby Power Gating: If powered down, output clean silence unless awakened by MIDI Note-On
+    // Standby Power: When powered off, start safe and ready to go with transparent unity-gain bypass.
+    // Rectifies overactive protection: does NOT silence track or require prepackaged sounds to turn on.
     if (!isPoweredOn.load(std::memory_order_relaxed))
     {
-        bool hasNoteOn = false;
-        for (const auto metadata : midiMessages)
+        if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
         {
-            if (metadata.numBytes >= 3)
-            {
-                const auto* rawData = metadata.data;
-                if ((rawData[0] & 0xF0) == 0x90 && rawData[2] > 0)
-                {
-                    hasNoteOn = true;
-                    break;
-                }
-            }
+            reverbEngine.reset();
         }
 
-        if (hasNoteOn)
+        if (getTotalNumInputChannels() == 0)
         {
-            isPoweredOn.store(true, std::memory_order_relaxed);
-        }
-        else
-        {
-            if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
-            {
-                reverbEngine.reset();
-            }
             buffer.clear();
-            pushScopeSamples(outChannels[0], outChannels[1], numSamples);
-            midiMessages.clear();
-            return;
         }
+        else if (getTotalNumInputChannels() == 1 && numChannels > 1)
+        {
+            // Mono-in / stereo-out: replicate clean channel 0 onto channel 1 (safely ignoring any host Ch1 garbage)
+            buffer.copyFrom(1, 0, buffer, 0, 0, numSamples);
+        }
+
+        pushScopeSamples(outChannels[0], outChannels[1], numSamples);
+        midiMessages.clear();
+        return;
     }
 
     // Wait-free POD snapshot load with std::memory_order_relaxed (0 locks, 0 memory allocs)

@@ -2194,6 +2194,14 @@ export class BraunRb26App {
       const target = e.target;
       if (target && target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'search' || !target.type)) return;
 
+      // P hotkey toggles system power on/off (Dieter Rams Standby / Power switch)
+      if (e.key === 'p' || e.key === 'P' || e.code === 'KeyP') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.setPower(!this.isPowered);
+        return;
+      }
+
       if (!isPlayableMusicalKey(e)) return;
 
       // Immediately blur any select, button, or active element so typing triggers notes cleanly

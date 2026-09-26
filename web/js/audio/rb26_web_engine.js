@@ -1052,11 +1052,11 @@ export class Rb26WebEngine {
     const now = this.ctx.currentTime;
 
     if (!this.isPowered) {
-      // Immediate silence on output buses
+      // Safe transparent unity-gain bypass on output buses (wet reverb muted, dry input preserved)
       if (this.masterOutputBus) {
         try { if (this.masterOutputBus.gain.cancelScheduledValues) this.masterOutputBus.gain.cancelScheduledValues(0); } catch (_) {}
-        this.masterOutputBus.gain.value = 0.0;
-        try { this.masterOutputBus.gain.setValueAtTime(0.0, now); } catch (_) {}
+        this.masterOutputBus.gain.value = 1.0;
+        try { this.masterOutputBus.gain.setValueAtTime(1.0, now); } catch (_) {}
       }
       if (this.wetGain) {
         try { if (this.wetGain.gain.cancelScheduledValues) this.wetGain.gain.cancelScheduledValues(0); } catch (_) {}
@@ -1065,14 +1065,14 @@ export class Rb26WebEngine {
       }
       if (this.dryGain) {
         try { if (this.dryGain.gain.cancelScheduledValues) this.dryGain.gain.cancelScheduledValues(0); } catch (_) {}
-        this.dryGain.gain.value = 0.0;
-        try { this.dryGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+        this.dryGain.gain.value = 1.0;
+        try { this.dryGain.gain.setValueAtTime(1.0, now); } catch (_) {}
       }
 
       if (this.outputTrimGain) {
         try { if (this.outputTrimGain.gain.cancelScheduledValues) this.outputTrimGain.gain.cancelScheduledValues(0); } catch (_) {}
-        this.outputTrimGain.gain.value = 0.0;
-        try { this.outputTrimGain.gain.setValueAtTime(0.0, now); } catch (_) {}
+        this.outputTrimGain.gain.value = 1.0;
+        try { this.outputTrimGain.gain.setValueAtTime(1.0, now); } catch (_) {}
       }
       if (this.masterDcBlocker && this.masterLimiter && this.splitter) {
         try {
