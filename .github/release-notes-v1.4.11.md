@@ -35,3 +35,4 @@
 * **`BRAUN_RB26-v1.4.11-VST3-Windows-x64.zip`**: Streamlined VST3-only package (`BRAUN_RB26.vst3`, `LICENSE`, `README.md`, `ARCHITECTURE.md`).  
   `SHA-256: 1a6e48908a21a49736fdd3bd711bf2fe013492ffb773ab24707c003c49d59cf6`
 * **`BRAUN_RB26-v1.4.11-macOS-Universal.zip`**: Universal macOS distribution (AU `.component`, VST3 `.vst3`, CLAP `.clap`, Standalone `.app`, `LICENSE`, `README.md`, `ARCHITECTURE.md`).
+* **`BRAUN_RB26-v1.4.11-Linux-x64.tar.gz`**: Linux x86_64 distribution (VST3, CLAP, Standalone binary, `INSTALL.txt`, `LICENSE`, `README.md`, built and verified via Ubuntu CI).
