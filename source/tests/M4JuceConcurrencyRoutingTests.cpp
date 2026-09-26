@@ -929,6 +929,230 @@ void runTest10_NativeUIOcclusionAndContextMenu() {
     std::cout << "  -> PASS: Native mode toggle, rapid switching (50x), resize, and context menu verified.\n";
 }
 
+void runTest11_MultiChannelSurroundAndAtmos() {
+    std::cout << "[Test 11] Multi-Channel, Surround (5.1/7.1), & Dolby Atmos (7.1.4) (PHASE-2)...\n";
+    juce::ScopedJuceInitialiser_GUI guiInit;
+
+    BRAUN_RB26AudioProcessor processor;
+
+    // 1. Bus Layout Negotiation & Verification
+    auto checkLayout = [&](const juce::AudioChannelSet& inSet, const juce::AudioChannelSet& outSet, bool expected) {
+        juce::AudioProcessor::BusesLayout bl;
+        bl.inputBuses.add(inSet);
+        bl.outputBuses.add(outSet);
+        bool supported = processor.isBusesLayoutSupported(bl);
+        RB26_TEST_ASSERT(supported == expected);
+    };
+
+    // Standard valid layouts
+    checkLayout(juce::AudioChannelSet::mono(), juce::AudioChannelSet::mono(), true); // Mono (1 in, 1 out)
+    checkLayout(juce::AudioChannelSet::mono(), juce::AudioChannelSet::stereo(), true); // Mono to Stereo (1 in, 2 out)
+    checkLayout(juce::AudioChannelSet::stereo(), juce::AudioChannelSet::stereo(), true); // Stereo (2 in, 2 out)
+    checkLayout(juce::AudioChannelSet::quadraphonic(), juce::AudioChannelSet::quadraphonic(), true); // Quad (4 in, 4 out)
+    checkLayout(juce::AudioChannelSet::stereo(), juce::AudioChannelSet::quadraphonic(), true); // Quad (2 in, 4 out)
+    checkLayout(juce::AudioChannelSet::mono(), juce::AudioChannelSet::quadraphonic(), true); // Quad (1 in, 4 out)
+    checkLayout(juce::AudioChannelSet::create5point1(), juce::AudioChannelSet::create5point1(), true); // 5.1 (6 in, 6 out)
+    checkLayout(juce::AudioChannelSet::stereo(), juce::AudioChannelSet::create5point1(), true); // 5.1 (2 in, 6 out)
+    checkLayout(juce::AudioChannelSet::mono(), juce::AudioChannelSet::create5point1(), true); // 5.1 (1 in, 6 out)
+    checkLayout(juce::AudioChannelSet::create7point1(), juce::AudioChannelSet::create7point1(), true); // 7.1 (8 in, 8 out)
+    checkLayout(juce::AudioChannelSet::stereo(), juce::AudioChannelSet::create7point1(), true); // 7.1 (2 in, 8 out)
+    checkLayout(juce::AudioChannelSet::mono(), juce::AudioChannelSet::create7point1(), true); // 7.1 (1 in, 8 out)
+    checkLayout(juce::AudioChannelSet::create7point1point2(), juce::AudioChannelSet::create7point1point2(), true); // 7.1.2 (10 in, 10 out)
+    checkLayout(juce::AudioChannelSet::stereo(), juce::AudioChannelSet::create7point1point2(), true); // 7.1.2 (2 in, 10 out)
+    checkLayout(juce::AudioChannelSet::mono(), juce::AudioChannelSet::create7point1point2(), true); // 7.1.2 (1 in, 10 out)
+    checkLayout(juce::AudioChannelSet::create7point1point4(), juce::AudioChannelSet::create7point1point4(), true); // 7.1.4 (12 in, 12 out)
+    checkLayout(juce::AudioChannelSet::stereo(), juce::AudioChannelSet::create7point1point4(), true); // 7.1.4 (2 in, 12 out)
+    checkLayout(juce::AudioChannelSet::mono(), juce::AudioChannelSet::create7point1point4(), true); // 7.1.4 (1 in, 12 out)
+    checkLayout(juce::AudioChannelSet::disabled(), juce::AudioChannelSet::create7point1point4(), true); // Disabled input
+
+    // Invalid layouts
+    checkLayout(juce::AudioChannelSet::stereo(), juce::AudioChannelSet::mono(), false); // Stereo to Mono not supported
+    checkLayout(juce::AudioChannelSet::canonicalChannelSet(3), juce::AudioChannelSet::canonicalChannelSet(3), false); // 3 channels invalid
+    checkLayout(juce::AudioChannelSet::canonicalChannelSet(5), juce::AudioChannelSet::canonicalChannelSet(5), false); // 5 channels invalid
+    checkLayout(juce::AudioChannelSet::canonicalChannelSet(14), juce::AudioChannelSet::canonicalChannelSet(14), false); // 14 channels invalid
+
+    // 2. Active Channel Layout Name Query
+    struct LayoutNameTest {
+        juce::AudioChannelSet inSet;
+        juce::AudioChannelSet outSet;
+        const char* expectedName;
+    };
+    const LayoutNameTest nameTests[] = {
+        { juce::AudioChannelSet::mono(), juce::AudioChannelSet::mono(), "MONO" },
+        { juce::AudioChannelSet::stereo(), juce::AudioChannelSet::stereo(), "STEREO" },
+        { juce::AudioChannelSet::quadraphonic(), juce::AudioChannelSet::quadraphonic(), "QUAD" },
+        { juce::AudioChannelSet::create5point1(), juce::AudioChannelSet::create5point1(), "5.1 SURROUND" },
+        { juce::AudioChannelSet::create7point1(), juce::AudioChannelSet::create7point1(), "7.1 SURROUND" },
+        { juce::AudioChannelSet::create7point1point2(), juce::AudioChannelSet::create7point1point2(), "7.1.2 ATMOS" },
+        { juce::AudioChannelSet::create7point1point4(), juce::AudioChannelSet::create7point1point4(), "7.1.4 ATMOS" }
+    };
+    for (const auto& nt : nameTests) {
+        // Test via modern setBusesLayout
+        {
+            BRAUN_RB26AudioProcessor p;
+            juce::AudioProcessor::BusesLayout bl;
+            bl.inputBuses.add(nt.inSet);
+            bl.outputBuses.add(nt.outSet);
+            p.setBusesLayout(bl);
+            p.prepareToPlay(48000.0, 512);
+            const juce::String name = p.getActiveChannelLayoutName();
+            RB26_TEST_ASSERT(name == nt.expectedName);
+        }
+        // Test via channel count configuration
+        {
+            BRAUN_RB26AudioProcessor p;
+            p.setPlayConfigDetails(nt.inSet.size(), nt.outSet.size(), 48000.0, 512);
+            p.prepareToPlay(48000.0, 512);
+            const juce::String name = p.getActiveChannelLayoutName();
+            RB26_TEST_ASSERT(name == nt.expectedName);
+        }
+    }
+
+    // 3. Multi-Channel Standby Bypass Verification
+    // 3A: Stereo in, 5.1 out
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.setPlayConfigDetails(2, 6, 48000.0, 512);
+        p.prepareToPlay(48000.0, 512);
+        p.setPower(false);
+
+        juce::AudioBuffer<float> buf(6, 512);
+        buf.clear();
+        for (int i = 0; i < 512; ++i) {
+            buf.setSample(0, i, 0.7f); // Left
+            buf.setSample(1, i, 0.4f); // Right
+            buf.setSample(2, i, 99.0f); // Center (garbage host data)
+            buf.setSample(3, i, 99.0f); // LFE
+            buf.setSample(4, i, 99.0f); // Ls
+            buf.setSample(5, i, 99.0f); // Rs
+        }
+
+        juce::MidiBuffer midi;
+        p.processBlock(buf, midi);
+
+        // Ch 0 and 1 must be preserved at unity gain
+        for (int i = 0; i < 512; ++i) {
+            RB26_TEST_ASSERT(std::abs(buf.getSample(0, i) - 0.7f) < 1.0e-5f);
+            RB26_TEST_ASSERT(std::abs(buf.getSample(1, i) - 0.4f) < 1.0e-5f);
+        }
+        // Ch 2..5 must be strictly cleared to zero
+        for (int ch = 2; ch < 6; ++ch) {
+            for (int i = 0; i < 512; ++i) {
+                RB26_TEST_ASSERT(buf.getSample(ch, i) == 0.0f);
+            }
+        }
+    }
+
+    // 3B: Stereo in, 7.1.4 Atmos out
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.setPlayConfigDetails(2, 12, 48000.0, 512);
+        p.prepareToPlay(48000.0, 512);
+        p.setPower(false);
+
+        juce::AudioBuffer<float> buf(12, 512);
+        buf.clear();
+        for (int i = 0; i < 512; ++i) {
+            buf.setSample(0, i, 0.6f);
+            buf.setSample(1, i, 0.3f);
+            for (int ch = 2; ch < 12; ++ch) {
+                buf.setSample(ch, i, -50.0f);
+            }
+        }
+        juce::MidiBuffer midi;
+        p.processBlock(buf, midi);
+
+        for (int i = 0; i < 512; ++i) {
+            RB26_TEST_ASSERT(std::abs(buf.getSample(0, i) - 0.6f) < 1.0e-5f);
+            RB26_TEST_ASSERT(std::abs(buf.getSample(1, i) - 0.3f) < 1.0e-5f);
+        }
+        for (int ch = 2; ch < 12; ++ch) {
+            for (int i = 0; i < 512; ++i) {
+                RB26_TEST_ASSERT(buf.getSample(ch, i) == 0.0f);
+            }
+        }
+    }
+
+    // 4. Multi-Channel Active Processing & Upmixing (7.1.4 Dolby Atmos)
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.setPlayConfigDetails(2, 12, 48000.0, 512);
+        p.prepareToPlay(48000.0, 512);
+        p.setPower(true);
+
+        juce::AudioBuffer<float> buf(12, 512);
+        buf.clear();
+        buf.setSample(0, 0, 1.0f); // Impulse on Left
+
+        // Flood unassigned channels 2..11 with toxic NaNs and Infs to test adversarial host isolation
+        for (int ch = 2; ch < 12; ++ch) {
+            buf.setSample(ch, 0, std::numeric_limits<float>::quiet_NaN());
+            buf.setSample(ch, 1, std::numeric_limits<float>::infinity());
+        }
+
+        juce::MidiBuffer midi;
+        p.processBlock(buf, midi);
+
+        // Verify finite output and no NaN pollution on ANY of the 12 channels
+        for (int ch = 0; ch < 12; ++ch) {
+            for (int i = 0; i < 512; ++i) {
+                const float s = buf.getSample(ch, i);
+                RB26_TEST_ASSERT(std::isfinite(s));
+                RB26_TEST_ASSERT(std::abs(s) <= 1.05f);
+            }
+        }
+
+        // Run subsequent blocks to allow diffuse reverb tail to populate all 12 channels
+        for (int b = 0; b < 20; ++b) {
+            buf.clear();
+            p.processBlock(buf, midi);
+            for (int ch = 0; ch < 12; ++ch) {
+                for (int i = 0; i < 512; ++i) {
+                    const float s = buf.getSample(ch, i);
+                    RB26_TEST_ASSERT(std::isfinite(s));
+                    RB26_TEST_ASSERT(std::abs(s) <= 1.05f);
+                }
+            }
+        }
+
+        // LFE (Ch 3) must be strictly 0.0f
+        for (int i = 0; i < 512; ++i) {
+            RB26_TEST_ASSERT(buf.getSample(3, i) == 0.0f);
+        }
+
+        // Height channels (Ch 8, 9, 10, 11) must have received diffuse 3D spatial reverberation
+        for (int ch = 8; ch < 12; ++ch) {
+            const float mag = buf.getMagnitude(ch, 0, 512);
+            RB26_TEST_ASSERT(mag > 0.0f);
+        }
+    }
+
+    // 5. Native Editor Creation & Rendering under 7.1.4 Atmos Layout
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.setPlayConfigDetails(2, 12, 48000.0, 512);
+        p.prepareToPlay(48000.0, 512);
+        p.setPower(true);
+
+        auto editor = std::unique_ptr<BRAUN_RB26AudioProcessorEditor>(
+            dynamic_cast<BRAUN_RB26AudioProcessorEditor*>(p.createEditor()));
+        RB26_TEST_ASSERT(editor != nullptr);
+        editor->setSize(1280, 760);
+        editor->setNativeMode(true);
+        editor->resized();
+
+        // Repaint native graphics including CRT and chassis with 7.1.4 Atmos layout badges
+        juce::Image testImg(juce::Image::ARGB, 1280, 760, true);
+        juce::Graphics g(testImg);
+        editor->paint(g);
+
+        editor->setNativeMode(false);
+        editor.reset();
+    }
+
+    std::cout << "  -> PASS: All 8 bus layouts, 7.1.4 Atmos upmixing, zero NaN bleed, and editor rendering verified.\n";
+}
+
 } // namespace
 
 int main() {
@@ -947,6 +1171,7 @@ int main() {
     runTest8_UserPathManifoldSwitchingContinuity();
     runTest9_LosslessWavRecorderDirectoryAndIntegrity();
     runTest10_NativeUIOcclusionAndContextMenu();
+    runTest11_MultiChannelSurroundAndAtmos();
 
     std::cout << "================================================================\n";
     std::cout << "  ALL MILESTONE 4 AUDIT TESTS PASSED (100% SUCCESS)\n";

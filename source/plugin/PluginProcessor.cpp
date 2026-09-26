@@ -169,7 +169,9 @@ bool BRAUN_RB26AudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts
                            || mainOutput == juce::AudioChannelSet::create5point1()
                            || mainOutput == juce::AudioChannelSet::create7point1()
                            || mainOutput == juce::AudioChannelSet::create7point1point2()
-                           || mainOutput == juce::AudioChannelSet::create7point1point4());
+                           || mainOutput == juce::AudioChannelSet::discreteChannels(10)
+                           || mainOutput == juce::AudioChannelSet::create7point1point4()
+                           || mainOutput == juce::AudioChannelSet::discreteChannels(12));
 
     if (!validOutput)
         return false;
@@ -188,26 +190,33 @@ bool BRAUN_RB26AudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts
 
 juce::String BRAUN_RB26AudioProcessor::getActiveChannelLayoutName() const noexcept
 {
+    const int numOuts = getTotalNumOutputChannels();
+
     if (auto* outBus = getBus(false, 0))
     {
         const auto layout = outBus->getCurrentLayout();
-        if (layout == juce::AudioChannelSet::mono())
-            return "MONO";
-        if (layout == juce::AudioChannelSet::stereo())
-            return "STEREO";
-        if (layout == juce::AudioChannelSet::quadraphonic())
-            return "QUAD";
-        if (layout == juce::AudioChannelSet::create5point1())
-            return "5.1 SURROUND";
-        if (layout == juce::AudioChannelSet::create7point1())
-            return "7.1 SURROUND";
-        if (layout == juce::AudioChannelSet::create7point1point2())
-            return "7.1.2 ATMOS";
-        if (layout == juce::AudioChannelSet::create7point1point4())
-            return "7.1.4 ATMOS";
+        if (layout.size() == numOuts)
+        {
+            if (layout == juce::AudioChannelSet::mono())
+                return "MONO";
+            if (layout == juce::AudioChannelSet::stereo())
+                return "STEREO";
+            if (layout == juce::AudioChannelSet::quadraphonic())
+                return "QUAD";
+            if (layout == juce::AudioChannelSet::create5point1())
+                return "5.1 SURROUND";
+            if (layout == juce::AudioChannelSet::create7point1())
+                return "7.1 SURROUND";
+            if (layout == juce::AudioChannelSet::create7point1point2()
+             || layout == juce::AudioChannelSet::discreteChannels(10))
+                return "7.1.2 ATMOS";
+            if (layout == juce::AudioChannelSet::create7point1point4()
+             || layout == juce::AudioChannelSet::discreteChannels(12))
+                return "7.1.4 ATMOS";
+        }
     }
 
-    const int ch = (reverbEngine.getActiveChannelCount() > 0) ? reverbEngine.getActiveChannelCount() : getTotalNumOutputChannels();
+    const int ch = (numOuts > 0) ? numOuts : reverbEngine.getActiveChannelCount();
     switch (ch)
     {
         case 1:  return "MONO";
