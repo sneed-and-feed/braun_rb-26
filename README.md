@@ -1,11 +1,11 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
 [![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(391%2F391)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.4.11](https://img.shields.io/badge/Version-1.4.11-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.11)
+[![Version: 1.4.12](https://img.shields.io/badge/Version-1.4.12-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.12)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.11/BRAUN_RB26-v1.4.11-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.11/BRAUN_RB26-v1.4.11-macOS-Universal.zip)
-[![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.11/BRAUN_RB26-v1.4.11-Linux-x64.tar.gz)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.12/BRAUN_RB26-v1.4.12-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.12/BRAUN_RB26-v1.4.12-macOS-Universal.zip)
+[![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.12/BRAUN_RB26-v1.4.12-Linux-x64.tar.gz)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-4A4A4A?style=for-the-badge)](https://isocpp.org/)
@@ -32,9 +32,9 @@ Ships as native **VST3**, **CLAP**, **AU**, and **Standalone** plugins for **mac
 
 Precompiled release packages (verified with SHA-256 in [`releases/SHA256SUMS.txt`](releases/SHA256SUMS.txt)):
 
-* **macOS Universal (Apple Silicon M1–M4 & Intel)**: [**`BRAUN_RB26-v1.4.11-macOS-Universal.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.11/BRAUN_RB26-v1.4.11-macOS-Universal.zip) (~23 MB) — AU (`.component`), VST3 (`.vst3`), CLAP (`.clap`), Standalone (`.app`).
-* **Windows x64**: [**`BRAUN_RB26-v1.4.11-Windows-x64.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.11/BRAUN_RB26-v1.4.11-Windows-x64.zip) (~10 MB) or [**VST3 Only (.zip)**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.11/BRAUN_RB26-v1.4.11-VST3-Windows-x64.zip) (~3 MB) — VST3, CLAP, Standalone (`.exe`).
-* **Linux x64**: [**`BRAUN_RB26-v1.4.11-Linux-x64.tar.gz`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.11/BRAUN_RB26-v1.4.11-Linux-x64.tar.gz) — VST3, CLAP, Standalone binary, and `INSTALL.txt` (packaged via Ubuntu CI).
+* **macOS Universal (Apple Silicon M1–M4 & Intel)**: [**`BRAUN_RB26-v1.4.12-macOS-Universal.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.12/BRAUN_RB26-v1.4.12-macOS-Universal.zip) (~23 MB) — AU (`.component`), VST3 (`.vst3`), CLAP (`.clap`), Standalone (`.app`).
+* **Windows x64**: [**`BRAUN_RB26-v1.4.12-Windows-x64.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.12/BRAUN_RB26-v1.4.12-Windows-x64.zip) (~10 MB) or [**VST3 Only (.zip)**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.12/BRAUN_RB26-v1.4.12-VST3-Windows-x64.zip) (~3 MB) — VST3, CLAP, Standalone (`.exe`).
+* **Linux x64**: [**`BRAUN_RB26-v1.4.12-Linux-x64.tar.gz`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.12/BRAUN_RB26-v1.4.12-Linux-x64.tar.gz) — VST3, CLAP, Standalone binary, and `INSTALL.txt` (packaged via Ubuntu CI).
 * View all release notes and checksums on [GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases).
 
 ---
