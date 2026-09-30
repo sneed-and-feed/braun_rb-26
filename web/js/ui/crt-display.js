@@ -159,6 +159,9 @@ export class BraunCrtDisplay {
     this.ctx.fillStyle = '#121414';
     this.ctx.fillRect(0, 0, w, h);
     this.draw();
+    if (!this.isPowered) {
+      this.stop();
+    }
   }
 
   _updateGraticuleCache(w, h) {
@@ -251,16 +254,24 @@ export class BraunCrtDisplay {
       if (typeof this.analyserL.maxDecibels === 'number') {
         this.maxDecibels = this.analyserL.maxDecibels;
       }
-      if (!this.isRunning) this.start();
+      if (this.isPowered && !this.isRunning) this.start();
     }
     this.draw();
+    if (!this.isPowered) {
+      this.stop();
+    }
   }
 
   setPower(isPowered) {
     this.isPowered = Boolean(isPowered);
     this.silentFrames = 0;
-    if (!this.isRunning) this.start();
-    this.draw();
+    if (!this.isPowered) {
+      this.draw();
+      this.stop();
+    } else {
+      if (!this.isRunning) this.start();
+      this.draw();
+    }
   }
 
   setMode(mode) {
@@ -268,6 +279,9 @@ export class BraunCrtDisplay {
     if (mode === 'WAVEFORM') mode = 'WAVE';
     this.mode = mode;
     this.draw();
+    if (!this.isPowered) {
+      this.stop();
+    }
   }
 
   /**
@@ -276,7 +290,7 @@ export class BraunCrtDisplay {
    * @param {Float32Array} [right]
    */
   pushAudio(left, right) {
-    if (!left) return;
+    if (!this.isPowered || !left) return;
     let lData = left;
     let rData = right;
     if (left && left.leftData) {
@@ -306,7 +320,7 @@ export class BraunCrtDisplay {
       this.silentFrames = Math.min(100, this.silentFrames + 1);
     }
 
-    if (!this.isRunning) this.start();
+    if (this.isPowered && !this.isRunning) this.start();
   }
 
   /**
@@ -414,6 +428,9 @@ export class BraunCrtDisplay {
     this._drawGraticule(ctx, w, h);
 
     if (!this.isPowered) {
+      ctx.fillStyle = '#121414';
+      ctx.fillRect(0, 0, w, h);
+      this._drawGraticule(ctx, w, h);
       this._drawStandbyBeam(ctx, w, h);
       return;
     }

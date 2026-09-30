@@ -313,6 +313,38 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const auto snapshot = atomicPointers.loadSnapshot();
     reverbEngine.setParameters(snapshot.toDspParams());
 
+    // Auto-wake / liveness check:
+    // If DAW transport is playing, incoming audio arrives above threshold,
+    // or exciter has active voices / incoming MIDI, ensure the engine is fully active
+    bool isTransportPlaying = false;
+    if (auto* ph = getPlayHead())
+    {
+        if (auto pos = ph->getPosition())
+        {
+            if (pos->getIsPlaying())
+                isTransportPlaying = true;
+        }
+    }
+
+    bool hasIncomingAudio = false;
+    for (int ch = 0; ch < numInputChannels; ++ch)
+    {
+        if (buffer.getMagnitude(ch, 0, numSamples) > 1.0e-5f)
+        {
+            hasIncomingAudio = true;
+            break;
+        }
+    }
+
+    const bool hasMidiOrExciter = !midiMessages.isEmpty()
+                               || exciterEngine.getActiveVoiceCount() > 0
+                               || exciterEngine.isPoissonActive();
+
+    if (isTransportPlaying || hasIncomingAudio || hasMidiOrExciter)
+    {
+        reverbEngine.wakeUp();
+    }
+
     if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
     {
         reverbEngine.reset();
@@ -575,6 +607,7 @@ void BRAUN_RB26AudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty("currentProgram", mCurrentProgram, nullptr);
+    state.setProperty("isPoweredOn", isPoweredOn.load(std::memory_order_relaxed), nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -587,6 +620,10 @@ void BRAUN_RB26AudioProcessor::setStateInformation(const void* data, int sizeInB
         auto vt = juce::ValueTree::fromXml(*xmlState);
         if (vt.hasProperty("currentProgram"))
             mCurrentProgram = static_cast<int>(vt.getProperty("currentProgram"));
+        if (vt.hasProperty("isPoweredOn"))
+            setPower(static_cast<bool>(vt.getProperty("isPoweredOn")));
+        else
+            setPower(true);
         apvts.replaceState(vt);
     }
 }

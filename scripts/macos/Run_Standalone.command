@@ -24,8 +24,9 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-echo "Removing macOS Gatekeeper quarantine attribute..."
+echo "Removing macOS Gatekeeper quarantine attribute and applying ad-hoc code signature..."
 xattr -cr "$APP_PATH" 2>/dev/null || true
+codesign --force --deep --sign - "$APP_PATH" 2>/dev/null || true
 
 echo "Opening BRAUN RB-26..."
 open "$APP_PATH"

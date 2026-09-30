@@ -1109,20 +1109,44 @@ export class BraunRb26App {
         this._scopeBufferL = new Float32Array(512);
         this._scopeBufferR = new Float32Array(512);
         backend.addEventListener('scopeFrame', (data) => {
-          if (data && (data.samplesL || data.samples) && this.display) {
-            const arrL = data.samplesL || data.samples;
-            const arrR = data.samplesR || arrL;
-            const len = Math.min(512, arrL.length);
-            for (let i = 0; i < len; i++) {
-              this._scopeBufferL[i] = arrL[i] || 0;
-              this._scopeBufferR[i] = (arrR && typeof arrR[i] === 'number') ? arrR[i] : (arrL[i] || 0);
+          if (!data || !this.display || !this.isPowered) return;
+          try {
+            if (typeof data.l === 'string') {
+              const rawL = atob(data.l);
+              const rawR = typeof data.r === 'string' ? atob(data.r) : null;
+              const len = Math.min(512, rawL.length);
+              const inv127 = 1.0 / 127.0;
+              for (let i = 0; i < len; i++) {
+                this._scopeBufferL[i] = (rawL.charCodeAt(i) - 128) * inv127;
+              }
+              if (rawR) {
+                const rLen = Math.min(512, rawR.length);
+                for (let i = 0; i < rLen; i++) {
+                  this._scopeBufferR[i] = (rawR.charCodeAt(i) - 128) * inv127;
+                }
+              } else {
+                this._scopeBufferR.set(this._scopeBufferL);
+              }
+              this.display.pushAudio(this._scopeBufferL.subarray(0, len), this._scopeBufferR.subarray(0, len));
+            } else if (data.samplesL || data.samples) {
+              // Backward compatibility for raw float arrays
+              const arrL = data.samplesL || data.samples;
+              const arrR = data.samplesR || arrL;
+              const len = Math.min(512, arrL.length);
+              for (let i = 0; i < len; i++) {
+                this._scopeBufferL[i] = arrL[i] || 0;
+                this._scopeBufferR[i] = (arrR && typeof arrR[i] === 'number') ? arrR[i] : (arrL[i] || 0);
+              }
+              this.display.pushAudio(this._scopeBufferL.subarray(0, len), this._scopeBufferR.subarray(0, len));
             }
-            this.display.pushAudio(this._scopeBufferL.subarray(0, len), this._scopeBufferR.subarray(0, len));
+          } catch (err) {
+            console.warn('scopeFrame decode error:', err);
           }
         });
 
         backend.addEventListener('telemetryFrame', (frame) => {
-          if (frame && this.display) {
+          if (!frame || !this.isPowered) return;
+          if (this.display) {
             this.display.pushTelemetry(frame.lowEnergy || 0, frame.midEnergy || 0, frame.highEnergy || 0);
           }
           if (frame && frame.channelLayout) {
@@ -1203,20 +1227,33 @@ export class BraunRb26App {
       document.addEventListener(evt, doUnlock, { capture: true, passive: true });
     });
 
-    // Auto-recovery when tab gains focus
+    // Lifecycle & canvas pausing on visibilitychange & tab backgrounding
     const onVisibilityChange = async () => {
-      if (this.isJuce) return;
-      if (document.visibilityState === 'visible' && this.engine.ctx) {
-        if (this.engine.ctx.state === 'suspended' || this.engine.ctx.state === 'interrupted') {
-          try {
-            await this.engine.ctx.resume();
-          } catch (e) {}
+      if (typeof document !== 'undefined' && document.hidden) {
+        if (this.display) this.display.stop();
+      } else {
+        if (this.isPowered && this.display) {
+          this.display.start();
+        }
+        if (!this.isJuce && this.engine && this.engine.ctx) {
+          if (this.engine.ctx.state === 'suspended' || this.engine.ctx.state === 'interrupted') {
+            try {
+              await this.engine.ctx.resume();
+            } catch (e) {}
+          }
         }
       }
     };
 
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('pageshow', onVisibilityChange);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pageshow', onVisibilityChange);
+      window.addEventListener('pagehide', () => {
+        if (this.display) this.display.stop();
+      });
+    }
   }
 
   _initTheme() {
@@ -1532,6 +1569,10 @@ export class BraunRb26App {
         if (isSwitching) return;
         isSwitching = true;
         setTimeout(() => { isSwitching = false; }, 400);
+
+        if (this.display) {
+          this.display.stop();
+        }
 
         if (typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
           try {

@@ -41,7 +41,8 @@ if [ -d "$DIR/AU/BRAUN_RB26.component" ]; then
     rm -rf "$AU_DIR/BRAUN_RB26.component"
     cp -R "$DIR/AU/BRAUN_RB26.component" "$AU_DIR/"
     xattr -cr "$AU_DIR/BRAUN_RB26.component" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ AU installed and unquarantined${RESET}"
+    codesign --force --deep --sign - "$AU_DIR/BRAUN_RB26.component" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ AU installed, unquarantined, and ad-hoc signed${RESET}"
 fi
 
 # 2. Install VST3 (.vst3)
@@ -50,7 +51,8 @@ if [ -d "$DIR/VST3/BRAUN_RB26.vst3" ]; then
     rm -rf "$VST3_DIR/BRAUN_RB26.vst3"
     cp -R "$DIR/VST3/BRAUN_RB26.vst3" "$VST3_DIR/"
     xattr -cr "$VST3_DIR/BRAUN_RB26.vst3" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ VST3 installed and unquarantined${RESET}"
+    codesign --force --deep --sign - "$VST3_DIR/BRAUN_RB26.vst3" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ VST3 installed, unquarantined, and ad-hoc signed${RESET}"
 fi
 
 # 3. Install CLAP (.clap)
@@ -59,7 +61,8 @@ if [ -e "$DIR/CLAP/BRAUN_RB26.clap" ]; then
     rm -rf "$CLAP_DIR/BRAUN_RB26.clap"
     cp -R "$DIR/CLAP/BRAUN_RB26.clap" "$CLAP_DIR/"
     xattr -cr "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ CLAP installed and unquarantined${RESET}"
+    codesign --force --deep --sign - "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ CLAP installed, unquarantined, and ad-hoc signed${RESET}"
 fi
 
 # 4. Install Standalone (.app)
@@ -68,7 +71,8 @@ if [ -d "$DIR/Standalone/BRAUN_RB26.app" ]; then
     rm -rf "$APP_DIR/BRAUN_RB26.app"
     cp -R "$DIR/Standalone/BRAUN_RB26.app" "$APP_DIR/"
     xattr -cr "$APP_DIR/BRAUN_RB26.app" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ Standalone app installed and unquarantined${RESET}"
+    codesign --force --deep --sign - "$APP_DIR/BRAUN_RB26.app" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ Standalone app installed, unquarantined, and ad-hoc signed${RESET}"
 fi
 
 # 5. Flush macOS AudioComponentRegistrar cache so Logic / DAWs see it immediately

@@ -97,8 +97,9 @@ if [ -n "$AU_SRC" ]; then
     echo -e "Installing ${BOLD}Audio Unit (AU)${RESET} -> $AU_DIR/..."
     rm -rf "$AU_DIR/BRAUN_RB26.component"
     cp -R "$AU_SRC" "$AU_DIR/"
-    xattr -d com.apple.quarantine "$AU_DIR/BRAUN_RB26.component" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ AU installed & Gatekeeper unquarantined${RESET}"
+    xattr -cr "$AU_DIR/BRAUN_RB26.component" 2>/dev/null || true
+    codesign --force --deep --sign - "$AU_DIR/BRAUN_RB26.component" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ AU installed, Gatekeeper unquarantined & ad-hoc signed${RESET}"
 fi
 
 # Install VST3
@@ -107,8 +108,9 @@ if [ -n "$VST3_SRC" ]; then
     echo -e "Installing ${BOLD}VST3${RESET} -> $VST3_DIR/..."
     rm -rf "$VST3_DIR/BRAUN_RB26.vst3"
     cp -R "$VST3_SRC" "$VST3_DIR/"
-    xattr -d com.apple.quarantine "$VST3_DIR/BRAUN_RB26.vst3" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ VST3 installed & Gatekeeper unquarantined${RESET}"
+    xattr -cr "$VST3_DIR/BRAUN_RB26.vst3" 2>/dev/null || true
+    codesign --force --deep --sign - "$VST3_DIR/BRAUN_RB26.vst3" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ VST3 installed, Gatekeeper unquarantined & ad-hoc signed${RESET}"
 fi
 
 # Install CLAP
@@ -117,8 +119,9 @@ if [ -n "$CLAP_SRC" ]; then
     echo -e "Installing ${BOLD}CLAP${RESET} -> $CLAP_DIR/..."
     rm -rf "$CLAP_DIR/BRAUN_RB26.clap"
     cp -R "$CLAP_SRC" "$CLAP_DIR/"
-    xattr -d com.apple.quarantine "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ CLAP installed & Gatekeeper unquarantined${RESET}"
+    xattr -cr "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
+    codesign --force --deep --sign - "$CLAP_DIR/BRAUN_RB26.clap" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ CLAP installed, Gatekeeper unquarantined & ad-hoc signed${RESET}"
 fi
 
 # Install Standalone
@@ -127,8 +130,9 @@ if [ -n "$APP_SRC" ]; then
     echo -e "Installing ${BOLD}Standalone${RESET} -> $APP_DIR/..."
     rm -rf "$APP_DIR/BRAUN_RB26.app"
     cp -R "$APP_SRC" "$APP_DIR/"
-    xattr -d com.apple.quarantine "$APP_DIR/BRAUN_RB26.app" 2>/dev/null || true
-    echo -e "${GREEN}  ✓ Standalone app installed & Gatekeeper unquarantined${RESET}"
+    xattr -cr "$APP_DIR/BRAUN_RB26.app" 2>/dev/null || true
+    codesign --force --deep --sign - "$APP_DIR/BRAUN_RB26.app" 2>/dev/null || true
+    echo -e "${GREEN}  ✓ Standalone app installed, Gatekeeper unquarantined & ad-hoc signed${RESET}"
 fi
 
 # Refresh macOS Audio Units cache

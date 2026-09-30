@@ -488,7 +488,13 @@ if (window.__JUCE__ && window.__JUCE__.backend) {
   });
 
   window.__JUCE__.backend.addEventListener('scopeFrame', (data) => {
-    if (data && data.samples) {
+    if (data && data.l && typeof atob === 'function') {
+      const raw = atob(data.l);
+      const inv127 = 1.0 / 127.0;
+      for (let i = 0; i < canvas.width && i < raw.length; ++i) {
+        scopeData[i] = (raw.charCodeAt(i) - 128) * inv127;
+      }
+    } else if (data && data.samples) {
       for (let i = 0; i < canvas.width && i < data.samples.length; ++i) {
         scopeData[i] = data.samples[i];
       }
@@ -509,15 +515,14 @@ if (window.__JUCE__ && window.__JUCE__.backend) {
 juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOptions(BRAUN_RB26AudioProcessorEditor& editor)
 {
 #if JUCE_WINDOWS
-    // Configure WebView2 arguments for low latency, no audio contention, and host DAW stability
+    // Configure WebView2 arguments for low latency, no audio contention, and host DAW stability.
+    // Background throttling and occlusion backgrounding are allowed to function naturally so
+    // Chromium can idle, trigger V8 garbage collection sweeps, and trim working set memory.
     _wputenv_s(
         L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
         L"--mute-audio "
         L"--disable-audio-output "
         L"--disable-web-midi "
-        L"--disable-background-timer-throttling "
-        L"--disable-backgrounding-occluded-windows "
-        L"--disable-renderer-backgrounding "
         L"--disable-features=Translate,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,CalculateNativeWinOcclusion"
     );
 #endif
@@ -783,7 +788,7 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
 #if JUCE_WEB_BROWSER
 void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
 {
-    if (webComponent == nullptr || !webComponent->isVisible())
+    if (!processorRef.isPower() || webComponent == nullptr || !webComponent->isVisible())
         return;
 
     const bool isSilent = (latestTelemetryFrame.inputRmsL < 1.0e-5f &&
@@ -822,7 +827,7 @@ void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
 
 void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
 {
-    if (webComponent == nullptr || !webComponent->isVisible())
+    if (!processorRef.isPower() || webComponent == nullptr || !webComponent->isVisible())
         return;
 
     constexpr int kSamples = 512;
@@ -853,20 +858,19 @@ void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
         silentFrameCounter = 0;
     }
 
-    juce::Array<juce::var> leftArray;
-    juce::Array<juce::var> rightArray;
-    leftArray.ensureStorageAllocated(kSamples);
-    rightArray.ensureStorageAllocated(kSamples);
+    uint8_t bytesL[kSamples];
+    uint8_t bytesR[kSamples];
     for (int i = 0; i < kSamples; ++i)
     {
-        leftArray.add(sL[i]);
-        rightArray.add(sR[i]);
+        const float sampL = std::clamp(sL[i], -1.0f, 1.0f);
+        const float sampR = std::clamp(sR[i], -1.0f, 1.0f);
+        bytesL[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(std::round(128.0f + sampL * 127.0f)), 0, 255));
+        bytesR[i] = static_cast<uint8_t>(std::clamp(static_cast<int>(std::round(128.0f + sampR * 127.0f)), 0, 255));
     }
 
     auto* obj = new juce::DynamicObject();
-    obj->setProperty("samplesL", juce::var(leftArray));
-    obj->setProperty("samplesR", juce::var(rightArray));
-    obj->setProperty("samples", juce::var(leftArray)); // mono backward compatibility
+    obj->setProperty("l", juce::Base64::toBase64(bytesL, kSamples));
+    obj->setProperty("r", juce::Base64::toBase64(bytesR, kSamples));
     webComponent->emitEventIfBrowserIsVisible("scopeFrame", juce::var(obj));
 }
 
@@ -1582,6 +1586,7 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
             webComponent->setVisible(true);
             webComponent->setBounds(getLocalBounds());
             webComponent->toFront(false);
+            syncAllParametersToWeb();
         }
     }
     viewModeButton.setVisible(useNativeUI);

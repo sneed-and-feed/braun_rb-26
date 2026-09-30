@@ -6,15 +6,13 @@ cmake_minimum_required(VERSION 3.22)
 # Platforms: Windows (x64/ARM64), macOS (Universal), Linux, iOS, Android
 # ==============================================================================
 
-# Configure Apple deployment target before project()
+# Configure Apple deployment target and Universal architectures before project()
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS deployment target")
-    if(NOT CMAKE_OSX_ARCHITECTURES)
-        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
-    endif()
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 endif()
 
-project(BRAUN_RB26_PROJECT VERSION 1.4.12 LANGUAGES C CXX)
+project(BRAUN_RB26_PROJECT VERSION 1.4.13 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -252,7 +250,7 @@ juce_add_plugin(BRAUN_RB26
     PLUGIN_CODE Rb26
     FORMATS ${RB26_FORMATS}
     PRODUCT_NAME "BRAUN_RB26"
-    VERSION "1.4.12"
+    VERSION "1.4.13"
     ${RB26_EXTRA_PLUGIN_ARGS}
 )
 

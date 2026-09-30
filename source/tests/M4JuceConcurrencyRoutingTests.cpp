@@ -28,8 +28,8 @@ void runTest1_ConcurrencyAndPowerReset() {
     BRAUN_RB26AudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
 
-    // Initial state: Standby (power false)
-    RB26_TEST_ASSERT(!processor.isPower());
+    // Initial state: Power ON by default
+    RB26_TEST_ASSERT(processor.isPower());
 
     // 1. Process normal audio with power ON
     processor.setPower(true);
@@ -420,6 +420,7 @@ void runTest5_HostDawPresetsExposure() {
     restoredProcessor.setStateInformation(stateBlock.getData(), static_cast<int>(stateBlock.getSize()));
     RB26_TEST_ASSERT(restoredProcessor.getCurrentProgram() == 8);
     RB26_TEST_ASSERT(*restoredProcessor.getAPVTS().getRawParameterValue("freeze_hold") > 0.5f);
+    RB26_TEST_ASSERT(restoredProcessor.isPower() == processor.isPower());
 
     std::cout << "  -> PASS: All 10 factory presets exposed, selectable, and state-restorable.\n";
 }
@@ -839,7 +840,7 @@ void runTest10_NativeUIOcclusionAndContextMenu() {
 
     BRAUN_RB26AudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
-    RB26_TEST_ASSERT(!processor.isPower());
+    RB26_TEST_ASSERT(processor.isPower());
 
     auto editor = std::unique_ptr<BRAUN_RB26AudioProcessorEditor>(
         dynamic_cast<BRAUN_RB26AudioProcessorEditor*>(processor.createEditor()));

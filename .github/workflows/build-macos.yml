@@ -94,6 +94,13 @@ jobs:
             exit 1
           fi
 
+          # Ad-hoc sign all binaries for Apple Silicon (arm64 requires valid code signature)
+          echo "Applying ad-hoc code signature (codesign --force --deep --sign -)..."
+          codesign --force --deep --sign - "package/VST3/BRAUN_RB26.vst3"
+          codesign --force --deep --sign - "package/AU/BRAUN_RB26.component"
+          codesign --force --deep --sign - "package/CLAP/BRAUN_RB26.clap"
+          codesign --force --deep --sign - "package/Standalone/BRAUN_RB26.app"
+
           # Copy easy-run scripts into package root and grant execute permissions
           if [ -d "scripts/macos" ]; then
             echo "Copying macOS easy-run helper scripts..."

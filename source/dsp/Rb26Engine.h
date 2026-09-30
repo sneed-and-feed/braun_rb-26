@@ -58,6 +58,9 @@ struct Rb26Parameters {
     bool limiterEnable = true;      // true/false
     ManifoldType manifold = ManifoldType::PoincareHyperbolic;
     bool pitchWarp = false;         // Shimmer Warp Mode (unbounded feedback, micro-flutter, wideband)
+
+    bool operator==(const Rb26Parameters& other) const noexcept = default;
+    bool operator!=(const Rb26Parameters& other) const noexcept = default;
 };
 
 struct PresetDefinition {
@@ -111,8 +114,12 @@ public:
                  int numSamples,
                  const float* const* auxReverbChannels = nullptr) noexcept;
 
-    // Status queries
+    // Status queries & engine wake-up
     [[nodiscard]] bool isIdle() const noexcept { return mIsIdle; }
+    void wakeUp() noexcept {
+        mIsIdle = false;
+        mSilentSamplesCount = 0;
+    }
     [[nodiscard]] int getActiveChannelCount() const noexcept { return mActiveChannelCount; }
     [[nodiscard]] ChannelLayout getActiveChannelLayout() const noexcept { return getLayoutForChannelCount(mActiveChannelCount); }
 

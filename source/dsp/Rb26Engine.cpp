@@ -166,7 +166,7 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
         mLastPitchFbR = 0.0f;
     }
 
-    if (params.freezeHold && mIsIdle) {
+    if ((params.freezeHold || mParams != params) && mIsIdle) {
         mIsIdle = false;
         mSilentSamplesCount = 0;
     }
