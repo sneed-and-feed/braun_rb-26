@@ -211,6 +211,8 @@ private:
     int mTelemetryDecimator { 0 };
 
     bool mWasFrozen { false };
+    float mLastBoostDb { 0.0f };
+    float mLastBoostGain { 1.0f };
 
     void pushVisualizerFrame(const VisualizerFrame& frame) noexcept;
 };

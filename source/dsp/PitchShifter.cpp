@@ -68,12 +68,19 @@ void DualTapDelayPitchShifter::updateWindowTarget() noexcept {
 }
 
 void DualTapDelayPitchShifter::setWarpMode(bool enabled, float warpAmount) noexcept {
+    const float clampedAmount = enabled ? std::clamp(warpAmount, 0.0f, 1.0f) : 0.0f;
+    if (mWarpEnabled == enabled && std::abs(mWarpAmount - clampedAmount) < 1.0e-5f) {
+        return;
+    }
     mWarpEnabled = enabled;
-    mWarpAmount = enabled ? std::clamp(warpAmount, 0.0f, 1.0f) : 0.0f;
+    mWarpAmount = clampedAmount;
     updateWindowTarget();
 }
 
 void DualTapDelayPitchShifter::setWarpModulation(float modulation) noexcept {
+    if (std::abs(mWarpModulation - modulation) < 1.0e-5f) {
+        return;
+    }
     mWarpModulation = modulation;
     if (mWarpEnabled && mWarpAmount > 0.001f) {
         updateWindowTarget();
@@ -238,6 +245,8 @@ void PitchShifter::prepare(double sampleRate, int /*maxBlockSize*/) noexcept {
     mDimmerCircBufferL.assign(kCircCapacity, 0.0f);
     mDimmerCircBufferR.assign(kCircCapacity, 0.0f);
     mCircWriteIndex = 0;
+    mShimDelaySamples = static_cast<size_t>(std::clamp(0.149f * mSampleRate, 1.0f, static_cast<float>(kCircCapacity - 64)));
+    mDimDelaySamples  = static_cast<size_t>(std::clamp(0.211f * mSampleRate, 1.0f, static_cast<float>(kCircCapacity - 64)));
 
     reset();
 }
@@ -276,8 +285,12 @@ void PitchShifter::reset() noexcept {
 }
 
 void PitchShifter::setWarpMode(bool enabled, float warpAmount) noexcept {
+    const float clampedAmount = enabled ? std::clamp(warpAmount, 0.0f, 1.0f) : 0.0f;
+    if (mWarpEnabled == enabled && std::abs(mWarpAmount - clampedAmount) < 1.0e-5f) {
+        return;
+    }
     mWarpEnabled = enabled;
-    mWarpAmount = enabled ? std::clamp(warpAmount, 0.0f, 1.0f) : 0.0f;
+    mWarpAmount = clampedAmount;
     mWarpSmoother.setTarget(mWarpAmount);
 
     mShimmerShifterL.setWarpMode(enabled, mWarpAmount);
@@ -399,8 +412,7 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     float shimSatR = 0.0f;
     if (effShimmerSend > 1.0e-5f) {
         // Decoupled circulation delay tap (~149 ms for Shimmer, giving distinct temporal sparkle spacing)
-        const size_t shimDelaySamples = static_cast<size_t>(std::clamp(0.149f * mSampleRate, 1.0f, static_cast<float>(kCircCapacity - 64)));
-        const size_t readShimIdx = (mCircWriteIndex + kCircCapacity - shimDelaySamples) & kCircMask;
+        const size_t readShimIdx = (mCircWriteIndex + kCircCapacity - mShimDelaySamples) & kCircMask;
         const float delayedShimFbL = mShimmerCircBufferL[readShimIdx];
         const float delayedShimFbR = mShimmerCircBufferR[readShimIdx];
 
@@ -442,8 +454,7 @@ void PitchShifter::processSample(float inL, float inR, float& outL, float& outR)
     float dimSatR = 0.0f;
     if (effDimmerSend > 1.0e-5f) {
         // Decoupled circulation delay tap (~211 ms for Dimmer, giving distinct temporal falling drops)
-        const size_t dimDelaySamples = static_cast<size_t>(std::clamp(0.211f * mSampleRate, 1.0f, static_cast<float>(kCircCapacity - 64)));
-        const size_t readDimIdx = (mCircWriteIndex + kCircCapacity - dimDelaySamples) & kCircMask;
+        const size_t readDimIdx = (mCircWriteIndex + kCircCapacity - mDimDelaySamples) & kCircMask;
         const float delayedDimFbL = mDimmerCircBufferL[readDimIdx];
         const float delayedDimFbR = mDimmerCircBufferR[readDimIdx];
 

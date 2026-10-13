@@ -183,7 +183,7 @@ void ChimeVoice::processSample(float& outL, float& outR) noexcept {
         if (mHammerStep < mHammerAttackSamples) {
             const float frac = static_cast<float>(mHammerStep) / static_cast<float>(mHammerAttackSamples);
             // Smooth raised-cosine (Hann) attack: zero start value and zero initial derivative
-            mHammerGain = mHammerTargetGain * (0.5f * (1.0f - std::cos(kPi * frac)));
+            mHammerGain = mHammerTargetGain * (0.5f * (1.0f - FastSinTable::cos(kPi * frac)));
         } else if (mHammerStep < mHammerDecaySamples) {
             mHammerGain *= mHammerDecayCoeff;
         } else {
@@ -323,9 +323,9 @@ void LaboratoryImpulseGenerator::processSample(float& outL, float& outR) noexcep
         const int fadeSamples = std::max(1, std::min(static_cast<int>(0.005f * mSampleRate), mBurstTotal / 4));
         float win = 1.0f;
         if (elapsed < fadeSamples) {
-            win = 0.5f * (1.0f - std::cos(kPi * static_cast<float>(elapsed) / static_cast<float>(fadeSamples)));
+            win = 0.5f * (1.0f - FastSinTable::cos(kPi * static_cast<float>(elapsed) / static_cast<float>(fadeSamples)));
         } else if (mBurstRemaining < fadeSamples) {
-            win = 0.5f * (1.0f + std::cos(kPi * static_cast<float>(fadeSamples - mBurstRemaining) / static_cast<float>(fadeSamples)));
+            win = 0.5f * (1.0f + FastSinTable::cos(kPi * static_cast<float>(fadeSamples - mBurstRemaining) / static_cast<float>(fadeSamples)));
         }
 
         const float burstVal = pink * win * 0.80f;

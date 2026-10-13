@@ -770,7 +770,9 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
         powerButton.setButtonText(processorRef.isPower() ? "POWER ON" : "STANDBY");
         powerButton.setToggleState(processorRef.isPower(), juce::dontSendNotification);
 
-        recordButton.setToggleState(processorRef.isRecording(), juce::dontSendNotification);
+        const bool rec = processorRef.isRecording();
+        recordButton.setButtonText(rec ? "RECORDING..." : "REC CAPTURE");
+        recordButton.setToggleState(rec, juce::dontSendNotification);
 
         // Sync preset combo box if external host program changed
         const int currentProg = processorRef.getCurrentProgram();

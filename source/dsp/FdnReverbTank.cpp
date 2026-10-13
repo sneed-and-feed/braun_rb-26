@@ -33,6 +33,10 @@ void FdnReverbTank::prepare(double sampleRate, float maxRoomSize) noexcept {
         mDcBlockers[k].setCutoff(5.0f, mSampleRate);
     }
 
+    mAllpassG = 0.74f * std::sqrt(std::clamp(mDiffusionDensity, 0.0f, 1.0f));
+    mLastDecayRoom = -1.0f;
+    mLastDecayRt60 = -1.0f;
+
     mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz, mDiffusionDensity);
     updateDecayGains();
     reset();
@@ -67,7 +71,11 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
     mRoomSize = std::clamp(safeRoom, 0.1f, mMaxRoomSize);
     mDecayRt60 = std::clamp(safeRt60, 0.2f, 30.0f);
     mHighDampingHz = std::clamp(safeDamp, 500.0f, 20000.0f);
-    mDiffusionDensity = std::clamp(safeDiff, 0.0f, 1.0f);
+    const float clampedDiff = std::clamp(safeDiff, 0.0f, 1.0f);
+    if (std::abs(clampedDiff - mDiffusionDensity) > 1.0e-5f) {
+        mDiffusionDensity = clampedDiff;
+        mAllpassG = 0.74f * std::sqrt(mDiffusionDensity);
+    }
     mFreezeHold = freezeHold;
     if (manifoldType.has_value()) {
         mCurrentManifold = *manifoldType;
@@ -87,7 +95,12 @@ void FdnReverbTank::setParameters(float roomSize, float decayRt60Sec, float high
 
     mTailModulator.setParameters(safeModRate, safeModDepth, safeBloom);
     mManifoldNetwork.setParameters(mCurrentManifold, mRoomSize, mHighDampingHz, mDiffusionDensity);
-    updateDecayGains();
+
+    if (std::abs(mRoomSize - mLastDecayRoom) > 1.0e-5f ||
+        std::abs(mDecayRt60 - mLastDecayRt60) > 1.0e-5f ||
+        mCurrentManifold != mLastDecayManifold) {
+        updateDecayGains();
+    }
 }
 
 void FdnReverbTank::setManifold(ManifoldType manifoldType) noexcept {
@@ -97,6 +110,9 @@ void FdnReverbTank::setManifold(ManifoldType manifoldType) noexcept {
 }
 
 void FdnReverbTank::updateDecayGains() noexcept {
+    mLastDecayRoom = mRoomSize;
+    mLastDecayRt60 = mDecayRt60;
+    mLastDecayManifold = mCurrentManifold;
     const auto& lengths = mManifoldNetwork.getNominalLengths();
     const float safeRt60 = std::max(0.05f, mDecayRt60);
     for (size_t k = 0; k < kNumLines; ++k) {
@@ -105,8 +121,8 @@ void FdnReverbTank::updateDecayGains() noexcept {
     }
 }
 
-inline float FdnReverbTank::processAllpass(size_t index, float input, float density) noexcept {
-    if (density < 1.0e-4f) {
+inline float FdnReverbTank::processAllpass(size_t index, float input) noexcept {
+    if (mDiffusionDensity < 1.0e-4f) {
         return input;
     }
     if (index >= kNumAllpass || mAllpassBuffers[index].empty()) [[unlikely]] {
@@ -121,8 +137,7 @@ inline float FdnReverbTank::processAllpass(size_t index, float input, float dens
 
     // Perceptual curve mapping and expanded feedback depth (up to 0.74f)
     // Guarantees contractive stability (|g| < 1.0) with audible transient smearing
-    const float effDensity = std::sqrt(std::clamp(density, 0.0f, 1.0f));
-    const float g = 0.74f * effDensity;
+    const float g = mAllpassG;
     const float output = -g * input + delayed;
     mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
 
@@ -143,8 +158,8 @@ void FdnReverbTank::processSample(float inL, float inR, float pitchFbL, float pi
     const float freezeLoop = mFreezeLoopSmoother.next();
 
     // 1. Allpass input diffusion (cascaded dual allpasses per channel)
-    const float diffL = processAllpass(1, processAllpass(0, inL, mDiffusionDensity), mDiffusionDensity);
-    const float diffR = processAllpass(3, processAllpass(2, inR, mDiffusionDensity), mDiffusionDensity);
+    const float diffL = processAllpass(1, processAllpass(0, inL));
+    const float diffR = processAllpass(3, processAllpass(2, inR));
 
     // Sum diffused input and pitch feedback with contractive loop gain headroom; isolate both on freeze
     const float dryL = (diffL + pitchFbL) * freezeIn;
@@ -242,8 +257,8 @@ void FdnReverbTank::processSampleMultiChannel(const float* inChannels,
     }
 
     // 2. Allpass input diffusion (cascaded dual allpasses for L and R)
-    const float diffL = processAllpass(1, processAllpass(0, inL, mDiffusionDensity), mDiffusionDensity);
-    const float diffR = processAllpass(3, processAllpass(2, inR, mDiffusionDensity), mDiffusionDensity);
+    const float diffL = processAllpass(1, processAllpass(0, inL));
+    const float diffR = processAllpass(3, processAllpass(2, inR));
 
     // Sum diffused input and pitch feedback with contractive loop gain headroom; isolate both on freeze
     const float fbL = pitchFb ? pitchFb[0] : 0.0f;

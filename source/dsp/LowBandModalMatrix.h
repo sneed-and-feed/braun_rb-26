@@ -345,6 +345,11 @@ private:
 
     // Cached parameters
     LowBandModalParams mParams;
+    float mOutScale { 0.25f };
+    float mLastCrossoverHz { -1.0f };
+    float mLastBassRt60Mult { -1.0f };
+    float mLastRt60DecaySec { -1.0f };
+    bool  mLastFreezeHold { false };
     float mLastLowEnergy { 0.0f };
     int mSubBlockCounter { 0 };
 };

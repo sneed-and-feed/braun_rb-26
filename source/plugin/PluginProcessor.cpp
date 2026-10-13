@@ -262,10 +262,11 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             else if (status == 0xB0 && note == 64)
             {
                 // MIDI CC 64 Sustain Pedal -> toggle Freeze Hold
-                const bool sustainOn = (vel >= 64);
+                const float targetVal = (vel >= 64) ? 1.0f : 0.0f;
                 if (auto* freezeParam = apvts.getParameter(rb26::ParamIDs::freezeHold.getParamID()))
                 {
-                    freezeParam->setValueNotifyingHost(sustainOn ? 1.0f : 0.0f);
+                    if (std::abs(freezeParam->getValue() - targetVal) > 0.5f)
+                        freezeParam->setValueNotifyingHost(targetVal);
                 }
             }
         }
@@ -619,7 +620,7 @@ void BRAUN_RB26AudioProcessor::setStateInformation(const void* data, int sizeInB
     {
         auto vt = juce::ValueTree::fromXml(*xmlState);
         if (vt.hasProperty("currentProgram"))
-            mCurrentProgram = static_cast<int>(vt.getProperty("currentProgram"));
+            mCurrentProgram = std::clamp(static_cast<int>(vt.getProperty("currentProgram")), 0, std::max(0, getNumPrograms() - 1));
         if (vt.hasProperty("isPoweredOn"))
             setPower(static_cast<bool>(vt.getProperty("isPoweredOn")));
         else

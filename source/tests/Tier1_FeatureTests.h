@@ -585,7 +585,7 @@ inline void registerTier1Tests() {
     // ========================================================================
     registerTest("Tier 1", "T1_F07_1", "Pitch Blend - Pure Shimmer at Blend = +1.0", []() {
         const float blend = 1.0f;
-        const float blendAngle = (test_utils::kPi * 0.25f) * (1.0f - blend); // 0
+        const float blendAngle = (static_cast<float>(test_utils::kPi) * 0.25f) * (1.0f - blend); // 0
         const float shimW = std::cos(blendAngle);
         const float dimW  = std::sin(blendAngle);
         TEST_ASSERT_NEAR(shimW, 1.0f, 1.0e-5f, "Shimmer weight must be 1.0 at blend = +1.0");
@@ -595,7 +595,7 @@ inline void registerTier1Tests() {
 
     registerTest("Tier 1", "T1_F07_2", "Pitch Blend - Pure Dimmer at Blend = -1.0", []() {
         const float blend = -1.0f;
-        const float blendAngle = (test_utils::kPi * 0.25f) * (1.0f - blend); // pi/2
+        const float blendAngle = (static_cast<float>(test_utils::kPi) * 0.25f) * (1.0f - blend); // pi/2
         const float shimW = std::cos(blendAngle);
         const float dimW  = std::sin(blendAngle);
         TEST_ASSERT_NEAR(shimW, 0.0f, 1.0e-5f, "Shimmer weight must be 0.0 at blend = -1.0");
@@ -605,7 +605,7 @@ inline void registerTier1Tests() {
 
     registerTest("Tier 1", "T1_F07_3", "Pitch Blend - Equal Power Balance at Blend = 0.0", []() {
         const float blend = 0.0f;
-        const float blendAngle = (test_utils::kPi * 0.25f) * (1.0f - blend); // pi/4
+        const float blendAngle = (static_cast<float>(test_utils::kPi) * 0.25f) * (1.0f - blend); // pi/4
         const float shimW = std::cos(blendAngle);
         const float dimW  = std::sin(blendAngle);
         TEST_ASSERT_NEAR(shimW, 0.70710678f, 1.0e-5f, "Shimmer weight must be ~0.7071 at blend = 0.0");

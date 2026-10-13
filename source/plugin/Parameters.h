@@ -167,6 +167,10 @@ inline const std::array<ParameterMetadata, 29>& getParameterMetadataTable() {
 // ============================================================================
 // Lock-Free Plain-Old-Data (POD) Parameter Snapshot Structure
 // ============================================================================
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#endif
 struct alignas(16) Rb26ParameterSnapshot {
     float inputTrimDb      { 0.0f };
     float preDelayMs       { 24.0f };
@@ -232,6 +236,9 @@ struct alignas(16) Rb26ParameterSnapshot {
         return p;
     }
 };
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 // ============================================================================
 // Cached Atomic Parameter Pointers for Real-Time Lock-Free Snapshotting

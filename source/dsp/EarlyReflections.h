@@ -90,6 +90,10 @@ private:
     static constexpr float kClusterGain = 0.28f;
 
     float mDiffusionDensity { 0.0f };
+    float mLastDiffusionDensity { -1.0f };
+    float mAllpassG { 0.0f };
+    float mDryDiffGain { 1.0f };
+    float mWetDiffGain { 0.0f };
     static constexpr size_t kNumAllpass = 4;
     static constexpr std::array<size_t, kNumAllpass> kBaseAllpassLengths = {{ 149, 211, 163, 223 }};
     std::array<size_t, kNumAllpass> mAllpassLengths {};
@@ -99,8 +103,9 @@ private:
     OnePoleLowpass mDampingLpL;
     OnePoleLowpass mDampingLpR;
 
-    inline float processAllpass(size_t index, float input, float density) noexcept;
+    inline float processAllpass(size_t index, float input) noexcept;
     void updateTaps() noexcept;
+    void updateDiffusionGains() noexcept;
 };
 
 } // namespace rb26

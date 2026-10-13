@@ -124,6 +124,10 @@ private:
     float mDecayRt60 { 3.5f };
     float mHighDampingHz { 1800.0f };
     float mDiffusionDensity { 0.75f };
+    float mAllpassG { 0.6408588f }; // 0.74 * sqrt(0.75)
+    float mLastDecayRoom { -1.0f };
+    float mLastDecayRt60 { -1.0f };
+    ManifoldType mLastDecayManifold { ManifoldType::PoincareHyperbolic };
     bool mFreezeHold { false };
     ManifoldType mCurrentManifold { ManifoldType::PoincareHyperbolic };
 
@@ -141,7 +145,7 @@ private:
     OnePoleSmoother mFreezeInputSmoother;
     OnePoleSmoother mFreezeLoopSmoother;
 
-    inline float processAllpass(size_t index, float input, float density) noexcept;
+    inline float processAllpass(size_t index, float input) noexcept;
     void updateDecayGains() noexcept;
 };
 

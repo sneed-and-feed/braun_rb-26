@@ -152,7 +152,9 @@ void Rb26ReverbEngine::reset() noexcept {
 
     mTelemetryWriteIndex.store(0, std::memory_order_relaxed);
     mTelemetryReadIndex.store(0, std::memory_order_relaxed);
-    mWasFrozen = false;
+    mWasFrozen = mParams.freezeHold;
+    mLastBoostDb = mPitchBoostSmoother.getCurrent();
+    mLastBoostGain = (mLastBoostDb <= 1.0e-5f) ? 1.0f : dbToGain(mLastBoostDb);
 }
 
 void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
@@ -454,7 +456,11 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
                 injPitchR = applySmoothBoundaryKnee(drivenR, 0.72f, 1.05f);
 
                 const float boostDb = mPitchBoostSmoother.next();
-                const float boostGain = dbToGain(boostDb);
+                if (std::abs(boostDb - mLastBoostDb) > 1.0e-5f) {
+                    mLastBoostDb = boostDb;
+                    mLastBoostGain = (boostDb <= 1.0e-5f) ? 1.0f : dbToGain(boostDb);
+                }
+                const float boostGain = mLastBoostGain;
                 const float rawPitchL = filteredPitchL * 0.50f * boostGain;
                 const float rawPitchR = filteredPitchR * 0.50f * boostGain;
                 pitchAddL = applySmoothBoundaryKnee(rawPitchL, 0.72f, 1.05f);
@@ -589,7 +595,7 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             mDecayPeakFollower = std::max(outPeak, mDecayPeakFollower * 0.999f);
             mTailEnergyFollower = flushDenormal(0.999f * mTailEnergyFollower + 0.001f * outPeak);
 
-            float inPeak = 0.0f;
+            float inPeak = std::max(std::abs(preL), std::abs(preR));
             for (int ch = 0; ch < numChannels && ch < 12; ++ch) {
                 inPeak = std::max(inPeak, std::abs(inSample[ch]));
             }
@@ -766,7 +772,11 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
             mLastPitchFbR = shiftedR;
 
             const float boostDb = mPitchBoostSmoother.next();
-            const float boostGain = dbToGain(boostDb);
+            if (std::abs(boostDb - mLastBoostDb) > 1.0e-5f) {
+                mLastBoostDb = boostDb;
+                mLastBoostGain = (boostDb <= 1.0e-5f) ? 1.0f : dbToGain(boostDb);
+            }
+            const float boostGain = mLastBoostGain;
 
             // 5. Early / Late Mix (Equal-power trigonometric balance with Hermite bounded booster saturation)
             // Filtered through feedback lowpass/highpass and smoothly scaled to eliminate slapback transient clicks
@@ -839,8 +849,9 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mDecayPeakFollower = std::max(outPeak, mDecayPeakFollower * 0.999f);
         mTailEnergyFollower = flushDenormal(0.999f * mTailEnergyFollower + 0.001f * outPeak);
 
-        // Check if signal has completely died down below audible threshold
-        const float inPeak = std::max(std::abs(xL), std::abs(xR)) + (auxL ? std::abs(auxL[n]) : 0.0f) + (auxR ? std::abs(auxR[n]) : 0.0f);
+        // Check if signal has completely died down below audible threshold (including pre-delay tap output)
+        const float inPeak = std::max({ std::abs(xL), std::abs(xR), std::abs(preL), std::abs(preR) })
+                           + (auxL ? std::abs(auxL[n]) : 0.0f) + (auxR ? std::abs(auxR[n]) : 0.0f);
         if (inPeak < 1.0e-7f && outPeak < 1.0e-7f && mTailEnergyFollower < 1.0e-7f && !mParams.freezeHold) {
             mSilentSamplesCount++;
         } else {
@@ -877,8 +888,10 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
     }
     }
 
-    // If silence sustained for > 2048 samples (approx 42ms after reaching sub -140dB), transition to idle
-    if (mSilentSamplesCount >= 2048 && !mParams.freezeHold) {
+    // Account for active pre-delay length so impulses traversing long pre-delays at 100% wet mix are never prematurely gated
+    const size_t activePreDelaySamples = static_cast<size_t>(std::max(0.0f, mPreDelaySmoother.getCurrent() * 0.001f * fs));
+    const size_t idleThresholdSamples = 2048 + activePreDelaySamples;
+    if (mSilentSamplesCount >= idleThresholdSamples && !mParams.freezeHold) {
         mIsIdle = true;
         // Flush all internal delay buffers, filters, and recursive states to clean zero
         mLowBandMatrix.reset();
@@ -886,6 +899,10 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mFdnTank.reset();
         mPitchShifter.reset();
         mMasterSubMono.reset();
+        mPitchFeedbackHpL.reset();
+        mPitchFeedbackHpR.reset();
+        mPitchFeedbackLpL.reset();
+        mPitchFeedbackLpR.reset();
         std::fill(mPreDelayBufferL.begin(), mPreDelayBufferL.end(), 0.0f);
         std::fill(mPreDelayBufferR.begin(), mPreDelayBufferR.end(), 0.0f);
         std::fill(mPitchDelayBufferL.begin(), mPitchDelayBufferL.end(), 0.0f);

@@ -27,9 +27,8 @@ size_t LowBandModalMatrix::findClosestPrime(size_t target) const noexcept {
 LowBandModalMatrix::LowBandModalMatrix() noexcept {
     for (size_t i = 0; i < kNumModalLines; ++i) {
         mDelayBuffers[i].assign(32768, 0.0f); // Pre-allocate maximum buffer capacity up to 192 kHz
-        mDcBlockFilters[i].configure(Biquad::Type::Highpass, 48000.0f, 56.0f, 0.70710678f);
-        mDampingFilters[i].configure(Biquad::Type::Lowpass, 48000.0f, 270.0f, 0.70710678f);
     }
+    prepare(48000.0);
 }
 
 void LowBandModalMatrix::prepare(double sampleRate) noexcept {
@@ -50,6 +49,9 @@ void LowBandModalMatrix::prepare(double sampleRate) noexcept {
         mDcBlockFilters[i].configure(Biquad::Type::Highpass, mSampleRate, 56.0f, 0.70710678f);
         mDampingFilters[i].configure(Biquad::Type::Lowpass, mSampleRate, dampingCutoff, 0.70710678f);
     }
+    mLastCrossoverHz = mParams.crossoverHz;
+    mLastBassRt60Mult = -1.0f;
+    mLastRt60DecaySec = -1.0f;
 
     // Size prime delay lines (sized up to 192 kHz max)
     for (size_t i = 0; i < kNumModalLines; ++i) {
@@ -87,15 +89,28 @@ void LowBandModalMatrix::setParameters(const LowBandModalParams& params) noexcep
     mParams = params;
     mCrossover.setCutoff(mParams.crossoverHz);
     mEllipticalFilter.setCutoff(mParams.subMonoHz);
-    const float dampingCutoff = std::min(320.0f, mParams.crossoverHz * 1.5f);
-    for (size_t i = 0; i < kNumModalLines; ++i) {
-        mDcBlockFilters[i].configure(Biquad::Type::Highpass, mSampleRate, 56.0f, 0.70710678f);
-        mDampingFilters[i].configure(Biquad::Type::Lowpass, mSampleRate, dampingCutoff, 0.70710678f);
+    if (std::abs(mParams.crossoverHz - mLastCrossoverHz) > 0.01f) {
+        mLastCrossoverHz = mParams.crossoverHz;
+        const float dampingCutoff = std::min(320.0f, mParams.crossoverHz * 1.5f);
+        for (size_t i = 0; i < kNumModalLines; ++i) {
+            mDampingFilters[i].configure(Biquad::Type::Lowpass, mSampleRate, dampingCutoff, 0.70710678f);
+        }
     }
-    updateDecayCoefficients();
+    if (std::abs(mParams.bassRt60Mult - mLastBassRt60Mult) > 1.0e-5f ||
+        std::abs(mParams.rt60DecaySec - mLastRt60DecaySec) > 1.0e-5f ||
+        mParams.freezeHold != mLastFreezeHold) {
+        updateDecayCoefficients();
+    }
 }
 
 void LowBandModalMatrix::updateDecayCoefficients() noexcept {
+    mLastBassRt60Mult = mParams.bassRt60Mult;
+    mLastRt60DecaySec = mParams.rt60DecaySec;
+    mLastFreezeHold = mParams.freezeHold;
+
+    const float bassPresence = std::clamp(std::sqrt(std::max(0.0f, mParams.bassRt60Mult)), 0.707f, 2.0f);
+    mOutScale = 0.25f * bassPresence;
+
     if (mParams.freezeHold) {
         for (size_t i = 0; i < kNumModalLines; ++i) {
             mDecayCoeffs[i] = 1.0f;
@@ -166,8 +181,7 @@ void LowBandModalMatrix::processModalOnly(float lowInL, float lowInR,
 
     // 6. Balanced orthogonal Hadamard output summing with Bass RT60 presence and calibrated headroom scaling
     // Eliminates pairwise comb cancellations and assertively blooms low frequencies when bassRt60Mult is high
-    const float bassPresence = std::clamp(std::sqrt(mParams.bassRt60Mult), 0.707f, 2.0f);
-    const float outScale = 0.25f * bassPresence;
+    const float outScale = mOutScale;
     const float rawLowL = 0.5f * (-w[0] - w[1] + w[2] + w[3]) * outScale;
     const float rawLowR = 0.5f * ( w[0] + w[1] + w[2] + w[3]) * outScale;
 

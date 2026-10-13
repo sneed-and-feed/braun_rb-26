@@ -232,6 +232,8 @@ private:
     std::vector<float> mDimmerCircBufferL;
     std::vector<float> mDimmerCircBufferR;
     size_t mCircWriteIndex { 0 };
+    size_t mShimDelaySamples { 7152 };
+    size_t mDimDelaySamples { 10128 };
     float mRecircShimmerL { 0.0f };
     float mRecircShimmerR { 0.0f };
     float mRecircDimmerL { 0.0f };

@@ -13,6 +13,7 @@ void EarlyReflections::prepare(double sampleRate, float maxRoomSize) noexcept {
     mCrossfadeRemaining = 0;
     mHasProcessedSamples = false;
     mLastRoomSize = -1.0f;
+    mLastDiffusionDensity = -1.0f;
 
     for (size_t i = 0; i < kNumAllpass; ++i) {
         const size_t len = static_cast<size_t>(std::round(static_cast<double>(kBaseAllpassLengths[i]) * (mSampleRate / 48000.0)));
@@ -27,6 +28,7 @@ void EarlyReflections::prepare(double sampleRate, float maxRoomSize) noexcept {
     mDampingLpR.reset();
 
     updateTaps();
+    updateDiffusionGains();
 }
 
 void EarlyReflections::reset() noexcept {
@@ -52,7 +54,19 @@ void EarlyReflections::setParameters(float roomSize, float diffusionDensity) noe
         mRoomSize = clamped;
         updateTaps();
     }
-    mDiffusionDensity = std::clamp(diffusionDensity, 0.0f, 1.0f);
+    const float clampedDiff = std::clamp(diffusionDensity, 0.0f, 1.0f);
+    if (std::abs(clampedDiff - mLastDiffusionDensity) > 1.0e-5f) {
+        mLastDiffusionDensity = clampedDiff;
+        mDiffusionDensity = clampedDiff;
+        updateDiffusionGains();
+    }
+}
+
+void EarlyReflections::updateDiffusionGains() noexcept {
+    const float effDiff = std::sqrt(std::clamp(mDiffusionDensity, 0.0f, 1.0f));
+    mAllpassG = 0.74f * effDiff;
+    mDryDiffGain = FastSinTable::cos(effDiff * kHalfPi);
+    mWetDiffGain = FastSinTable::sin(effDiff * kHalfPi);
 }
 
 void EarlyReflections::updateTaps() noexcept {
@@ -82,16 +96,15 @@ void EarlyReflections::updateTaps() noexcept {
     }
 }
 
-inline float EarlyReflections::processAllpass(size_t index, float input, float density) noexcept {
-    if (density < 1.0e-4f) return input;
+inline float EarlyReflections::processAllpass(size_t index, float input) noexcept {
+    if (mDiffusionDensity < 1.0e-4f) return input;
     const size_t len = mAllpassLengths[index];
     const size_t writeIdx = mAllpassWriteIndices[index];
     const float delayed = mAllpassBuffers[index][writeIdx];
 
     // Perceptual curve mapping and expanded feedback depth (up to 0.74f)
     // Guarantees contractive stability (|g| < 1.0) with audible transient smearing
-    const float effDensity = std::sqrt(std::clamp(density, 0.0f, 1.0f));
-    const float g = 0.74f * effDensity;
+    const float g = mAllpassG;
     const float output = -g * input + delayed;
     mAllpassBuffers[index][writeIdx] = flushDenormal(input + g * output);
 
@@ -138,14 +151,11 @@ void EarlyReflections::processSample(float inL, float inR, float& outL, float& o
 
     mWriteIndex = (mWriteIndex + 1) & kBufferMask;
 
-    const float diffL = processAllpass(1, processAllpass(0, sumL, mDiffusionDensity), mDiffusionDensity);
-    const float diffR = processAllpass(3, processAllpass(2, sumR, mDiffusionDensity), mDiffusionDensity);
+    const float diffL = processAllpass(1, processAllpass(0, sumL));
+    const float diffR = processAllpass(3, processAllpass(2, sumR));
 
-    const float effDiff = std::sqrt(std::clamp(mDiffusionDensity, 0.0f, 1.0f));
-    const float dryG = FastSinTable::cos(effDiff * kHalfPi);
-    const float wetG = FastSinTable::sin(effDiff * kHalfPi);
-    outL = flushDenormal(mDampingLpL.process(dryG * sumL + wetG * diffL));
-    outR = flushDenormal(mDampingLpR.process(dryG * sumR + wetG * diffR));
+    outL = flushDenormal(mDampingLpL.process(mDryDiffGain * sumL + mWetDiffGain * diffL));
+    outR = flushDenormal(mDampingLpR.process(mDryDiffGain * sumR + mWetDiffGain * diffR));
 }
 
 void EarlyReflections::processBlock(const float* inL, const float* inR,
