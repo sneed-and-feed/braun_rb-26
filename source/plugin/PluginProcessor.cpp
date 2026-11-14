@@ -658,7 +658,23 @@ void BRAUN_RB26AudioProcessor::setStateInformation(const void* data, int sizeInB
             setPower(static_cast<bool>(vt.getProperty("isPoweredOn")));
         else
             setPower(true);
+        const bool disarmColdBootFreeze =
+            (wrapperType == wrapperType_Standalone)
+            && !mStandaloneColdBootHandled.exchange(true, std::memory_order_acq_rel);
+        if (disarmColdBootFreeze)
+        {
+            auto freezeChild = vt.getChildWithProperty("id", rb26::ParamIDs::freezeHold.getParamID());
+            if (freezeChild.isValid())
+                freezeChild.setProperty("value", 0.0f, nullptr);
+        }
         apvts.replaceState(vt);
+        if (disarmColdBootFreeze)
+        {
+            if (auto* freezeParam = apvts.getParameter(rb26::ParamIDs::freezeHold.getParamID()))
+                freezeParam->setValueNotifyingHost(0.0f);
+            if (auto* rawFreeze = apvts.getRawParameterValue(rb26::ParamIDs::freezeHold.getParamID()))
+                rawFreeze->store(0.0f, std::memory_order_relaxed);
+        }
         mStateSyncDirty.store(true, std::memory_order_release);
     }
 }

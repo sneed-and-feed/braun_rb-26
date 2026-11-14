@@ -96,7 +96,7 @@ export const CHORD_VOICINGS = [
   { id: 'CLUSTER', name: 'CLUSTER', freqs: [220.00, 233.08, 246.94, 261.63, 277.18] }    // Inharmonic Cluster (A3, Bb3, B3, C4, C#4)
 ];
 
-// Curated 10 Studio Factory Presets
+// Curated 15 Studio Factory Presets
 export const FACTORY_PRESETS = {
   DEFAULT: {
     name: 'CALIBRATED DEFAULT',
@@ -285,7 +285,7 @@ export const FACTORY_PRESETS = {
       low_crossover: 250, damping_low: 1.5, low_punch: 75, mono_bass: 90,
       rt60_decay: 15.0, room_size: 160, damping_high: 3800, decay_hold: false,
       manifold_type: 0,
-      shimmer_send: 15, dimmer_send: 75, shimmer_interval: 12, dimmer_interval: -24,
+      shimmer_send: 15, dimmer_send: 75, shimmer_interval: 7, dimmer_interval: -12,
       shimmer_dimmer_blend: -85, pitch_regen: 82, pitch_delay: 180, pitch_boost: 3.0,
       pitch_warp: true,
       tail_mod_rate: 0.35, tail_mod_depth: 50, tail_bloom: 150,
@@ -819,7 +819,7 @@ export class BraunRb26App {
       if (this._heldKeys) {
         this._heldKeys.clear();
       }
-      if (this.isPoissonRunning) this.togglePoisson();
+      if (this.isPoissonRunning) this.togglePoisson(fromHost);
 
       // Stop recording if active when powering down
       if (this.isJuce && this._isJuceRecording) {
@@ -1104,8 +1104,18 @@ export class BraunRb26App {
             const knob = this.knobs[entry.key];
             if (knob && typeof knob.setValue === 'function') {
               const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-              if (knob.isDragging || (now - (knob.lastUserInteractionTime || 0) < 250)) return;
-              knob.setValue(data.value * entry.scale, false);
+              if (knob.isDragging || (knob.lastUserInteractionTime > 0 && (now - knob.lastUserInteractionTime < 250))) return;
+              const uiVal = data.value * entry.scale;
+              knob.setValue(uiVal, false);
+              if (this.vectorPad && !this.vectorPad.isEngaged) {
+                if (entry.key === 'tail_mod_rate') {
+                  const normX = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (uiVal - 0.05) / 4.95), 1 / 1.6)));
+                  this.vectorPad.setCoordinates(normX, this.vectorPad.y, false);
+                } else if (entry.key === 'tail_mod_depth') {
+                  const normY = Math.max(0, Math.min(1.0, uiVal / 100));
+                  this.vectorPad.setCoordinates(this.vectorPad.x, normY, false);
+                }
+              }
             }
           }
         });
@@ -1460,7 +1470,7 @@ export class BraunRb26App {
         this.engine.setParam('tailModRateHz', v);
         this._emitJuceParam('tailModRateHz', v);
         if (this.vectorPad && !this.vectorPad.isEngaged) {
-          const normX = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (v - 0.05) / 3.95), 1 / 1.6)));
+          const normX = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (v - 0.05) / 4.95), 1 / 1.6)));
           this.vectorPad.setCoordinates(normX, this.vectorPad.y, false);
         }
       }
@@ -1520,7 +1530,7 @@ export class BraunRb26App {
 
     const initRate = 0.65;
     const initDepth = 45;
-    const initX = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (initRate - 0.05) / 3.95), 1 / 1.6)));
+    const initX = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (initRate - 0.05) / 4.95), 1 / 1.6)));
     const initY = initDepth / 100;
 
     this.vectorPad = new BraunVectorPad(container, {
@@ -2098,7 +2108,7 @@ export class BraunRb26App {
     if (this.vectorPad && preset.params) {
       const pRate = preset.params.tail_mod_rate ?? 0.65;
       const pDepth = preset.params.tail_mod_depth ?? 45;
-      const px = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (pRate - 0.05) / 3.95), 1 / 1.6)));
+      const px = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (pRate - 0.05) / 4.95), 1 / 1.6)));
       const py = Math.max(0, Math.min(1.0, pDepth / 100));
       this.vectorPad.setDefaults(px, py);
       this.vectorPad.setCoordinates(px, py, false);
@@ -3264,7 +3274,7 @@ export class BraunRb26App {
   /**
    * Autonomous Generative Poisson Process Clock
    */
-  togglePoisson() {
+  togglePoisson(fromHost = false) {
     if (!this.isPowered && !this.isPoissonRunning) return;
     this.isPoissonRunning = !this.isPoissonRunning;
     const poissonBtn = document.getElementById('btn-poisson-toggle');
@@ -3274,7 +3284,7 @@ export class BraunRb26App {
       if (led) led.classList.toggle('is-active', this.isPoissonRunning);
     }
 
-    if (this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
+    if (!fromHost && this.isJuce && typeof window !== 'undefined' && window.__JUCE__?.backend?.emitEvent) {
       try {
         window.__JUCE__.backend.emitEvent('exciterTrigger', {
           type: 'poisson',

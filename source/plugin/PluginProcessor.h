@@ -90,6 +90,7 @@ private:
     std::atomic<bool> mPendingEngineReset { false };
     std::atomic<bool> mPendingExciterFifoFlush { false };
     std::atomic<bool> mStateSyncDirty { false };
+    std::atomic<bool> mStandaloneColdBootHandled { false };
     int mCurrentProgram { 0 };
 
     // Visualizer waveform circular buffer

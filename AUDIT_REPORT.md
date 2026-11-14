@@ -292,13 +292,14 @@ A comprehensive code inspection of the C++20 DSP Core, JUCE Plugin interfaces, a
 ## 5. R2: Sound Quality & Numerical Stabilization Deep Dive
 
 ### 5.1 Infinite Freeze Hold Damping Bypass Analysis
-In a recirculating delay network with loop feedback matrix $A$, delay lengths $M_i$, and per-channel damping filters $H_i(z) = \frac{1 - \alpha_i}{1 - \alpha_i z^{-1}}$, the loop gain at frequency $\omega$ is governed by:
+In a recirculating delay network with loop feedback matrix $A$ and per-channel delay/damping response $M_i,\ H_i(z) = \frac{1 - \alpha_i}{1 - \alpha_i z^{-1}}$, the loop gain at frequency $\omega$ is governed by:
 
 ```math
 G_i(\omega) = g_{\text{fb}} \cdot \left\lvert \frac{1 - \alpha_i}{1 - \alpha_i e^{-j\omega}} \right\rvert
 ```
 
-For true infinite sustain hold, the loop must be strictly isometric ($\Vert G_i(\omega) \Vert = 1.0$ for all $\omega$). When $\alpha_i > 0$:
+For true infinite sustain hold, the loop must be strictly isometric ($\Vert G_i(\omega) \Vert = 1.0$ for all $\omega$).
+When the damping coefficient is positive ($\alpha_i > 0$):
 
 ```math
 \lvert H_i(\pi) \rvert = \frac{1 - \alpha_i}{1 + \alpha_i} < 1.0

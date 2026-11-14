@@ -964,9 +964,10 @@ void BRAUN_RB26AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
         return;
 
     const juce::String type = obj->getProperty("type").toString();
+    const bool isPoissonDisable = type.equalsIgnoreCase("poisson") && !static_cast<bool>(obj->getProperty("enable"));
 
-    // Auto-wake DSP engine to ensure audio output on exciter interaction
-    if (!processorRef.isPower())
+    // Auto-wake DSP engine on active exciter interaction (never wake on Poisson turn-off)
+    if (!type.isEmpty() && !isPoissonDisable && !processorRef.isPower())
     {
         processorRef.setPower(true);
         powerButton.setButtonText("POWER ON");
@@ -1064,6 +1065,12 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
     const int hashIdx = path.indexOfChar('#');
     if (hashIdx >= 0) path = path.substring(0, hashIdx);
 
+    if (path.contains("..") || path.containsChar(':'))
+        return std::nullopt;
+    path = juce::URL::removeEscapeChars(path);
+    if (path.contains("..") || path.containsChar(':'))
+        return std::nullopt;
+
     while (path.startsWithChar('/') || path.startsWithChar('\\') || path.startsWith("./"))
     {
         if (path.startsWithChar('/') || path.startsWithChar('\\'))
@@ -1079,6 +1086,9 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
 
     while (path.startsWithChar('/') || path.startsWithChar('\\'))
         path = path.substring(1);
+
+    if (path.contains("..") || path.containsChar(':'))
+        return std::nullopt;
 
     if (path.isEmpty())
         path = "index.html";
@@ -1096,8 +1106,13 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
     else if (path.endsWithIgnoreCase(".ttf")) mimeType = "font/ttf";
     else if (path.endsWithIgnoreCase(".wasm")) mimeType = "application/wasm";
 
-    // 1. Search local filesystem (for live dev iteration)
-    auto checkDiskFile = [&](const juce::File& file) -> std::optional<juce::WebBrowserComponent::Resource> {
+    // 1. Search local filesystem (for live dev iteration, confined strictly inside baseDir)
+    auto checkDiskFile = [&](const juce::File& baseDir, const juce::String& relPath) -> std::optional<juce::WebBrowserComponent::Resource> {
+        if (!baseDir.isDirectory())
+            return std::nullopt;
+        const juce::File file = baseDir.getChildFile(relPath);
+        if (!file.isAChildOf(baseDir))
+            return std::nullopt;
         if (file.existsAsFile())
         {
             juce::MemoryBlock mb;
@@ -1112,19 +1127,19 @@ std::optional<juce::WebBrowserComponent::Resource> BRAUN_RB26AudioProcessorEdito
     };
 
     const juce::File cwd = juce::File::getCurrentWorkingDirectory();
-    if (auto res = checkDiskFile(cwd.getChildFile("web").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile("ui").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile("braun_rb-26/web").getChildFile(path))) return res;
-    if (auto res = checkDiskFile(cwd.getChildFile("rb-26/web").getChildFile(path))) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("web"), path)) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("ui"), path)) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("braun_rb-26/web"), path)) return res;
+    if (auto res = checkDiskFile(cwd.getChildFile("rb-26/web"), path)) return res;
 
     // Search relative to executable
     auto dir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentExecutableFile).getParentDirectory();
     for (int depth = 0; depth < 5; ++depth)
     {
-        if (auto res = checkDiskFile(dir.getChildFile("web").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile("ui").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile("braun_rb-26/web").getChildFile(path))) return res;
-        if (auto res = checkDiskFile(dir.getChildFile("rb-26/web").getChildFile(path))) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("web"), path)) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("ui"), path)) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("braun_rb-26/web"), path)) return res;
+        if (auto res = checkDiskFile(dir.getChildFile("rb-26/web"), path)) return res;
         dir = dir.getParentDirectory();
     }
 

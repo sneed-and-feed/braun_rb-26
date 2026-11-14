@@ -1256,7 +1256,63 @@ void runTest12_PowerIdempotenceStandbyMidiAndAutoWake() {
         RB26_TEST_ASSERT(!p.consumeStateSyncDirty());
     }
 
-    std::cout << "  -> PASS: Power idempotence, Standby MIDI isolation, auto-wake Dirac FIFO, and stateSyncDirty verified.\n";
+    // 5. Standby Poisson disable does NOT bounce power on; WebView2 getResource rejects path traversal
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.prepareToPlay(48000.0, 512);
+        std::unique_ptr<BRAUN_RB26AudioProcessorEditor> editor(
+            static_cast<BRAUN_RB26AudioProcessorEditor*>(p.createEditor()));
+        RB26_TEST_ASSERT(editor != nullptr);
+
+#if JUCE_WEB_BROWSER
+        p.setPower(false);
+        RB26_TEST_ASSERT(!p.isPower());
+
+        auto* poissonOffObj = new juce::DynamicObject();
+        poissonOffObj->setProperty("type", "poisson");
+        poissonOffObj->setProperty("enable", false);
+        editor->handleExciterTriggerFromWeb(juce::var(poissonOffObj));
+        RB26_TEST_ASSERT(!p.isPower()); // Must NOT bounce out of Standby!
+
+        // Path traversal & drive-letter probes must return std::nullopt
+        RB26_TEST_ASSERT(!editor->getResource("https://juce.backend/../../CMakeLists.txt").has_value());
+        RB26_TEST_ASSERT(!editor->getResource("https://juce.backend/%2e%2e/CMakeLists.txt").has_value());
+        RB26_TEST_ASSERT(!editor->getResource("https://juce.backend/web/../../README.md").has_value());
+        RB26_TEST_ASSERT(!editor->getResource("https://juce.backend/C:/Windows/win.ini").has_value());
+        RB26_TEST_ASSERT(editor->getResource("https://juce.backend/index.html").has_value());
+#endif
+    }
+
+    // 6. Standalone cold-boot freeze_hold disarm (prevents infinite mic/line feedback on launch)
+    {
+        BRAUN_RB26AudioProcessor savedProc;
+        savedProc.setCurrentProgram(8); // INFINITE_ETHEREAL_FREEZE -> freeze_hold = true
+        RB26_TEST_ASSERT(*savedProc.getAPVTS().getRawParameterValue("freeze_hold") > 0.5f);
+
+        juce::MemoryBlock frozenState;
+        savedProc.getStateInformation(frozenState);
+
+        // VST3/Plugin host recall MUST preserve freeze_hold = true
+        juce::AudioProcessor::setTypeOfNextNewPlugin(juce::AudioProcessor::wrapperType_VST3);
+        BRAUN_RB26AudioProcessor vstProc;
+        RB26_TEST_ASSERT(vstProc.wrapperType == juce::AudioProcessor::wrapperType_VST3);
+        vstProc.setStateInformation(frozenState.getData(), static_cast<int>(frozenState.getSize()));
+        RB26_TEST_ASSERT(*vstProc.getAPVTS().getRawParameterValue("freeze_hold") > 0.5f);
+
+        // Standalone cold-boot initial setStateInformation MUST disarm freeze_hold = false,
+        // while subsequent state recalls during the session preserve freeze_hold = true.
+        juce::AudioProcessor::setTypeOfNextNewPlugin(juce::AudioProcessor::wrapperType_Standalone);
+        BRAUN_RB26AudioProcessor standaloneProc;
+        RB26_TEST_ASSERT(standaloneProc.wrapperType == juce::AudioProcessor::wrapperType_Standalone);
+        standaloneProc.setStateInformation(frozenState.getData(), static_cast<int>(frozenState.getSize()));
+        RB26_TEST_ASSERT(*standaloneProc.getAPVTS().getRawParameterValue("freeze_hold") < 0.5f);
+        standaloneProc.setStateInformation(frozenState.getData(), static_cast<int>(frozenState.getSize()));
+        RB26_TEST_ASSERT(*standaloneProc.getAPVTS().getRawParameterValue("freeze_hold") > 0.5f);
+
+        juce::AudioProcessor::setTypeOfNextNewPlugin(juce::AudioProcessor::wrapperType_Undefined);
+    }
+
+    std::cout << "  -> PASS: Power idempotence, Standby MIDI/Poisson isolation, getResource path confinement, Standalone freeze guard, and stateSyncDirty verified.\n";
 }
 
 } // namespace

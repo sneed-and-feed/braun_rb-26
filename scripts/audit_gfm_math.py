@@ -1,5 +1,14 @@
+#!/usr/bin/env python3
+"""
+Automated GitHub Flavored Markdown (GFM) & KaTeX Math Compliance Linter.
+Validates markdown files against the strict rules in the github-math-compliance skill.
+"""
+
+import glob
+import os
 import sys
 import re
+
 
 def audit_file(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -8,16 +17,23 @@ def audit_file(filepath):
     errors = []
     in_code_block = False
     in_math_fence = False
+    in_display_dollars = False
 
     for idx, line in enumerate(lines, 1):
         stripped = line.strip()
 
-        # Track fenced code blocks
+        # Track fenced code blocks and ```math fences independently
         if stripped.startswith('```') or stripped.startswith('~~~'):
-            if stripped.startswith('```math'):
-                in_math_fence = not in_math_fence
+            if in_math_fence:
+                in_math_fence = False
             elif in_code_block:
                 in_code_block = False
+            elif stripped.startswith('```math'):
+                in_math_fence = True
+                if not line.startswith('```math'):
+                    errors.append((idx, "Display math fence ```math must start at Column 0 (no indentation)"))
+                if idx > 1 and lines[idx - 2].strip() != '':
+                    errors.append((idx, "Display math fence ```math must be preceded by an empty blank line"))
             else:
                 in_code_block = True
             continue
@@ -25,18 +41,33 @@ def audit_file(filepath):
         if in_code_block:
             continue
 
+        # Check display math $$
+        if stripped.startswith('$$'):
+            if line.startswith('   $$') or line.startswith('  $$') or line.startswith(' $$') or line.startswith('\t$$'):
+                errors.append((idx, "Display math $$ block must start at Column 0 (no indentation)"))
+            # Check blank line before if idx > 1
+            if idx > 1 and lines[idx - 2].strip() != '':
+                errors.append((idx, "Display math $$ block must be preceded by an empty blank line"))
+            # Check if one-line display math
+            if stripped.endswith('$$') and len(stripped) > 2:
+                # one-line $$...$$
+                if idx < len(lines) and lines[idx].strip() != '':
+                    errors.append((idx, "Display math $$ block must be followed by an empty blank line"))
+            else:
+                in_display_dollars = not in_display_dollars
+
         # 1. Backtick math
         if re.search(r'\$`|`\$', line):
             errors.append((idx, "Backtick math detected (`$ or $`)"))
 
         # 2. Markdown bold/italics wrapping $
-        if re.search(r'\*\*[^*]*\$[^*]*\*\*', line):
+        if re.search(r'\*\*[^*$\n]*\$[^*$\n]*\*\*', line):
             errors.append((idx, "Markdown bold wrapping math (**...$...**)"))
         if re.search(r'(?<!\*)\*[^*$\n]+\$[^*$\n]+\*(?!\*)', line):
             errors.append((idx, "Markdown italic wrapping math (*...$...*)"))
 
         # 3. \text{--} in math
-        if re.search(r'\$[^$]*\\text\{--\}[^$]*\$', line):
+        if re.search(r'\$[^$]*\\text\{--\}[^$]*\$', line) or ((in_math_fence or in_display_dollars) and r'\text{--}' in line):
             errors.append((idx, r"\text{--} in math mode"))
 
         # 5. Raw | inside table math cells
@@ -54,7 +85,7 @@ def audit_file(filepath):
 
         # 8. Indented math fences
         if (line.startswith('   ```math') or line.startswith('  ```math') or line.startswith('    ```math')) or \
-           (line.startswith('   $$') or line.startswith('  $$')):
+           (line.startswith('   $$') or line.startswith('  $$') or line.startswith(' $$') or line.startswith('\t$$')):
             errors.append((idx, "Indented display math block (must be Column-0)"))
 
         # 10. List items beginning with math before bold title
@@ -62,7 +93,7 @@ def audit_file(filepath):
             errors.append((idx, "List item beginning with inline math before bold title"))
 
         # 11. \operatorname
-        if re.search(r'\$[^$]*\\operatorname[^$]*\$', line):
+        if r'\operatorname' in line:
             errors.append((idx, r"\operatorname macro detected (use \mathrm)"))
 
         # 13. Lie group subscripts
@@ -85,19 +116,31 @@ def audit_file(filepath):
         if re.search(r'\[[^\]]*\$[^\]]*\]\(.*?\)', line):
             errors.append((idx, "Math in markdown link anchor text"))
 
-        # Check unclosed $ on single line (if not display math fence $$)
-        # Count non-escaped $
-        clean_line = re.sub(r'\\\$', '', line)
-        dollars = clean_line.count('$')
-        if dollars % 2 != 0:
-            errors.append((idx, f"Unclosed or odd count of $ delimiters ({dollars} found)"))
+        # 18. Prime-preceded subscripts
+        if re.search(r'\\(bigotimes|prod|coprod|bigoplus)\'_', line):
+            errors.append((idx, "Prime-preceded subscript operator (use {\\bigotimes_p}')"))
+
+        # 9. Multiple inline math spans with subscripts on same line
+        inline_spans = re.findall(r'(?<!\\)\$([^$\n]+)\$', line)
+        if len(inline_spans) >= 2:
+            subscript_spans = [s for s in inline_spans if '_' in s]
+            if len(subscript_spans) >= 2:
+                errors.append((idx, "Multiple separate inline math spans with subscripts on same line (risk of CommonMark _ hijack)"))
+
+        # Check unclosed $ on single line (if not inside display math fence or multi-line $$)
+        if not in_display_dollars and not in_math_fence and not line.strip().startswith('$$'):
+            clean_line = re.sub(r'\\\$', '', line)
+            dollars = clean_line.count('$')
+            if dollars % 2 != 0:
+                errors.append((idx, f"Unclosed or odd count of $ delimiters ({dollars} found)"))
 
     return errors
 
+
 if __name__ == "__main__":
-    import os
-    files = sys.argv[1:]
-    if not files:
+    raw_args = sys.argv[1:]
+    if not raw_args:
+        files = []
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         skip_dirs = {".git", "build", "node_modules", ".agents"}
         for root, dirs, filenames in os.walk(repo_root):
@@ -105,6 +148,20 @@ if __name__ == "__main__":
             for fname in sorted(filenames):
                 if fname.lower().endswith(".md"):
                     files.append(os.path.relpath(os.path.join(root, fname), repo_root))
+    else:
+        files = []
+        for arg in raw_args:
+            if any(ch in arg for ch in "*?["):
+                matched = sorted(glob.glob(arg, recursive=True))
+                if matched:
+                    files.extend(matched)
+                else:
+                    files.append(arg)
+            elif os.path.isdir(arg):
+                files.extend(sorted(glob.glob(os.path.join(arg, "**", "*.md"), recursive=True)))
+            else:
+                files.append(arg)
+
     total_errors = 0
     for fpath in files:
         errs = audit_file(fpath)

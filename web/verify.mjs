@@ -867,7 +867,7 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
 
         // 3. Verify knobs reset to DEFAULT preset (6.5s)
         assert.strictEqual(app.knobs.rt60_decay.getValue(), 6.5);
-        const expectedPx = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (0.65 - 0.05) / 3.95), 1 / 1.6)));
+        const expectedPx = Math.max(0, Math.min(1.0, Math.pow(Math.max(0, (0.65 - 0.05) / 4.95), 1 / 1.6)));
         assert.ok(Math.abs(app.vectorPad.x - expectedPx) < 0.01, 'Vector pad X must reset to calibrated coordinate');
         assert.ok(Math.abs(app.vectorPad.y - 0.45) < 0.01, 'Vector pad Y must reset to calibrated coordinate');
 
@@ -1364,6 +1364,14 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
         assert.strictEqual(app.isPowered, true);
         assert.strictEqual(emitted.length, 0, 'Host-driven setPower(true, true) must not echo paramChange power back to C++');
 
+        // Verify host-driven Standby while Poisson is running does not emit poisson exciterTrigger bounce-back
+        app.isPoissonRunning = true;
+        await app.setPower(false, true);
+        assert.strictEqual(app.isPowered, false);
+        assert.strictEqual(app.isPoissonRunning, false, 'Poisson must disarm on Standby');
+        assert.strictEqual(emitted.length, 0, 'Host-driven Standby with Poisson active must not emit exciterTrigger back to JUCE');
+
+        await app.setPower(true, true);
         await app.setPower(false, false);
         assert.strictEqual(app.isPowered, false);
         assert.strictEqual(emitted.length, 1, 'User-driven setPower(false) must emit power paramChange to C++');
@@ -1406,6 +1414,53 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
       engine.setParam('manifoldType', 2);
       const snap = app.getSnapshot();
       assert.strictEqual(snap.manifold_type, 2, 'getSnapshot() must persist manifold_type');
+
+      // Verify BraunVectorPad 0.05..5.00 Hz (4.95 span) and host paramUpdate -> vectorPad sync
+      const { BraunVectorPad } = await import('./js/ui/vector-pad.js');
+      const pad = new BraunVectorPad(null);
+      pad.x = 1.0;
+      assert.strictEqual(pad._calculateValues().rateHz, 5.0, 'VectorPad X=1.0 must reach full 5.00 Hz');
+
+      const origWin = globalThis.window;
+      const origDoc = globalThis.document;
+      try {
+        const listeners = {};
+        const emitted = [];
+        globalThis.window = {
+          __JUCE__: {
+            backend: {
+              emitEvent: (evt, payload) => { emitted.push({ evt, payload }); },
+              addEventListener: (evt, cb) => { listeners[evt] = cb; }
+            }
+          }
+        };
+        globalThis.document = {
+          getElementById: () => null,
+          querySelector: () => null,
+          querySelectorAll: () => []
+        };
+        const syncApp = Object.create(BraunRb26App.prototype);
+        syncApp.isPowered = true;
+        syncApp.knobs = {
+          tail_mod_rate: { value: 0.65, isDragging: false, setValue(v) { this.value = v; } },
+          tail_mod_depth: { value: 45, isDragging: false, setValue(v) { this.value = v; } }
+        };
+        syncApp.vectorPad = {
+          x: 0.2, y: 0.45, isEngaged: false,
+          setCoordinates(nx, ny) { this.x = nx; this.y = ny; }
+        };
+        syncApp._initJuceBridge();
+        emitted.length = 0; // Ignore initial requestInitialSync handshake event
+        assert.strictEqual(typeof listeners.paramUpdate, 'function');
+        listeners.paramUpdate({ id: 'tail_mod_rate_hz', value: 5.0 });
+        listeners.paramUpdate({ id: 'tail_mod_depth_ms', value: 4.0 });
+        assert.ok(Math.abs(syncApp.vectorPad.x - 1.0) < 1e-6, 'Host tail_mod_rate_hz=5.0 must move vectorPad.x to 1.0');
+        assert.ok(Math.abs(syncApp.vectorPad.y - 0.8) < 1e-6, 'Host tail_mod_depth_ms=4.0 must move vectorPad.y to 0.8');
+        assert.strictEqual(emitted.length, 0, 'Host paramUpdate -> vectorPad sync must not echo IPC events');
+      } finally {
+        globalThis.window = origWin;
+        globalThis.document = origDoc;
+      }
     });
   });
 });

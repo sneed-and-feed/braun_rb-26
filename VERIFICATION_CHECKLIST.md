@@ -9,7 +9,7 @@
 **Document ID**: `RB26-VERIFY-CHECKLIST-001`  
 **Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.5.0)  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (10/10 CTest C++ Suites, 25/25 Checklist Tests, 39/39 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (10/10 CTest C++ Suites, 26/26 Checklist Tests, 39/39 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: RB-26 Lead Verification Specialist  
 
 ---
@@ -53,7 +53,7 @@ npm run test:browser
 | **Acoustic Decay Audit** | `rb26_acoustic_decay_audit.exe` (Suites A-H) | 8 / 8 Suites | ~8.5 s | **100% PASS** |
 | **Total Headless DSP Tests** | `ctest -C Release` (10 suites) | **10 / 10 Suites** | **~12 s** | **100% PASS** |
 | **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 39 / 39 | 69.0 ms | **PASS** |
-| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets, knob mappings) | 25 / 25 | 83.0 ms | **PASS** |
+| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, 1:1 C++/Web presets, knob mappings) | 26 / 26 | 85.0 ms | **PASS** |
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 1M samples | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
 | **Numerical Stability** | +40 dBFS input bursts, infinite feedback | 0 NaNs / 0 Infs | Continuous | **0 NaNs** |
@@ -68,12 +68,19 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
 
 ### Verified Behaviors Across Multi-Rate:
 1. **Filter Coefficient Normalization**:
-   - 1-Pole HF Damping & Smoothing Filters: $\alpha(f_s) = 1 - \exp\left(-\frac{2\pi f_c}{f_s}\right)$ verified for cutoffs $60\text{ Hz} \le f_c \le 14,000\text{ Hz}$. Monotonically decreases with higher sample rates while preserving exact analog-matched cutoff bandwidth.
+   - 1-Pole HF Damping & Smoothing Filters: $\alpha(f_s) = 1 - \exp(-2\pi f_c / f_s)$ verified for cutoffs between $60\text{ Hz}$ and $14{,}000\text{ Hz}$. Monotonically decreases with higher sample rates while preserving exact analog-matched cutoff bandwidth.
    - Decoupled Linkwitz-Riley 4th Order (LR4) Crossover: Cascaded 2nd-order Butterworth biquad sections ($Q = -3.0103\text{ dB}$, linear $Q = 1/\sqrt{2} \approx 0.70710678$). Cutoff frequencies ($60\text{ Hz} \le f_x \le 400\text{ Hz}$) maintain identical frequency-domain magnitude summing ($\pm 0.0002\text{ dB}$) from $44.1\text{ kHz}$ to $192\text{ kHz}$.
 2. **Hermite Fractional Delay Scaling**:
    - 4-point, 3rd-order Catmull-Rom cubic spline interpolation:
-     $$y(\mu) = c_0 + \mu (c_1 + \mu (c_2 + \mu c_3))$$
-     where $c_0 = y_0$, $c_1 = \frac{1}{2}(y_1 - y_{-1})$, $c_2 = y_{-1} - \frac{5}{2}y_0 + 2y_1 - \frac{1}{2}y_2$, $c_3 = \frac{1}{2}(y_2 - y_{-1}) + \frac{3}{2}(y_0 - y_1)$.
+
+```math
+y(\mu) = c_0 + \mu (c_1 + \mu (c_2 + \mu c_3))
+```
+
+```math
+c_0 = y_0, \quad c_1 = \tfrac{1}{2}(y_1 - y_{-1}), \quad c_2 = y_{-1} - \tfrac{5}{2}y_0 + 2y_1 - \tfrac{1}{2}y_2, \quad c_3 = \tfrac{1}{2}(y_2 - y_{-1}) + \tfrac{3}{2}(y_0 - y_1)
+```
+
    - Delay line reads scale fractional offsets $\mu \in [0.0, 1.0)$ with sub-sample precision ($< 0.001\text{ sample}$ error), maintaining clean high-frequency response up to $0.45 f_s$ without pitch smearing or comb-filter aliasing.
 3. **Prime Delay Line Buffer Allocation**:
    - 8 FDN prime delay lines: $\{21.1\text{ ms}, 22.3\text{ ms}, 24.1\text{ ms}, 27.7\text{ ms}, 33.1\text{ ms}, 40.9\text{ ms}, 50.9\text{ ms}, 63.1\text{ ms}\}$.
@@ -111,7 +118,11 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
    - Dynamic parameter sweeps between 0% and 100% send verified click-free with a maximum sample delta of $0.029$.
 2. **FastSinTable Lookup Table**:
    - 2048-point precomputed sine table with linear interpolation:
-     $$\text{SNR} = 121.26\text{ dB}, \quad \text{THD} = -109.89\text{ dB}, \quad \text{SFDR} = 113.46\text{ dB}$$
+
+```math
+\text{SNR} = 121.26\text{ dB}, \quad \text{THD} = -109.89\text{ dB}, \quad \text{SFDR} = 113.46\text{ dB}
+```
+
    - Delivers a **12–15x speedup** over standard library transcendental calls (`std::sin`, `std::cos`).
    - Branchless non-finite protection: `FastSinTable::sin(NaN)` and `FastSinTable::sin(Inf)` return strictly $0.0f$.
 3. **Single-Precision Base-2 Exponentiation (`std::exp2f`)**:
@@ -128,7 +139,11 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
 - **Algorithmic Through-Latency**: **0 samples** ($0.000\text{ ms}$). The plugin reports 0 latency compensation to host DAWs.
 - **Linkwitz-Riley 4th Order (LR4) Decoupled Low-End**:
   - The sum of the lowpass and highpass outputs has flat magnitude:
-    $$|H_{LP}(j\omega) + H_{HP}(j\omega)| = 1.00000 \quad (0.000\text{ dB ripple})$$
+
+```math
+\lvert H_{\mathrm{LP}}(j\omega) + H_{\mathrm{HP}}(j\omega) \rvert = 1.00000 \quad (0.000\text{ dB ripple})
+```
+
   - Relative phase difference between low and high bands is strictly $0^\circ$ at the crossover point ($f = f_x$), guaranteeing zero comb filtering or cancellation upon acoustic recombination.
 - **Delay Buffer Bounds**:
   - Pre-delay buffer: Circular ring buffer sized to $500.0\text{ ms}$ with bitmask wrap-around.
@@ -141,7 +156,11 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
 
 - **1-Pole Exponential Slewing**:
   - Continuous parameters are smoothed using 1-pole recursive lowpass slewers:
-    $$y[n] = y[n-1] + \alpha (x_{\text{target}} - y[n-1])$$
+
+```math
+y[n] = y[n-1] + \alpha (x_{\text{target}} - y[n-1])
+```
+
   - Calibrated time constants:
     - $\tau = 2\text{ ms}$: Volume and mute ramping (eliminates note-on clicks).
     - $\tau = 20\text{ ms} - 25\text{ ms}$: Rotary knob continuous adjustments (pre-delay, decay time, wet/dry mix, tone).
@@ -150,7 +169,11 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
 - **Dual-Bank Tap Crossfading**:
   - Reverb tank room size scrubbing switches between Delay Bank A and Delay Bank B using an S-curve smoothstep crossfade $(S(t) = 3t^2 - 2t^3)$.
   - Energy conservation law:
-    $$S(t) + (1 - S(t)) \equiv 1.00000$$
+
+```math
+S(t) + (1 - S(t)) \equiv 1.00000
+```
+
   - Eliminates pitch doppler zipper noise, buffer scrubbing pop, and clicks during live parameter automation.
 
 ---
@@ -189,7 +212,11 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
   - Blocks CPU execution stalls caused by floating-point subnormals during reverb tail decay into silence.
 - **Software Subnormal Flush (`flushDenormal`)**:
   - Branchless evaluation:
-    $$\text{flushDenormal}(x) = \begin{cases} 0.0f & \text{if } |x| < 10^{-15} \text{ or } x \notin \mathbb{R} \\ x & \text{otherwise} \end{cases}$$
+
+```math
+\text{flushDenormal}(x) = \begin{cases} 0.0f & \text{if } \lvert x \rvert < 10^{-15} \text{ or } x \notin \mathbb{R} \\ x & \text{otherwise} \end{cases}
+```
+
   - Internal delay lines decay to bit-exact $0.0f$ within finite time.
 - **Master Hermite Soft-Knee Limiter**:
   - Seamless $C^1$-continuous cubic Hermite transfer curve with knee $k = 0.85$ and ceiling $M = 1.00$:

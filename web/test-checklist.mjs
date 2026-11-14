@@ -401,7 +401,7 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
       };
 
       const validShimmerIntervals = [7, 12, 24];
-      const validDimmerIntervals = [-24, -12, -7, -2];
+      const validDimmerIntervals = [-12, -7, -2];
       const validManifoldTypes = [0, 1, 2, 3];
 
       for (const preset of data.presets) {
@@ -437,6 +437,100 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
           `Preset ${preset.id} shimmer_send (${preset.params.shimmer_send}) must be >= 5%`);
         assert.ok(preset.params.dimmer_send >= 5,
           `Preset ${preset.id} dimmer_send (${preset.params.dimmer_send}) must be >= 5%`);
+      }
+    });
+
+    it('verifies 1:1 parameter parity across Rb26Engine.cpp, app.js, web/factory_presets.json, and web/presets/factory_presets.json', async () => {
+      const rootPresets = JSON.parse(fs.readFileSync(presetsPath, 'utf8'));
+      const subPresets = JSON.parse(fs.readFileSync(path.join(__dirname, 'presets', 'factory_presets.json'), 'utf8'));
+      assert.deepStrictEqual(rootPresets, subPresets, 'web/factory_presets.json and web/presets/factory_presets.json must be identical');
+
+      const { FACTORY_PRESETS } = await import('./js/app.js');
+      const cppSrc = fs.readFileSync(path.join(__dirname, '..', 'source', 'dsp', 'Rb26Engine.cpp'), 'utf8');
+      assert.ok(cppSrc.includes('presets.reserve(15);'), 'Rb26Engine.cpp getFactoryPresets() must reserve(15)');
+
+      const manifoldEnumMap = {
+        PoincareHyperbolic: 0,
+        WhisperingGallery: 1,
+        AnharmonicPlate: 2,
+        StockhausenKlangdom: 3
+      };
+
+      // Parse all 15 PresetDefinition blocks in Rb26Engine::getFactoryPresets()
+      const fnIdx = cppSrc.indexOf('Rb26ReverbEngine::getFactoryPresets()');
+      assert.ok(fnIdx >= 0, 'Must locate Rb26ReverbEngine::getFactoryPresets()');
+      const fnBody = cppSrc.slice(fnIdx);
+      const blockRegex = /p\.id\s*=\s*"([^"]+)";([\s\S]*?)presets\.push_back\(p\);/g;
+      const cppPresets = [];
+      let m;
+      while ((m = blockRegex.exec(fnBody)) !== null) {
+        const id = m[1];
+        const body = m[2];
+        const num = (field, defVal) => {
+          const rm = body.match(new RegExp(`p\\.params\\.${field}\\s*=\\s*([-+]?\\d+(?:\\.\\d+)?)f?;`));
+          return rm ? parseFloat(rm[1]) : defVal;
+        };
+        const bool = (field, defVal) => {
+          const rm = body.match(new RegExp(`p\\.params\\.${field}\\s*=\\s*(true|false);`));
+          return rm ? rm[1] === 'true' : defVal;
+        };
+        const mfMatch = body.match(/p\.params\.manifold\s*=\s*ManifoldType::(\w+);/);
+        const mf = mfMatch ? manifoldEnumMap[mfMatch[1]] : 0;
+
+        cppPresets.push({
+          id,
+          params: {
+            input_trim: num('inputTrimDb', 0.0),
+            predelay: num('preDelayMs', 24.0),
+            diffusion: Math.round(num('diffusionDensity', 0.75) * 100),
+            low_crossover: num('lowCrossoverHz', 180.0),
+            damping_low: num('bassRt60Mult', 1.0),
+            low_punch: Math.round(num('punchDucking', 0.65) * 100),
+            mono_bass: num('subMonoHz', 120.0),
+            rt60_decay: num('decayRt60Sec', 6.5),
+            room_size: Math.round(num('roomSize', 1.0) * 100),
+            damping_high: num('highDampingHz', 1800.0),
+            decay_hold: bool('freezeHold', false),
+            manifold_type: mf,
+            shimmer_send: Math.round(num('shimmerSend', 0.40) * 100),
+            dimmer_send: Math.round(num('dimmerSend', 0.35) * 100),
+            shimmer_interval: num('shimmerInterval', 12),
+            dimmer_interval: num('dimmerInterval', -12),
+            shimmer_dimmer_blend: Math.round(num('pitchBlend', 0.0) * 100),
+            pitch_regen: Math.round(num('pitchFeedback', 0.45) * 100),
+            pitch_delay: num('pitchDelayMs', 150.0),
+            pitch_boost: num('pitchBoostDb', 0.0),
+            pitch_warp: bool('pitchWarp', false),
+            tail_mod_rate: num('tailModRateHz', 0.65),
+            tail_mod_depth: Math.round((num('tailModDepthMs', 2.25) / 5.0) * 100),
+            tail_bloom: num('tailBloomMs', 85.0),
+            stereo_width: Math.round(num('stereoWidth', 1.0) * 100),
+            early_late_mix: Math.round(num('earlyLateMix', 0.50) * 100),
+            dry_wet_mix: Math.round(num('dryWetMix', 0.40) * 100),
+            output_trim: num('outputTrimDb', 0.0),
+            soft_limiter: bool('limiterEnable', true)
+          }
+        });
+      }
+
+      assert.strictEqual(cppPresets.length, 15, 'C++ getFactoryPresets() must define 15 presets');
+      assert.strictEqual(rootPresets.presets.length, 15, 'JSON factory_presets.json must define 15 presets');
+
+      for (let i = 0; i < 15; i++) {
+        const cppP = cppPresets[i];
+        const jsonP = rootPresets.presets[i];
+        const jsP = FACTORY_PRESETS[jsonP.id];
+        assert.strictEqual(cppP.id, jsonP.id, `Preset index ${i} ID mismatch between C++ and JSON`);
+        assert.ok(jsP, `app.js FACTORY_PRESETS missing ${jsonP.id}`);
+        for (const [k, cppVal] of Object.entries(cppP.params)) {
+          if (typeof cppVal === 'boolean') {
+            assert.strictEqual(jsonP.params[k], cppVal, `${cppP.id}.${k}: JSON (${jsonP.params[k]}) != C++ (${cppVal})`);
+            assert.strictEqual(jsP.params[k], cppVal, `${cppP.id}.${k}: app.js (${jsP.params[k]}) != C++ (${cppVal})`);
+          } else {
+            assert.ok(Math.abs(jsonP.params[k] - cppVal) < 1e-4, `${cppP.id}.${k}: JSON (${jsonP.params[k]}) != C++ (${cppVal})`);
+            assert.ok(Math.abs(jsP.params[k] - cppVal) < 1e-4, `${cppP.id}.${k}: app.js (${jsP.params[k]}) != C++ (${cppVal})`);
+          }
+        }
       }
     });
   });

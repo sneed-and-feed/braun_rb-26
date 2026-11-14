@@ -406,8 +406,8 @@ export class BraunVectorPad {
   }
 
   _calculateValues() {
-    // X: Mod Rate 0.05 Hz to 4.00 Hz (smooth response with fine low-end resolution)
-    const rateHz = +(0.05 + Math.pow(this.x, 1.6) * 3.95).toFixed(2);
+    // X: Mod Rate 0.05 Hz to 5.00 Hz (smooth response with fine low-end resolution)
+    const rateHz = +(0.05 + Math.pow(this.x, 1.6) * 4.95).toFixed(2);
     // Y: Mod Depth 0% to 100%
     const depthPct = Math.round(this.y * 100);
     // Y: Bloom Onset 20ms to 300ms

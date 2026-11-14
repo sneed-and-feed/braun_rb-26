@@ -254,6 +254,29 @@ juce_add_plugin(BRAUN_RB26
     ${RB26_EXTRA_PLUGIN_ARGS}
 )
 
+# Work around JUCE 8 _juce_create_windows_resource_file omitting DEPENDS on JUCE_INFO_FILE,
+# which otherwise leaves stale VERSIONINFO / CompanyName in BRAUN_RB26_resources.rc
+# across incremental version bumps.
+if(WIN32)
+    get_target_property(RB26_JUCE_GEN_DIR BRAUN_RB26 JUCE_GENERATED_SOURCES_DIRECTORY)
+    get_target_property(RB26_JUCE_INFO_FILE BRAUN_RB26 JUCE_INFO_FILE)
+    if(RB26_JUCE_GEN_DIR)
+        set(RB26_RC_FILE "${RB26_JUCE_GEN_DIR}/BRAUN_RB26_resources.rc")
+        if(EXISTS "${RB26_RC_FILE}")
+            file(READ "${RB26_RC_FILE}" RB26_RC_CONTENT)
+            if(NOT RB26_RC_CONTENT MATCHES "\"FileVersion\",[ ]*\"${PROJECT_VERSION}\\\\0\""
+               OR NOT RB26_RC_CONTENT MATCHES "\"ProductVersion\",[ ]*\"${PROJECT_VERSION}\\\\0\""
+               OR NOT RB26_RC_CONTENT MATCHES "\"CompanyName\",[ ]*\"Sneed's Feed & Seed Ltd\\.\\\\0\"")
+                message(STATUS "Removing stale Windows VERSIONINFO resource (${RB26_RC_FILE}) for regeneration...")
+                file(REMOVE "${RB26_RC_FILE}")
+            endif()
+        endif()
+        if(RB26_JUCE_INFO_FILE)
+            set_source_files_properties("${RB26_RC_FILE}" PROPERTIES OBJECT_DEPENDS "${RB26_JUCE_INFO_FILE}")
+        endif()
+    endif()
+endif()
+
 target_sources(BRAUN_RB26 PRIVATE
     source/plugin/PluginProcessor.cpp
     source/plugin/PluginProcessor.h

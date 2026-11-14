@@ -116,7 +116,7 @@ The circular pre-delay buffer implements fractional delay with cubic Hermite spl
 y[n] = x[n - D_\text{int} - \mu]
 ```
 
-where $D_\text{int} = \lfloor D \rfloor$ and $\mu = D - D_\text{int} \in [0, 1)$.
+where $D_\text{int} = \lfloor D \rfloor,\ \mu = D - D_\text{int} \in [0, 1)$.
 
 ---
 
@@ -158,7 +158,7 @@ When $E[n]$ exceeds the threshold, low-band reverb injection is ducked by up to 
 ### Deck 03: Core FDN Tank & Spatial Manifolds
 
 #### 8-Line Feedback Delay Network
-The late reverberation tank employs 8 mutually-prime delay lengths ($L_1 = 1087$ to $L_8 = 4507$ samples at $48\text{ kHz}$) coupled through an 8-dimensional Householder matrix:
+The late reverberation tank employs 8 mutually-prime delay lengths ($L_1 = 1087\text{ to }L_8 = 4507$ samples at $48\text{ kHz}$) coupled through an 8-dimensional Householder matrix:
 
 ```math
 H_8 = I_8 - \frac{2}{8}\mathbf{1}\mathbf{1}^T
@@ -263,7 +263,7 @@ r_k = \frac{1}{k+1} \in \left\lbrace 1, \frac{1}{2}, \frac{1}{3}, \frac{1}{4}, \
 ```
 
 #### Quality Mode Switch
-- **Auto**: Linear interpolation at $\ge 88.2\text{ kHz}$; Hermite spline at $\le 48\text{ kHz}$. Saves $50\text{--}60\%$ CPU at $192\text{ kHz}$.
+- **Auto**: Linear interpolation at $\ge 88.2\text{ kHz}$; Hermite spline at $\le 48\text{ kHz}$. Saves $50\text{-}60\%$ CPU at $192\text{ kHz}$.
 - **HiQHermite**: 4-point 3rd-order Hermite interpolation across all sample rates.
 - **FastLinear**: 2-point linear interpolation across all sample rates.
 
@@ -298,7 +298,7 @@ g_\text{dry} = \cos\left( \frac{\pi}{2} M \right), \quad g_\text{wet} = \sin\lef
 Guarantees transparent linear response below the knee $k = 0.85$ and a hard ceiling at $M = 1.000000$:
 
 ```math
-f(x) = \begin{cases} x & \lvert x \rvert \le k \\ \operatorname{sgn}(x) \left[ k + (M - k) \cdot P(u) \right] & k < \lvert x \rvert < M \\ \operatorname{sgn}(x) M & \lvert x \rvert \ge M \end{cases}
+f(x) = \begin{cases} x & \lvert x \rvert \le k \\ \mathrm{sgn}(x) \left[ k + (M - k) \cdot P(u) \right] & k < \lvert x \rvert < M \\ \mathrm{sgn}(x) M & \lvert x \rvert \ge M \end{cases}
 ```
 
 where $u = \frac{\lvert x \rvert - k}{M - k} \in [0, 1]$ and $P(u) = u(1 + u(1 - u))$ in Horner form. Because $P'(0) = 1$ and $P'(1) = 0$, the transfer curve exhibits $C^1$ continuity at both boundaries with zero overshoot.
