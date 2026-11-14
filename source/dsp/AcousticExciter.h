@@ -421,6 +421,8 @@ public:
     // Hard real-time lifecycle
     void prepare(double sampleRate) noexcept;
     void reset() noexcept;
+    void resetVoicesAndGenerators(bool flushFifo) noexcept;
+    void discardPendingTriggers() noexcept;
 
     // Parameter configuration
     void setParameters(const AcousticExciterParameters& params) noexcept;
@@ -476,6 +478,7 @@ public:
     // Status queries
     [[nodiscard]] int getActiveVoiceCount() const noexcept;
     [[nodiscard]] bool isPoissonActive() const noexcept { return mPoissonEnable.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool hasPendingActivity() const noexcept;
 
 private:
     double mSampleRate { 48000.0 };

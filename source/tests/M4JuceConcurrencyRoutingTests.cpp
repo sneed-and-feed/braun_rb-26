@@ -422,7 +422,7 @@ void runTest5_HostDawPresetsExposure() {
     RB26_TEST_ASSERT(*restoredProcessor.getAPVTS().getRawParameterValue("freeze_hold") > 0.5f);
     RB26_TEST_ASSERT(restoredProcessor.isPower() == processor.isPower());
 
-    std::cout << "  -> PASS: All 10 factory presets exposed, selectable, and state-restorable.\n";
+    std::cout << "  -> PASS: All 15 factory presets exposed, selectable, and state-restorable.\n";
 }
 
 void runTest6_ApvtsPrepareSnapshot() {
@@ -1154,6 +1154,111 @@ void runTest11_MultiChannelSurroundAndAtmos() {
     std::cout << "  -> PASS: All 8 bus layouts, 7.1.4 Atmos upmixing, zero NaN bleed, and editor rendering verified.\n";
 }
 
+void runTest12_PowerIdempotenceStandbyMidiAndAutoWake() {
+    std::cout << "[Test 12] Power Idempotence, Standby MIDI Isolation & Auto-Wake (v1.5.0)...\n";
+    juce::ScopedJuceInitialiser_GUI guiInit;
+
+    // 1. Idempotent setPower(true) must NOT wipe an active reverb tail
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.prepareToPlay(48000.0, 512);
+        p.setPower(true);
+
+        juce::AudioBuffer<float> buf(2, 512);
+        juce::MidiBuffer midi;
+
+        buf.clear();
+        buf.setSample(0, 0, 1.0f);
+        buf.setSample(1, 0, 1.0f);
+        p.processBlock(buf, midi);
+
+        for (int b = 0; b < 6; ++b) {
+            buf.clear();
+            p.processBlock(buf, midi);
+        }
+        const float rmsBefore = buf.getRMSLevel(0, 0, 512);
+        RB26_TEST_ASSERT(rmsBefore > 1.0e-3f);
+
+        // Redundant setPower(true) while already powered ON (e.g. editor open / state sync)
+        p.setPower(true);
+        buf.clear();
+        p.processBlock(buf, midi);
+        const float rmsAfter = buf.getRMSLevel(0, 0, 512);
+        RB26_TEST_ASSERT(rmsAfter > 0.5f * rmsBefore);
+        RB26_TEST_ASSERT(rmsAfter > 1.0e-3f);
+    }
+
+    // 2. Standby (!powered) must ignore MIDI Note-On so ghost voices never sound on wake
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.prepareToPlay(48000.0, 512);
+        p.setPower(false);
+
+        juce::AudioBuffer<float> buf(2, 512);
+        buf.clear();
+        juce::MidiBuffer standbyMidi;
+        standbyMidi.addEvent(juce::MidiMessage::noteOn(1, 60, static_cast<juce::uint8>(110)), 0);
+        p.processBlock(buf, standbyMidi);
+        RB26_TEST_ASSERT(p.getExciterEngine().getActiveVoiceCount() == 0);
+
+        // Power back on with silent input and empty MIDI
+        p.setPower(true);
+        juce::MidiBuffer emptyMidi;
+        float maxPostWake = 0.0f;
+        for (int b = 0; b < 4; ++b) {
+            buf.clear();
+            p.processBlock(buf, emptyMidi);
+            maxPostWake = std::max(maxPostWake, buf.getMagnitude(0, 512));
+        }
+        RB26_TEST_ASSERT(maxPostWake < 1.0e-7f);
+    }
+
+    // 3. Auto-wake from Standby + immediate triggerDiracAsync(1.0f) must preserve FIFO trigger & wake engine
+    {
+        BRAUN_RB26AudioProcessor p;
+        p.prepareToPlay(48000.0, 512);
+        p.setPower(false);
+
+        juce::AudioBuffer<float> buf(2, 512);
+        juce::MidiBuffer emptyMidi;
+        buf.clear();
+        p.processBlock(buf, emptyMidi); // Drain standby reset
+
+        // Simulate UI exciter click while in Standby: setPower(true) + triggerDiracAsync(1.0f)
+        p.setPower(true);
+        const bool posted = p.getExciterEngine().triggerDiracAsync(1.0f);
+        RB26_TEST_ASSERT(posted);
+        RB26_TEST_ASSERT(p.getExciterEngine().hasPendingActivity());
+
+        float peakAutoWake = 0.0f;
+        for (int b = 0; b < 6; ++b) {
+            buf.clear();
+            p.processBlock(buf, emptyMidi);
+            peakAutoWake = std::max(peakAutoWake, buf.getMagnitude(0, 512));
+        }
+        RB26_TEST_ASSERT(peakAutoWake > 1.0e-2f);
+    }
+
+    // 4. consumeStateSyncDirty() flags program and state updates for WebView synchronization
+    {
+        BRAUN_RB26AudioProcessor p;
+        (void)p.consumeStateSyncDirty(); // Clear initial state
+        RB26_TEST_ASSERT(!p.consumeStateSyncDirty());
+
+        p.setCurrentProgram(2);
+        RB26_TEST_ASSERT(p.consumeStateSyncDirty());
+        RB26_TEST_ASSERT(!p.consumeStateSyncDirty());
+
+        juce::MemoryBlock state;
+        p.getStateInformation(state);
+        p.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+        RB26_TEST_ASSERT(p.consumeStateSyncDirty());
+        RB26_TEST_ASSERT(!p.consumeStateSyncDirty());
+    }
+
+    std::cout << "  -> PASS: Power idempotence, Standby MIDI isolation, auto-wake Dirac FIFO, and stateSyncDirty verified.\n";
+}
+
 } // namespace
 
 int main() {
@@ -1173,6 +1278,7 @@ int main() {
     runTest9_LosslessWavRecorderDirectoryAndIntegrity();
     runTest10_NativeUIOcclusionAndContextMenu();
     runTest11_MultiChannelSurroundAndAtmos();
+    runTest12_PowerIdempotenceStandbyMidiAndAutoWake();
 
     std::cout << "================================================================\n";
     std::cout << "  ALL MILESTONE 4 AUDIT TESTS PASSED (100% SUCCESS)\n";

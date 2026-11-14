@@ -5,7 +5,7 @@
 The 8-channel Householder feedback reflection matrix satisfies:
 
 ```math
-\mathbf{H}_8 = \mathbf{I}_8 - \frac{1}{4}\mathbf{1}\mathbf{1}^T
+\mathbf H_8 = \mathbf I_8 - \frac{1}{4}\mathbf{1}\mathbf{1}^T
 ```
 
 This matrix possesses an eigenvalue of $-1$ corresponding to the uniform common mode:

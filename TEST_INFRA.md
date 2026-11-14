@@ -19,7 +19,7 @@ The testing methodology for the **BRAUN RB-26** is governed by five uncompromisi
 
 3. **Explicit Authoritative Expected Output Derivation**:
    For every single test case across all 4 tiers, the expected output is derived from an authoritative source:
-   - *Mathematical Oracles*: Closed-form analytical equations (e.g., constant power sum $\sum A_m^2 \equiv 1.5$ for Shepard spirals, Linkwitz-Riley crossover magnitude $|H_{sum}| \equiv 1.000$, exponential volume growth $e^{\lambda t}$, Hadamard row orthogonality $\mathbf{r}_L \cdot \mathbf{r}_R = 0$).
+   - *Mathematical Oracles*: Closed-form analytical equations (e.g., constant power sum $\sum A_m^2 \equiv 1.5$ for Shepard spirals, Linkwitz-Riley crossover magnitude $|H_{sum}| \equiv 1.000$, exponential volume growth $e^{\lambda t}$, Hadamard row orthogonality $\mathbf r_L \cdot \mathbf r_R = 0$).
    - *Acoustic & Physical Laws*: Kirchhoff-Love flexural dispersion ($v_g \propto \sqrt{\omega}$), Rayleigh grazing caustics, spruce body formants ($A_0, T_1$), and Harry Partch sub-harmonic ratios ($1/N$).
    - *Empirical Baseline Probes*: Pre-computed reference sweeps, impulse response decay thresholds, and psychoacoustic JND limits (< 5 cents onset wobble).
    - *RFC Specifications & Standards*: RFC 8259 JSON grammar validation and DIN 1451 glyph metrics.
@@ -110,15 +110,15 @@ Tier 1 establishes foundational correctness. Each feature F1 through F20 possess
 - **F1 (Poincaré Cavity)**: Negative curvature modal dispersion ($a_{disp} = -0.32$), exponential reflection density ($e^{\lambda t}$), horocycle delay scaling, hyperbolic group delay slope, energy conservation.
 - **F2 (Whispering Gallery)**: High-frequency caustic peaking ($+3.5\text{ dB}$ at $9.5\text{ kHz}$), Airy radial mode delays ($a_n$), circular spatial caustic panning ($\Omega = 0.25\text{ Hz}$), ultrasonic safety roll-off at $18\text{ kHz}$, shallow grazing boundary decay.
 - **F3 (Anharmonic Plate)**: Flexural stiffness dispersion ($v_g \propto \sqrt{\omega}$), allpass chirp cascade ($a_p = +0.55$), spruce $A_0$ air mode ($95\text{ Hz}$), spruce $T_1$ bridge mode ($320\text{ Hz}$), wood fiber resonance ($2.4\text{ kHz}$).
-- **F4 (Stockhausen Klangdom)**: Inscribed unit cube 8-vector spatialization ($\frac{1}{\sqrt{3}}(\pm 1, \pm 1, \pm 1)$), antipodal convergence timing ($2 R/c$), binaural diffuse field correlation, elevation ring partitioning, spherical energy balance.
+- **F4 (Stockhausen Klangdom)**: Inscribed unit cube 8-vector spatialization $(\frac{1}{\sqrt{3}} \text{ over octants})$, antipodal convergence timing $(2 R/c)$, binaural diffuse field correlation, elevation ring partitioning, spherical energy balance.
 - **F5 (Barber-Pole Dimmer)**: Continuous downward frequency glide ($d\sigma/dt < 0$), 4-voice log-frequency distribution, raised-cosine amplitude window, constant power sum ($\sum A_m^2 \equiv 1.5$), sub-bass bloom continuity across voice wrap.
 - **F6 (Barber-Pole Shimmer)**: Continuous upward frequency glide ($d\sigma/dt > 0$), raised-cosine windowing, high-frequency sparkle build, DC blocking in pitch loop, constant power sum ($\sum A_m^2 \equiv 1.5$).
 - **F7 (Microtonal Lattices)**: Pythagorean pure fifths ($3/2$, $+7.02\text{ st}$), Just Intonation major/minor thirds ($5/4, 6/5$), Harry Partch sub-harmonic series ($1/1, 1/2, 1/3, 1/4, 1/5, 1/6 \implies 0, -12, -19, -24, -28, -31\text{ st}$), cent accuracy within $0.1\text{ cent}$, pitch shift purity.
 - **F8 (Decoupled Low-End)**: 4th-order Linkwitz-Riley crossover ($f_x = 180\text{ Hz}$, $|H_{sum}| \equiv 1.000$), Hadamard modal output matrix ($[-1,-1,+1,+1]$ and $[+1,+1,+1,+1]$) yielding adjacent notch $< 4.80\text{ dB}$, automatic kick transient punch ducking ($-12\text{ dB}$ on $TR > 1.8$), 120 Hz elliptical mono collapse ($|S| < -12\text{ dB}$ at $60\text{ Hz}$).
 - **F9 (Tail Bloom Gating)**: Early reflections modulation drift bit-exact $0.0\text{ Hz}$ ($0.000\text{ ms}$), attack transient phase lock (pitch deviation $< 5\text{ cents}$ during $t < 25\text{ ms}$), bloom onset time constant $\tau_{bloom} \ge 85\text{ ms}$, late tail golden-ratio LFO detuning, smooth $E_{bloom}$ envelope tracking.
-- **F10 (Playable Chime Strip)**: 16-voice chime model modal inharmonicity ($1.0, 2.756, 5.404, 8.933$), touch velocity scaling ($0.35 + 0.50 \cdot \operatorname{relY}$), 8 modal scale quantizer, 12 chord macro triggers, 4-speed strumming delay queue.
+- **F10 (Playable Chime Strip)**: 16-voice chime model modal inharmonicity ($1.0, 2.756, 5.404, 8.933$), touch velocity scaling ($0.35 + 0.50 \cdot \mathrm{relY}$), 8 modal scale quantizer, 12 chord macro triggers, 4-speed strumming delay queue.
 - **F11 (Laboratory Impulse Generator)**: Single-sample Dirac delta pulse ($\delta[0] = 1.0, \delta[n>0] = 0.0$), broadband Paul Kellet 3-pole pink noise burst ($-3\text{ dB/oct}$ slope), Tukey window fade, $78\text{ Hz}$ acoustic hammer thud with $2.5\text{ ms}$ contact click, impulse polarity inversion.
-- **F12 (Poisson Stimulus)**: Exponential inter-arrival distribution ($\tau = -\ln(1-U)/\lambda$), Poisson density parameter ($4$ to $60\text{ epm}$), rubato humanization, Harold Budd Markov step/leap pitch weighting, modal scale pitch lock.
+- **F12 (Poisson Stimulus)**: Exponential inter-arrival distribution $\tau = -\ln(1-U)/\lambda$, Poisson density parameter ($4$ to $60\text{ epm}$), rubato humanization, Harold Budd Markov step/leap pitch weighting, modal scale pitch lock.
 - **F13 (Bus Routing & Staging)**: Exciter level trim ($-48\text{ dB}$ to $+6\text{ dB}$), `REVERB ONLY` routing mode (silent on dry bus), `REVERB + DIRECT` routing mode (audible direct acoustic instrument), clean gain ramping, overload protection.
 - **F14 (DIN 1451 & Austerity)**: 100% emoji absence verification across files, DIN 1451 font stack declaration, authentic Braun laboratory terminology, high-contrast metric graticule, uppercase tracking.
 - **F15 (Patch Management)**: 12 curated factory presets verification, custom patch save/load persistence in `localStorage`, RFC 8259 JSON patch export validation, JSON patch import restoring all 36 parameters, calibrated one-touch RESET.
@@ -187,11 +187,11 @@ Tier 4 reproduces end-to-end studio production sessions, performance interaction
 
 | Metric | Required Minimum | Planned / Specified | Compliance Margin |
 |:-------|:----------------:|:-------------------:|:-----------------:|
-| **Tier 1 (Feature Coverage)** | $\ge 100$ ($5 \times 20$ features) | **100 tests** | Exact ($5.0$ tests / feature) |
-| **Tier 2 (Boundary & Corner Cases)** | $\ge 100$ ($5 \times 20$ features) | **100 tests** | Exact ($5.0$ tests / feature) |
-| **Tier 3 (Cross-Feature Combinations)** | $\ge 20$ pairwise interactions | **24 tests** | $+20\%$ margin |
-| **Tier 4 (Real-World Application Scenarios)**| $\ge 10$ studio scenarios | **14 scenarios** | $+40\%$ margin |
-| **Total Test Suite Volume** | **$\ge 230$ tests** | **238 tests** | **Exceeds Threshold** |
+| **Tier 1 (Feature Coverage)** | $\ge 100$ ($5 \times 20$ features) | 100 tests | Exact ($5.0$ tests / feature) |
+| **Tier 2 (Boundary & Corner Cases)** | $\ge 100$ ($5 \times 20$ features) | 100 tests | Exact ($5.0$ tests / feature) |
+| **Tier 3 (Cross-Feature Combinations)** | $\ge 20$ pairwise interactions | 24 tests | $+20\%$ margin |
+| **Tier 4 (Real-World Application Scenarios)**| $\ge 10$ studio scenarios | 14 scenarios | $+40\%$ margin |
+| **Total Test Suite Volume** | $\ge 230$ tests | 238 tests | Exceeds Threshold |
 | **Audio Thread Dynamic Allocations** | **0 Allocations** | **0 Allocations** | Bit-Exact Compliant |
 | **Denormal Protection** | **100% Flush** | Hardware FTZ/DAZ + Soft Flush | Dual-Layer Compliant |
 | **Emoji Absence in UI / Code** | **0 Emojis** | **0 Emojis** | 100% Compliant |

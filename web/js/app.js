@@ -779,7 +779,7 @@ export class BraunRb26App {
     }
   }
 
-  async setPower(isPowered) {
+  async setPower(isPowered, fromHost = false) {
     this.isPowered = Boolean(isPowered);
     const powerBtn = document.getElementById('btn-power');
     if (powerBtn) {
@@ -830,15 +830,17 @@ export class BraunRb26App {
           const recText = recordBtn.querySelector('.braun-rec-text');
           if (recText) recText.textContent = 'REC WAV';
         }
-        try {
-          const backend = window.__JUCE__?.backend;
-          if (backend && typeof backend.emitEvent === 'function') {
-            backend.emitEvent('stopRecording', {});
+        if (!fromHost) {
+          try {
+            const backend = window.__JUCE__?.backend;
+            if (backend && typeof backend.emitEvent === 'function') {
+              backend.emitEvent('stopRecording', {});
+            }
+          } catch (err) {
+            console.warn('JUCE backend emitEvent stopRecording error:', err);
           }
-        } catch (err) {
-          console.warn('JUCE backend emitEvent stopRecording error:', err);
+          this._emitJuceParam('stopRecording', 1.0, true);
         }
-        this._emitJuceParam('stopRecording', 1.0, true);
       } else if (!this.isJuce && this.wavRecorder && this.wavRecorder.isRecording) {
         this.wavRecorder.stop();
         const recordBtn = document.getElementById('btn-record-wav');
@@ -870,7 +872,9 @@ export class BraunRb26App {
       }
     }
 
-    this._emitJuceParam('power', this.isPowered ? 1.0 : 0.0, true);
+    if (!fromHost) {
+      this._emitJuceParam('power', this.isPowered ? 1.0 : 0.0, true);
+    }
   }
 
   async init() {
@@ -956,7 +960,7 @@ export class BraunRb26App {
           if (data.id === 'power' || data.apvtsId === 'power') {
             const nextPower = data.value > 0.5;
             if (this.isPowered !== nextPower) {
-              this.setPower(nextPower);
+              this.setPower(nextPower, true);
             }
             return;
           }
@@ -1081,8 +1085,8 @@ export class BraunRb26App {
             pitchBoost: { key: 'pitch_boost', scale: 1 },
             tail_mod_rate_hz: { key: 'tail_mod_rate', scale: 1 },
             tailModRateHz: { key: 'tail_mod_rate', scale: 1 },
-            tail_mod_depth_ms: { key: 'tail_mod_depth', scale: 100 / 3.0 },
-            tailModDepthMs: { key: 'tail_mod_depth', scale: 100 / 3.0 },
+            tail_mod_depth_ms: { key: 'tail_mod_depth', scale: 100 / 5.0 },
+            tailModDepthMs: { key: 'tail_mod_depth', scale: 100 / 5.0 },
             tail_bloom_ms: { key: 'tail_bloom', scale: 1 },
             tailBloomMs: { key: 'tail_bloom', scale: 1 },
             stereo_width: { key: 'stereo_width', scale: 100 },
@@ -1358,7 +1362,7 @@ export class BraunRb26App {
 
     // Deck 1: INPUT / PRE-DELAY
     this.knobs.predelay = createKnob('knob-predelay', {
-      label: 'PRE-DELAY', min: 0, max: 250, step: 1, unit: 'ms', value: 24, size: 'small',
+      label: 'PRE-DELAY', min: 0, max: 500, step: 1, unit: 'ms', value: 24, size: 'small',
       onChange: (v) => { this.engine.setParam('preDelayMs', v); this._emitJuceParam('preDelayMs', v); }
     });
 
@@ -1379,7 +1383,7 @@ export class BraunRb26App {
     });
 
     this.knobs.damping_low = createKnob('knob-damping-low', {
-      label: 'BASS MULT', min: 0.20, max: 2.50, step: 0.05, unit: 'x', value: 1.00, size: 'medium',
+      label: 'BASS MULT', min: 0.20, max: 4.00, step: 0.05, unit: 'x', value: 1.00, size: 'medium',
       onChange: (v) => { this.engine.setParam('bassRt60Mult', v); this._emitJuceParam('bassRt60Mult', v); }
     });
 
@@ -1389,13 +1393,13 @@ export class BraunRb26App {
     });
 
     this.knobs.mono_bass = createKnob('knob-mono-bass', {
-      label: 'SUB MONO', min: 40, max: 250, step: 1, unit: 'Hz', value: 120, size: 'small',
+      label: 'SUB MONO', min: 20, max: 250, step: 1, unit: 'Hz', value: 120, size: 'small',
       onChange: (v) => { this.engine.setParam('subMonoHz', v); this._emitJuceParam('subMonoHz', v); }
     });
 
     // Deck 3: REVERB TANK / FDN
     this.knobs.rt60_decay = createKnob('knob-rt60-decay', {
-      label: 'DECAY (RT60)', min: 0.3, max: 30.0, step: 0.1, unit: 's', value: 6.5, size: 'large', isLog: true,
+      label: 'DECAY (RT60)', min: 0.2, max: 30.0, step: 0.1, unit: 's', value: 6.5, size: 'large', isLog: true,
       onChange: (v) => { this.engine.setParam('decayRt60Sec', v); this._emitJuceParam('decayRt60Sec', v); }
     });
 
@@ -1451,7 +1455,7 @@ export class BraunRb26App {
 
     // Deck 5: TAIL MODULATION
     this.knobs.tail_mod_rate = createKnob('knob-tail-mod-rate', {
-      label: 'MOD RATE', min: 0.05, max: 4.00, step: 0.05, unit: 'Hz', value: 0.65, size: 'medium',
+      label: 'MOD RATE', min: 0.05, max: 5.00, step: 0.05, unit: 'Hz', value: 0.65, size: 'medium',
       onChange: (v) => {
         this.engine.setParam('tailModRateHz', v);
         this._emitJuceParam('tailModRateHz', v);
@@ -1465,8 +1469,8 @@ export class BraunRb26App {
     this.knobs.tail_mod_depth = createKnob('knob-tail-mod-depth', {
       label: 'MOD DEPTH', min: 0, max: 100, step: 1, unit: '%', value: 45, size: 'medium',
       onChange: (v) => {
-        this.engine.setParam('tailModDepthMs', (v / 100) * 3.0);
-        this._emitJuceParam('tailModDepthMs', (v / 100) * 3.0);
+        this.engine.setParam('tailModDepthMs', (v / 100) * 5.0);
+        this._emitJuceParam('tailModDepthMs', (v / 100) * 5.0);
         if (this.vectorPad && !this.vectorPad.isEngaged) {
           this.vectorPad.setCoordinates(this.vectorPad.x, v / 100, false);
         }
@@ -1474,12 +1478,12 @@ export class BraunRb26App {
     });
 
     this.knobs.tail_bloom = createKnob('knob-tail-bloom', {
-      label: 'BLOOM ONSET', min: 20, max: 250, step: 5, unit: 'ms', value: 85, size: 'small',
+      label: 'BLOOM ONSET', min: 20, max: 300, step: 5, unit: 'ms', value: 85, size: 'small',
       onChange: (v) => {
         this.engine.setParam('tailBloomMs', v);
         this._emitJuceParam('tailBloomMs', v);
         if (this.vectorPad && !this.vectorPad.isEngaged) {
-          const normY = Math.max(0, Math.min(1.0, (v - 20) / 230));
+          const normY = Math.max(0, Math.min(1.0, (v - 20) / 280));
           this.vectorPad.setCoordinates(this.vectorPad.x, normY, false);
         }
       }
@@ -1532,11 +1536,11 @@ export class BraunRb26App {
         if (this.knobs.tail_bloom) this.knobs.tail_bloom.setValue(bloomMs, false);
 
         this.engine.setParam('tailModRateHz', rateHz);
-        this.engine.setParam('tailModDepthMs', (depthPct / 100) * 3.0);
+        this.engine.setParam('tailModDepthMs', (depthPct / 100) * 5.0);
         this.engine.setParam('tailBloomMs', bloomMs);
 
         this._emitJuceParam('tailModRateHz', rateHz);
-        this._emitJuceParam('tailModDepthMs', (depthPct / 100) * 3.0);
+        this._emitJuceParam('tailModDepthMs', (depthPct / 100) * 5.0);
         this._emitJuceParam('tailBloomMs', bloomMs);
       }
     });
@@ -1874,6 +1878,14 @@ export class BraunRb26App {
       } else if (this.engine && this.engine.dimmerInterval !== undefined) {
         snap.dimmer_interval = this.engine.dimmerInterval;
       }
+      const activeManifold = document.querySelector('#group-manifold .braun-segment-btn.active, #group-manifold .braun-segment-btn.is-active');
+      if (activeManifold) {
+        snap.manifold_type = parseInt(activeManifold.getAttribute('data-val') || activeManifold.dataset?.val, 10);
+      } else if (this.engine && this.engine.params?.manifoldType !== undefined) {
+        snap.manifold_type = this.engine.params.manifoldType;
+      }
+    } else if (this.engine && this.engine.params?.manifoldType !== undefined) {
+      snap.manifold_type = this.engine.params.manifoldType;
     }
     return snap;
   }

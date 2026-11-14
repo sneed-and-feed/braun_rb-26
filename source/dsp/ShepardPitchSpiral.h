@@ -16,7 +16,7 @@ namespace rb26 {
  *
  * Guarantees:
  * - 0 dynamic heap allocations in audio processing (pre-allocated for 192 kHz)
- * - Power-of-two bitmask indexing (2^16 = 65,536 samples)
+ * - Power-of-two bitmask indexing (2^17 = 131,072 samples)
  * - 4-voice circular log-frequency glide with raised-cosine spectral envelope
  * - Strictly constant power sum: sum(A_m^2) == 1.5, normalized by sqrt(2/3) for 0 dB ripple
  * - C^1 boundary continuity: 0 clicks, 0 boundary reset thumps
@@ -43,7 +43,7 @@ public:
     };
 
     static constexpr int kNumVoices = 4;
-    static constexpr int kMaxCapacity = 65536; // Sized for 192 kHz (341 ms)
+    static constexpr int kMaxCapacity = 131072; // Sized for 192 kHz (682.7 ms, supporting 200 ms grain windows without clamping)
     static constexpr int kBufferMask = kMaxCapacity - 1;
 
     // Mathematical Constants
@@ -126,6 +126,7 @@ private:
     PitchQualityMode mQualityMode { PitchQualityMode::Auto };
     float mSampleRate { 48000.0f };
     SpiralMode mMode { SpiralMode::BarberShimmer };
+    float mDepth { 0.5f };               // Wet/dry blend depth in [0.0, 1.0]
     float mRateHz { 0.10f };             // Glissando rate (0.01 - 2.0 Hz)
     float mWindowSec { 0.060f };         // Grain window size (60 ms default)
     float mWindowSamples { 2880.0f };

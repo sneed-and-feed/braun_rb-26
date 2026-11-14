@@ -95,7 +95,16 @@ def audit_file(filepath):
     return errors
 
 if __name__ == "__main__":
+    import os
     files = sys.argv[1:]
+    if not files:
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        skip_dirs = {".git", "build", "node_modules", ".agents"}
+        for root, dirs, filenames in os.walk(repo_root):
+            dirs[:] = sorted(d for d in dirs if d not in skip_dirs)
+            for fname in sorted(filenames):
+                if fname.lower().endswith(".md"):
+                    files.append(os.path.relpath(os.path.join(root, fname), repo_root))
     total_errors = 0
     for fpath in files:
         errs = audit_file(fpath)

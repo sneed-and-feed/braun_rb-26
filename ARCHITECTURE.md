@@ -350,10 +350,10 @@ Because $\frac{dS}{dt}\Big|_{t=0} = \frac{dS}{dt}\Big|_{t=1} = 0$, the derivativ
 
 | Invariant / Metric | Guarantee | Enforcement Mechanism |
 |:---|:---|:---|
-| **Dynamic Allocations** | 0 heap allocations in audio threads | Pre-allocated circular buffers sized for $192\text{ kHz}$ |
+| **Dynamic Allocations** | 0 heap allocations in audio threads | Pre-allocated circular buffers sized up to $384\text{ kHz}$ ($262{,}144$ pre-delay & pitch-delay, $131{,}072$ grain/spiral, $65{,}536$ circulation) |
 | **Denormal Flush** | Zero subnormal CPU stalls | RAII `ScopedNoDenormals` (FTZ/DAZ) + `flushDenormal()` |
 | **Through Latency** | 0 samples host compensation | Algorithmic zero-latency direct routing |
 | **Limiter Ceiling** | Output strictly $\le 1.000000$ | $C^1$ cubic Hermite limiter with $M = 1.00$ |
 | **Overload Headroom** | Finite bounded output under $+40\text{ dBFS}$ | Bounded saturator clamping with NaN neutralization |
 | **Sample Rate Range** | Bit-exact operation across all rates | Normalized coefficients for 44.1k, 48k, 88.2k, 96k, 176.4k, 192k |
-| **Verification Suite** | 100% test pass rate | 391 automated C++ assertions across 4 tiers |
+| **Verification Suite** | 100% test pass rate | 10 CTest C++ binaries + 64 Node tests (v1.5.0) |

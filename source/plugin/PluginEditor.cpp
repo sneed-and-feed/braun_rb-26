@@ -218,34 +218,34 @@ R"html(
 <script>
 const paramsMeta = [
   { id: 'input_trim_db', webId: 'inputTrimDb', label: 'Input Trim', deck: 'Input & Pre-Delay', min: -18, max: 18, def: 0, unit: 'dB' },
-  { id: 'pre_delay_ms', webId: 'preDelayMs', label: 'Pre-Delay', deck: 'Input & Pre-Delay', min: 0, max: 500, def: 20, unit: 'ms' },
+  { id: 'pre_delay_ms', webId: 'preDelayMs', label: 'Pre-Delay', deck: 'Input & Pre-Delay', min: 0, max: 500, def: 24, unit: 'ms' },
   { id: 'diffusion_density', webId: 'diffusionDensity', label: 'Diffusion', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.75, unit: '%' },
-  { id: 'dry_wet_mix', webId: 'dryWetMix', label: 'Dry/Wet', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.35, unit: '%' },
+  { id: 'dry_wet_mix', webId: 'dryWetMix', label: 'Dry/Wet', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.40, unit: '%' },
   { id: 'early_late_mix', webId: 'earlyLateMix', label: 'Early/Late', deck: 'Input & Pre-Delay', min: 0, max: 1, def: 0.50, unit: '%' },
 
   { id: 'low_crossover_hz', webId: 'lowCrossoverHz', label: 'Crossover', deck: 'Low Modal Matrix', min: 60, max: 400, def: 180, unit: 'Hz' },
   { id: 'bass_rt60_mult', webId: 'bassRt60Mult', label: 'Bass Mult', deck: 'Low Modal Matrix', min: 0.2, max: 4.0, def: 1.0, unit: 'x' },
-  { id: 'punch_ducking', webId: 'punchDucking', label: 'Punch Duck', deck: 'Low Modal Matrix', min: 0, max: 1, def: 0.40, unit: '%' },
+  { id: 'punch_ducking', webId: 'punchDucking', label: 'Punch Duck', deck: 'Low Modal Matrix', min: 0, max: 1, def: 0.65, unit: '%' },
   { id: 'sub_mono_hz', webId: 'subMonoHz', label: 'Sub Mono', deck: 'Low Modal Matrix', min: 20, max: 250, def: 120, unit: 'Hz' },
 
-  { id: 'room_size', webId: 'roomSize', label: 'Room Size', deck: 'FDN Tank', min: 0.1, max: 4.0, def: 0.65, unit: '' },
-  { id: 'decay_rt60_sec', webId: 'decayRt60Sec', label: 'Decay Time', deck: 'FDN Tank', min: 0.2, max: 30.0, def: 3.5, unit: 's' },
+  { id: 'room_size', webId: 'roomSize', label: 'Room Size', deck: 'FDN Tank', min: 0.1, max: 4.0, def: 1.0, unit: '' },
+  { id: 'decay_rt60_sec', webId: 'decayRt60Sec', label: 'Decay Time', deck: 'FDN Tank', min: 0.2, max: 30.0, def: 6.5, unit: 's' },
   { id: 'high_damping_hz', webId: 'highDampingHz', label: 'Damping', deck: 'FDN Tank', min: 1000, max: 20000, def: 1800, unit: 'Hz' },
   { id: 'manifold_type', webId: 'manifoldType', label: 'Manifold', deck: 'FDN Tank', min: 0, max: 3, def: 0, unit: '', isChoice: true, choices: ['Poincaré', 'Whispering', 'Plate', 'Klangdom'] },
   { id: 'freeze_hold', webId: 'freezeHold', label: 'Freeze', deck: 'FDN Tank', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
-  { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.30, unit: '%' },
-  { id: 'dimmer_send', webId: 'dimmerSend', label: 'Dimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.25, unit: '%' },
+  { id: 'shimmer_send', webId: 'shimmerSend', label: 'Shimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.40, unit: '%' },
+  { id: 'dimmer_send', webId: 'dimmerSend', label: 'Dimmer Send', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0.35, unit: '%' },
   { id: 'shimmer_interval', webId: 'shimmerInterval', label: 'Shimmer Int', deck: 'Pitch Diffusion', min: 0, max: 2, def: 1, unit: '', isChoice: true, choices: ['+7 st', '+12 st', '+24 st'] },
   { id: 'dimmer_interval', webId: 'dimmerInterval', label: 'Dimmer Int', deck: 'Pitch Diffusion', min: 0, max: 2, def: 2, unit: '', isChoice: true, choices: ['-2 st', '-7 st', '-12 st'] },
   { id: 'pitch_blend', webId: 'pitchBlend', label: 'Pitch Blend', deck: 'Pitch Diffusion', min: -1, max: 1, def: 0, unit: '' },
-  { id: 'pitch_feedback', webId: 'pitchFeedback', label: 'Pitch FB', deck: 'Pitch Diffusion', min: 0, max: 0.95, def: 0.50, unit: '%' },
+  { id: 'pitch_feedback', webId: 'pitchFeedback', label: 'Pitch FB', deck: 'Pitch Diffusion', min: 0, max: 0.95, def: 0.45, unit: '%' },
   { id: 'pitch_delay_ms', webId: 'pitchDelayMs', label: 'Pitch Delay', deck: 'Pitch Diffusion', min: 20, max: 500, def: 150, unit: 'ms' },
   { id: 'pitch_boost', webId: 'pitchBoost', label: 'Pitch Boost', deck: 'Pitch Diffusion', min: 0, max: 18, def: 0, unit: 'dB' },
   { id: 'pitch_warp', webId: 'pitchWarp', label: 'Warp Mode', deck: 'Pitch Diffusion', min: 0, max: 1, def: 0, unit: '', isBool: true },
 
-  { id: 'tail_mod_rate_hz', webId: 'tailModRateHz', label: 'Mod Rate', deck: 'Tail Bloom & Mod', min: 0.05, max: 5.0, def: 0.85, unit: 'Hz' },
-  { id: 'tail_mod_depth_ms', webId: 'tailModDepthMs', label: 'Mod Depth', deck: 'Tail Bloom & Mod', min: 0, max: 5.0, def: 1.2, unit: 'ms' },
+  { id: 'tail_mod_rate_hz', webId: 'tailModRateHz', label: 'Mod Rate', deck: 'Tail Bloom & Mod', min: 0.05, max: 5.0, def: 0.65, unit: 'Hz' },
+  { id: 'tail_mod_depth_ms', webId: 'tailModDepthMs', label: 'Mod Depth', deck: 'Tail Bloom & Mod', min: 0, max: 5.0, def: 2.25, unit: 'ms' },
   { id: 'tail_bloom_ms', webId: 'tailBloomMs', label: 'Bloom Attack', deck: 'Tail Bloom & Mod', min: 20, max: 300, def: 85, unit: 'ms' },
 
   { id: 'stereo_width', webId: 'stereoWidth', label: 'Width', deck: 'Master Bus', min: 0, max: 2.0, def: 1.0, unit: '%' },
@@ -358,7 +358,7 @@ if (chimeRow) {
 // Chords (1-=)
 const chordNames = [
   '1 PAVILION', '2 PLATEAUX', '3 DEEP 5TH', '4 ETHEREAL', '5 LYDIAN', '6 SOLAR BEAT',
-  '7 AVALON', '8 BLADE RUNNER', '9 MIN7 9', '0 SUS4 7', '- MAJOR 9', '= CLUSTER'
+  '7 AVALON', '8 SUMMER', '9 SPIRITED', '0 NOSTALGIA', '- BLADE RUN', '= TEARS RAIN'
 ];
 const chordKeys = ['1','2','3','4','5','6','7','8','9','0','-','='];
 const chordRow = document.getElementById('chordRow');
@@ -731,6 +731,8 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
         latestTelemetryFrame = frame;
     }
 
+    const bool stateSyncDirty = processorRef.consumeStateSyncDirty();
+
 #if JUCE_WEB_BROWSER
     if (!useNativeUI && webComponent != nullptr)
     {
@@ -741,8 +743,8 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
             webComponent->emitEventIfBrowserIsVisible("recordingSaved", juce::var(obj));
         }
 
-        // Initial state synchronization on webview ready
-        if (!initialSyncDone && webComponent->isVisible())
+        // Initial state synchronization on webview ready or after host state/program/power recall
+        if ((!initialSyncDone || stateSyncDirty) && webComponent->isVisible())
         {
             syncAllParametersToWeb();
             initialSyncDone = true;
@@ -967,6 +969,9 @@ void BRAUN_RB26AudioProcessorEditor::handleExciterTriggerFromWeb(const juce::var
     if (!processorRef.isPower())
     {
         processorRef.setPower(true);
+        powerButton.setButtonText("POWER ON");
+        powerButton.setToggleState(true, juce::dontSendNotification);
+        sendParameterUpdateToWeb("power", "power", 1.0f);
     }
 
     if (type.equalsIgnoreCase("note"))
@@ -1387,9 +1392,10 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
 {
     addMouseListener(this, true);
 
-    // Power button
-    powerButton.setButtonText("STANDBY");
-    powerButton.setToggleState(false, juce::dontSendNotification);
+    // Power button (reflect current processor power state on open)
+    const bool initPower = processorRef.isPower();
+    powerButton.setButtonText(initPower ? "POWER ON" : "STANDBY");
+    powerButton.setToggleState(initPower, juce::dontSendNotification);
     powerButton.setClickingTogglesState(false);
     powerButton.onClick = [this] {
         processorRef.setPower(!processorRef.isPower());
@@ -1482,28 +1488,40 @@ void BRAUN_RB26AudioProcessorEditor::setupNativeControls()
     addChildComponent(nextPresetBtn);
 
     // Audition Exciter trigger buttons
+    auto ensureNativeAwake = [this] {
+        if (!processorRef.isPower())
+        {
+            processorRef.setPower(true);
+            powerButton.setButtonText("POWER ON");
+            powerButton.setToggleState(true, juce::dontSendNotification);
+#if JUCE_WEB_BROWSER
+            sendParameterUpdateToWeb("power", "power", 1.0f);
+#endif
+        }
+    };
+
     impulseTriggerBtn.setButtonText("DIRAC IMPULSE");
-    impulseTriggerBtn.onClick = [this] {
-        if (!processorRef.isPower()) processorRef.setPower(true);
+    impulseTriggerBtn.onClick = [this, ensureNativeAwake] {
+        ensureNativeAwake();
         processorRef.getExciterEngine().triggerDiracAsync(1.0f);
     };
     addChildComponent(impulseTriggerBtn);
 
     hammerTriggerBtn.setButtonText("HAMMER THUD");
-    hammerTriggerBtn.onClick = [this] {
-        if (!processorRef.isPower()) processorRef.setPower(true);
+    hammerTriggerBtn.onClick = [this, ensureNativeAwake] {
+        ensureNativeAwake();
         processorRef.getExciterEngine().triggerHammerThudAsync(0.7f);
     };
     addChildComponent(hammerTriggerBtn);
 
     chordTriggerBtn.setButtonText("PIANO CHORD");
-    chordTriggerBtn.onClick = [this] {
-        if (!processorRef.isPower()) processorRef.setPower(true);
+    chordTriggerBtn.onClick = [this, ensureNativeAwake] {
+        ensureNativeAwake();
         processorRef.getExciterEngine().triggerChordAsync(3, 60.0f, 0.7f, rb26::StrumSpeed::Slow);
     };
     addChildComponent(chordTriggerBtn);
 
-    // 26 Parameters Binding
+    // 29 Parameters Binding
     const auto& meta = rb26::getParameterMetadataTable();
     for (const auto& item : meta)
     {

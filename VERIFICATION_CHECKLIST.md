@@ -7,9 +7,9 @@
 [![C++20 & Web Audio](https://img.shields.io/badge/DSP%20Parity-Verified-EE592B?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 
 **Document ID**: `RB26-VERIFY-CHECKLIST-001`  
-**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.4.14)  
+**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.5.0)  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (391/391 E2E Headless Tests, 24/24 Checklist Tests, 36/36 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (10/10 CTest C++ Suites, 25/25 Checklist Tests, 39/39 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: RB-26 Lead Verification Specialist  
 
 ---
@@ -51,9 +51,9 @@ npm run test:browser
 | **Native DSP Tier 3 (Pairwise)** | Cross-subsystem interactions (e.g. Freeze + Shimmer) | 34 / 34 | 215.8 ms | **PASS** |
 | **Native DSP Tier 4 (Scenarios)** | 1,000,000-sample burn-in, studio workloads, DAWs | 17 / 17 | 1,589.4 ms | **PASS** |
 | **Acoustic Decay Audit** | `rb26_acoustic_decay_audit.exe` (Suites A-H) | 8 / 8 Suites | ~8.5 s | **100% PASS** |
-| **Total Headless DSP Tests** | `rb26_headless_dsp_tests.exe` | **389 / 389** | **3,152.4 ms** | **100% PASS** |
-| **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 36 / 36 | 47.9 ms | **PASS** |
-| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets, knob mappings) | 24 / 24 | 76.9 ms | **PASS** |
+| **Total Headless DSP Tests** | `ctest -C Release` (10 suites) | **10 / 10 Suites** | **~12 s** | **100% PASS** |
+| **Web UI & Architecture** | `web/verify.mjs` (token parity, Rams rules, WAV rec) | 39 / 39 | 69.0 ms | **PASS** |
+| **Checklist Validation** | `web/test-checklist.mjs` (coefficients, immunity, presets, knob mappings) | 25 / 25 | 83.0 ms | **PASS** |
 | **Memory Leak Audit** | Intercepted `operator new/delete` over 1M samples | 0 Allocations | Continuous | **0 LEAKS** |
 | **Denormal Immunity** | Hardware FTZ/DAZ + Software `flushDenormal()` | 100% Flush | Continuous | **0 DENORMALS** |
 | **Numerical Stability** | +40 dBFS input bursts, infinite feedback | 0 NaNs / 0 Infs | Continuous | **0 NaNs** |
@@ -158,22 +158,27 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
 ## 7. Preset Compatibility & Serialization
 
 - **APVTS XML Serialization**:
-  - Complete state tree serialize/deserialize verified across 25 continuous and discrete parameters.
+  - Complete state tree serialize/deserialize verified across all 29 automatable continuous and discrete parameters (plus power state).
   - Host DAW projects reload bit-exact parameter states across session saves.
 - **Corrupted Stream Resilience**:
   - Evaluated against truncated XML chunks, malformed attribute strings, missing nodes, and out-of-range floats. The processor safely clamps parameters to default calibrated values without throwing exceptions or crashing.
-- **10 Curated Factory Presets**:
+- **15 Curated Factory Presets**:
   1. `DEFAULT`: Balanced studio reverb, 6.5s RT60, natural harmonic balance.
   2. `AMBIENT_GUITAR_CLOUD`: Lush 9.5s cloud, +12st shimmer bloom, wide dispersion.
   3. `AS42_SHIMMER_COMPANION`: Vintage tape-modulated plate with octave shimmer.
   4. `SOFT_FELT_ACOUSTIC_HALL`: Warm wooden concert hall, Harold Budd tuning.
   5. `GERMAN_PLATE_140`: Bright classic steel plate reverb, dense diffusion.
-  6. `CATHEDRAL_DIFFUSION`: Enormous stone cathedral, 12s decay, rich modal density.
-  7. `ETHEREAL_SYNTH_PAD`: Balanced 50/50 shimmer/dimmer harmonic cloud.
+  6. `CATHEDRAL_DIFFUSION`: Enormous stone cathedral, 18s decay, rich modal density.
+  7. `ETHEREAL_SYNTH_PAD`: Balanced shimmer/dimmer harmonic cloud.
   8. `BLOOM_SHIMMER_VOID`: Late-blooming pitch modulation with sustained high resonance.
   9. `INFINITE_ETHEREAL_FREEZE`: Infinite sustain ambient drone with decay hold.
   10. `SUB_BASS_PRESERVER`: Clean low-end matrix isolation, club kick transient protection.
-- Verified in both C++ host program management (`getNumPrograms() == 10`) and Web Audio JSON loader (`web/factory_presets.json`).
+  11. `WARP_CELESTIAL_OVERDRIVE`: Supercritical octave shimmer through Hermite soft saturation.
+  12. `HAUNTED_TAPE_BEATING`: Analog tape flutter with microtonal recursive pitch beating.
+  13. `SUB_TRITONE_ABYSS`: Saturated sub-harmonic gravitational pull with wide dispersion.
+  14. `METALLIC_COMB_DISINTEGRATION`: Short delay flutter into saturated inharmonic sidebands.
+  15. `INFINITE_WARP_SINGULARITY`: Self-oscillating shimmer sphere bounded by $C^1$ Hermite saturation.
+- Verified in both C++ host program management (`getNumPrograms() == 15`) and Web Audio JSON loader (`web/factory_presets.json`).
 
 ---
 
@@ -225,9 +230,9 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
 ================================================================================
   Verification Status           : 100% UNANIMOUS PASS
   Acoustic Decay Audit Suites   : 8 / 8 (Suites A-H, 100%)
-  Headless DSP Tests            : 391 / 391 (100%)
-  Web Unit Tests                : 36 / 36 (100%)
-  Checklist Automated Tests     : 24 / 24 (100%)
+  CTest C++ Verification Suites : 10 / 10 (100%)
+  Web Unit Tests                : 39 / 39 (100%)
+  Checklist Automated Tests     : 25 / 25 (100%)
   Total Assertions Evaluated    : > 1,180,000
   Memory Leaks                  : 0
   Denormal Stalls               : 0
@@ -235,5 +240,5 @@ $$\mathcal F_s \in \lbrace 44.1\text{ kHz},\ 48.0\text{ kHz},\ 88.2\text{ kHz},\
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.4.14)
+VERDICT: CERTIFIED PRODUCTION READY (v1.5.0)
 ```

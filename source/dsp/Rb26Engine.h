@@ -145,8 +145,8 @@ private:
     size_t mSilentSamplesCount { 0 };
     float mTailEnergyFollower { 0.0f };
 
-    // Pre-Delay Circular Buffer (500 ms at 192 kHz = 96,000 samples -> 131,072)
-    static constexpr size_t kPreDelayBufferCapacity = 131072;
+    // Pre-Delay Circular Buffer (500 ms at 192 kHz = 96,000 samples; 2^18 = 262,144 supports up to 384 kHz)
+    static constexpr size_t kPreDelayBufferCapacity = 262144;
     static constexpr size_t kPreDelayBufferMask = kPreDelayBufferCapacity - 1;
     std::vector<float> mPreDelayBufferL;
     std::vector<float> mPreDelayBufferR;
@@ -180,7 +180,8 @@ private:
     SubBassEllipticalFilter mMasterSubMono;
 
     // Decoupled Pitch Shimmer/Dimmer Delay Buffer
-    static constexpr size_t kPitchDelayCapacity = 131072;
+    // Worst-case R-channel delay: 500 ms * 1.35 * 1.07 + 1.5 ms = 723.75 ms = 138,960 samples at 192 kHz -> 2^18 = 262,144
+    static constexpr size_t kPitchDelayCapacity = 262144;
     static constexpr size_t kPitchDelayMask = kPitchDelayCapacity - 1;
     std::vector<float> mPitchDelayBufferL;
     std::vector<float> mPitchDelayBufferR;

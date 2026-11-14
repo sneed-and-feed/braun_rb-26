@@ -1,11 +1,11 @@
 # BRAUN RB-26 · Master Studio Reverberator
 
-[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(391%2F391)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
-[![Version: 1.4.14](https://img.shields.io/badge/Version-1.4.14-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.4.14)
+[![Verification: 100% PASS](https://img.shields.io/badge/Verification-100%25%20PASS%20(395%2F395)-24FF6A?style=for-the-badge&logo=checkmarx)](VERIFICATION_CHECKLIST.md)
+[![Version: 1.5.0](https://img.shields.io/badge/Version-1.5.0-EE592B?style=for-the-badge)](https://github.com/sneed-and-feed/braun_rb-26/releases/tag/v1.5.0)
 [![CI](https://github.com/sneed-and-feed/braun_rb-26/actions/workflows/test.yml/badge.svg)](https://github.com/sneed-and-feed/braun_rb-26/actions)
-[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.14/BRAUN_RB26-v1.4.14-Windows-x64.zip)
-[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.14/BRAUN_RB26-v1.4.14-macOS-Universal.zip)
-[![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.14/BRAUN_RB26-v1.4.14-Linux-x64.tar.gz)
+[![Windows VST3 & CLAP](https://img.shields.io/badge/Windows-VST3%20%7C%20CLAP%20%7C%20Standalone-blue?style=for-the-badge&logo=windows)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.5.0/BRAUN_RB26-v1.5.0-Windows-x64.zip)
+[![macOS AU & VST3](https://img.shields.io/badge/macOS-AU%20%7C%20VST3%20%7C%20CLAP%20%7C%20Standalone-white?style=for-the-badge&logo=apple)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.5.0/BRAUN_RB26-v1.5.0-macOS-Universal.zip)
+[![Linux VST3 & CLAP](https://img.shields.io/badge/Linux-VST3%20%7C%20CLAP%20%7C%20Standalone-FCC624?style=for-the-badge&logo=linux)](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.5.0/BRAUN_RB26-v1.5.0-Linux-x64.tar.gz)
 [![Web Audio API](https://img.shields.io/badge/Web%20Audio-100%25%20Client--Side-4A4A4A?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 [![License: MIT](https://img.shields.io/badge/License-MIT-black?style=for-the-badge)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-4A4A4A?style=for-the-badge)](https://isocpp.org/)
@@ -32,9 +32,9 @@ Ships as native **VST3**, **CLAP**, **AU**, and **Standalone** plugins for **mac
 
 Precompiled release packages (verified with SHA-256 in [`releases/SHA256SUMS.txt`](releases/SHA256SUMS.txt)):
 
-* **macOS Universal (Apple Silicon M1–M4 & Intel)**: [**`BRAUN_RB26-v1.4.14-macOS-Universal.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.14/BRAUN_RB26-v1.4.14-macOS-Universal.zip) (~23 MB) — AU (`.component`), VST3 (`.vst3`), CLAP (`.clap`), Standalone (`.app`).
-* **Windows x64**: [**`BRAUN_RB26-v1.4.14-Windows-x64.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.14/BRAUN_RB26-v1.4.14-Windows-x64.zip) (~10 MB) or [**VST3 Only (.zip)**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.14/BRAUN_RB26-v1.4.14-VST3-Windows-x64.zip) (~3 MB) — VST3, CLAP, Standalone (`.exe`).
-* **Linux x64**: [**`BRAUN_RB26-v1.4.14-Linux-x64.tar.gz`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.4.14/BRAUN_RB26-v1.4.14-Linux-x64.tar.gz) — VST3, CLAP, Standalone binary, and `INSTALL.txt` (packaged via Ubuntu CI).
+* **macOS Universal (Apple Silicon M1–M4 & Intel)**: [**`BRAUN_RB26-v1.5.0-macOS-Universal.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.5.0/BRAUN_RB26-v1.5.0-macOS-Universal.zip) (~23 MB) — AU (`.component`), VST3 (`.vst3`), CLAP (`.clap`), Standalone (`.app`).
+* **Windows x64**: [**`BRAUN_RB26-v1.5.0-Windows-x64.zip`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.5.0/BRAUN_RB26-v1.5.0-Windows-x64.zip) (~10 MB) or [**VST3 Only (.zip)**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.5.0/BRAUN_RB26-v1.5.0-VST3-Windows-x64.zip) (~3 MB) — VST3, CLAP, Standalone (`.exe`).
+* **Linux x64**: [**`BRAUN_RB26-v1.5.0-Linux-x64.tar.gz`**](https://github.com/sneed-and-feed/braun_rb-26/releases/download/v1.5.0/BRAUN_RB26-v1.5.0-Linux-x64.tar.gz) — VST3, CLAP, Standalone binary, and `INSTALL.txt` (packaged via Ubuntu CI).
 * View all release notes and checksums on [GitHub Releases](https://github.com/sneed-and-feed/braun_rb-26/releases).
 
 ---
@@ -43,7 +43,7 @@ Precompiled release packages (verified with SHA-256 in [`releases/SHA256SUMS.txt
 
 ### 1. Web Showcase (Zero Install)
 
-Audition the full 19" 2U rackmount interface, 21 rotary controls, 4-mode CRT vector scope, and acoustic exciter directly in your browser:
+Audition the full 19" 2U rackmount interface, 23 rotary controls, 4-mode CRT vector scope, and acoustic exciter directly in your browser:
 
 ```bash
 # Windows
@@ -55,7 +55,7 @@ npm start
 ```
 
 > [!TIP]
-> The RB-26 initializes in **Standby** mode (`power = false`) to protect studio monitors. Click the orange **POWER** switch or press `P` to engage the audio graph.
+> In browser mode, the RB-26 initializes in **Standby** (`power = false`) to satisfy Web Audio autoplay policies; click the orange **POWER** switch or press `P` to engage the audio graph. Native DAW/Standalone builds (`VST3`, `CLAP`, `AU`, `Standalone`) initialize **Active** (`power = true`) for immediate signal routing.
 
 ### 2. DAW Setup (Logic Pro, Ableton Live, FL Studio, Reaper, Bitwig)
 
@@ -95,7 +95,7 @@ The RB-26 arranges its spatial acoustic synthesis across 7 tactile physical deck
 
 ## Factory Presets & Sonic Character
 
-Ten factory presets crafted for acoustic instruments, modern studio mixes, and ambient compositions:
+Fifteen factory presets crafted for acoustic instruments, modern studio mixes, ambient compositions, and unbounded warp sound design:
 
 1. **Calibrated Default** (RT60: 6.5s) — Reference studio acoustic space with linear decay, natural early reflections, and transparent shimmer/dimmer harmonic balance.
 2. **Ambient Guitar Cloud** (RT60: 9.5s) — Expansive, blossoming ambient wash designed for electric guitar swells, featuring +12st octave shimmer and wide stereo diffusion.
@@ -105,8 +105,13 @@ Ten factory presets crafted for acoustic instruments, modern studio mixes, and a
 6. **Cathedral Diffusion** (RT60: 18.0s) — Grand sacred stone architecture with soaring decay tails, subtle air damping, and ethereal upper-register bloom.
 7. **Ethereal Synth Pad** (RT60: 10.5s) — Cinematic tail designed for polyphonic analog synths and brass, featuring balanced bidirectional shimmer and dimmer harmonics.
 8. **Bloom Shimmer Void** (RT60: 14.0s) — Deep ambient void where cascading octave shimmers bloom slowly behind melodic phrases without masking primary transients.
-9. **Infinite Ethereal Freeze** (RT60: Infinite) — Lossless infinite recirculating ambient drone with input isolation and gentle tail chorus modulation.
+9. **Infinite Ethereal Freeze** (RT60: 4.5s / Freeze Hold) — Lossless infinite recirculating ambient drone with input excitation and clean 4.5s release upon unfreeze.
 10. **Sub-Bass Preserver** (RT60: 4.5s) — Decoupled low-end preservation isolating kick fundamentals below 180 Hz while maintaining spatial width across midrange and high frequencies.
+11. **Warp Celestial Overdrive** (RT60: 12.0s / Warp) — Cascading runaway octave shimmer pushed past unity feedback through Hermite soft saturation.
+12. **Haunted Tape Beating** (RT60: 8.0s / Warp) — Deep analog tape flutter with unstable microtonal pitch beating and dark recursive feedback loops.
+13. **Sub Tritone Abyss** (RT60: 15.0s / Warp) — Sub-octave gravitational pull sinking into saturated low-end resonance with wide harmonic dispersion.
+14. **Metallic Comb Disintegration** (RT60: 6.0s / Warp) — Ultra-dense short delay flutter disintegrating into saturated metallic ringing and inharmonic sidebands.
+15. **Infinite Warp Singularity** (RT60: 25.0s / Warp) — Supercritical self-oscillating shimmer sphere contained by $C^1$ Hermite boundary saturation.
 
 ---
 
@@ -114,15 +119,15 @@ Ten factory presets crafted for acoustic instruments, modern studio mixes, and a
 
 Every release is verified against an uncompromising automated test harness:
 
-* **Automated C++ Suite**: 100% PASS across 391 headless DSP stress tests (Tier 1 Features, Tier 2 Boundaries, Tier 3 Pairwise, Tier 4 Scenarios).
+* **Automated C++ Suites**: 100% PASS across 10 CTest DSP & JUCE plugin verification binaries (`395+` assertions covering Tier 1–4 DSP, multi-channel 7.1.4 Atmos, concurrency, and 192 kHz stress audits).
 * **Real-Time Safety**: Zero dynamic memory allocations (`malloc`/`new`) in `processBlock()`, hardware FTZ/DAZ denormal immunity, zero NaNs, and zero algorithmic latency.
 * **Full Checklist & Reproducers**: Refer to [`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md) for full benchmark logs, commands, and compliance matrices.
 
 ```powershell
-# Run headless DSP test suite (391 tests)
-.\source\tests\rb26_headless_dsp_tests.exe
+# Run all C++ CTest verification suites (10 suites)
+ctest --test-dir build -C Release --output-on-failure
 
-# Run Web Audio verification suite (60 tests)
+# Run Web Audio verification suite (64 tests)
 npm run verify:all
 ```
 

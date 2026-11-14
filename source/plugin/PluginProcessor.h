@@ -51,10 +51,15 @@ public:
 
     // Power lifecycle control
     void setPower(bool powered) noexcept {
-        isPoweredOn.store(powered, std::memory_order_relaxed);
-        mPendingEngineReset.store(true, std::memory_order_release);
+        const bool prev = isPoweredOn.exchange(powered, std::memory_order_acq_rel);
+        if (prev != powered) {
+            mPendingExciterFifoFlush.store(!powered, std::memory_order_release);
+            mPendingEngineReset.store(true, std::memory_order_release);
+            mStateSyncDirty.store(true, std::memory_order_release);
+        }
     }
-    bool isPower() const noexcept { return isPoweredOn.load(std::memory_order_relaxed); }
+    bool isPower() const noexcept { return isPoweredOn.load(std::memory_order_acquire); }
+    bool consumeStateSyncDirty() noexcept { return mStateSyncDirty.exchange(false, std::memory_order_acq_rel); }
 
     // Lock-Free SPSC Telemetry Access
     bool popVisualizerFrame(rb26::Rb26ReverbEngine::VisualizerFrame& frame) noexcept {
@@ -83,6 +88,8 @@ private:
     rb26::Rb26AtomicPointers atomicPointers;
     std::atomic<bool> isPoweredOn { true };
     std::atomic<bool> mPendingEngineReset { false };
+    std::atomic<bool> mPendingExciterFifoFlush { false };
+    std::atomic<bool> mStateSyncDirty { false };
     int mCurrentProgram { 0 };
 
     // Visualizer waveform circular buffer

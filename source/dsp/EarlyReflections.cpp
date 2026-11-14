@@ -10,7 +10,9 @@ void EarlyReflections::prepare(double sampleRate, float maxRoomSize) noexcept {
     mBufferL.assign(kBufferCapacity, 0.0f);
     mBufferR.assign(kBufferCapacity, 0.0f);
     mWriteIndex = 0;
+    mCrossfadeTotal = std::clamp(static_cast<int>(std::round(0.006 * mSampleRate)), 64, 2048);
     mCrossfadeRemaining = 0;
+    mPendingTapUpdate = false;
     mHasProcessedSamples = false;
     mLastRoomSize = -1.0f;
     mLastDiffusionDensity = -1.0f;
@@ -36,7 +38,9 @@ void EarlyReflections::reset() noexcept {
     std::fill(mBufferR.begin(), mBufferR.end(), 0.0f);
     mWriteIndex = 0;
     mCrossfadeRemaining = 0;
+    mPendingTapUpdate = false;
     mHasProcessedSamples = false;
+    computeTapTargets(mRoomSize, mTapDelaysSamples, mTapGainsL, mTapGainsR);
 
     for (size_t i = 0; i < kNumAllpass; ++i) {
         std::fill(mAllpassBuffers[i].begin(), mAllpassBuffers[i].end(), 0.0f);
@@ -69,30 +73,45 @@ void EarlyReflections::updateDiffusionGains() noexcept {
     mWetDiffGain = FastSinTable::sin(effDiff * kHalfPi);
 }
 
-void EarlyReflections::updateTaps() noexcept {
-    if (mHasProcessedSamples && mTapDelaysSamples[0] > 0) {
-        if (mCrossfadeRemaining == 0) {
-            mOldTapDelaysSamples = mTapDelaysSamples;
-            mOldTapGainsL = mTapGainsL;
-            mOldTapGainsR = mTapGainsR;
-            mCrossfadeRemaining = kCrossfadeSamples;
-        }
-    }
-
-    const float erScale = 0.20f + 0.80f * (std::tanh(mRoomSize) / std::tanh(1.0f));
+void EarlyReflections::computeTapTargets(float roomSize,
+                                         std::array<size_t, kNumTaps>& delays,
+                                         std::array<float, kNumTaps>& gainsL,
+                                         std::array<float, kNumTaps>& gainsR) const noexcept {
+    const float erScale = 0.20f + 0.80f * (std::tanh(roomSize) / std::tanh(1.0f));
 
     for (size_t k = 0; k < kNumTaps; ++k) {
         const float delaySec = (kTapConfigs[k].baseDelayMs * 0.001f) * erScale;
         const size_t delaySamples = static_cast<size_t>(std::round(delaySec * mSampleRate));
-        mTapDelaysSamples[k] = std::clamp(delaySamples, size_t{1}, kBufferCapacity - 1);
+        delays[k] = std::clamp(delaySamples, size_t{1}, kBufferCapacity - 1);
 
         // Constant power azimuth panning: theta in [0, pi/2]
         // Scaled by calibrated kClusterGain factor (0.28f, -11.06 dBFS) to guarantee that
         // a 0 dBFS input impulse produces early reflection cluster peaks within the nominal
         // [-14 dBFS, -12 dBFS] headroom window, eliminating discrete tap overload.
         const float theta = (kTapConfigs[k].pan + 1.0f) * 0.25f * kPi;
-        mTapGainsL[k] = kClusterGain * kTapConfigs[k].gain * std::cos(theta);
-        mTapGainsR[k] = kClusterGain * kTapConfigs[k].gain * std::sin(theta);
+        gainsL[k] = kClusterGain * kTapConfigs[k].gain * std::cos(theta);
+        gainsR[k] = kClusterGain * kTapConfigs[k].gain * std::sin(theta);
+    }
+}
+
+void EarlyReflections::updateTaps() noexcept {
+    if (!mHasProcessedSamples || mTapDelaysSamples[0] == 0) {
+        computeTapTargets(mRoomSize, mTapDelaysSamples, mTapGainsL, mTapGainsR);
+        mCrossfadeRemaining = 0;
+        mPendingTapUpdate = false;
+        return;
+    }
+
+    if (mCrossfadeRemaining == 0) {
+        mOldTapDelaysSamples = mTapDelaysSamples;
+        mOldTapGainsL = mTapGainsL;
+        mOldTapGainsR = mTapGainsR;
+        computeTapTargets(mRoomSize, mTapDelaysSamples, mTapGainsL, mTapGainsR);
+        mCrossfadeRemaining = mCrossfadeTotal;
+        mPendingTapUpdate = false;
+    } else {
+        // Defer target swap until active crossfade finishes so active tap positions never jump mid-ramp
+        mPendingTapUpdate = true;
     }
 }
 
@@ -131,7 +150,7 @@ void EarlyReflections::processSample(float inL, float inR, float& outL, float& o
     float sumR = 0.0f;
 
     if (mCrossfadeRemaining > 0) {
-        const float fadeNew = 1.0f - static_cast<float>(mCrossfadeRemaining) / static_cast<float>(kCrossfadeSamples);
+        const float fadeNew = 1.0f - static_cast<float>(mCrossfadeRemaining) / static_cast<float>(mCrossfadeTotal);
         const float fadeOld = 1.0f - fadeNew;
         --mCrossfadeRemaining;
 
@@ -140,6 +159,15 @@ void EarlyReflections::processSample(float inL, float inR, float& outL, float& o
             const size_t newReadIdx = (mWriteIndex + kBufferCapacity - mTapDelaysSamples[k]) & kBufferMask;
             sumL += (mBufferL[oldReadIdx] * mOldTapGainsL[k] * fadeOld) + (mBufferL[newReadIdx] * mTapGainsL[k] * fadeNew);
             sumR += (mBufferR[oldReadIdx] * mOldTapGainsR[k] * fadeOld) + (mBufferR[newReadIdx] * mTapGainsR[k] * fadeNew);
+        }
+
+        if (mCrossfadeRemaining == 0 && mPendingTapUpdate) {
+            mOldTapDelaysSamples = mTapDelaysSamples;
+            mOldTapGainsL = mTapGainsL;
+            mOldTapGainsR = mTapGainsR;
+            computeTapTargets(mRoomSize, mTapDelaysSamples, mTapGainsL, mTapGainsR);
+            mCrossfadeRemaining = mCrossfadeTotal;
+            mPendingTapUpdate = false;
         }
     } else {
         for (size_t k = 0; k < kNumTaps; ++k) {

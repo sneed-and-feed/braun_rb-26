@@ -113,5 +113,9 @@ target_include_directories(rb26_multichannel_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_link_libraries(rb26_multichannel_tests PRIVATE rb26_dsp_core)
 set_target_properties(rb26_multichannel_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 add_test(NAME Rb26MultiChannelTests COMMAND rb26_multichannel_tests)
+add_test(NAME Rb26Challenger1M2Tests COMMAND rb26_challenger1_m2_tests)
+add_test(NAME Rb26M3StressAudit COMMAND rb26_m3_stress_audit)
+add_test(NAME Rb26M4JuceTests COMMAND rb26_m4_tests)
+add_test(NAME Rb26HammerTransientTests COMMAND rb26_hammer_transient_tests)
 
 

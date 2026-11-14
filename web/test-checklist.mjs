@@ -503,7 +503,7 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
       assert.ok(htmlContent.includes('id="knob-pitch-delay"'), 'index.html must contain knob-pitch-delay container');
     });
 
-    it('verifies all 10 presets contain manifold_type and valid range [0, 3]', () => {
+    it('verifies all 15 presets contain manifold_type and valid range [0, 3]', () => {
       const presetsPath = fs.existsSync(path.join(__dirname, 'factory_presets.json'))
         ? path.join(__dirname, 'factory_presets.json')
         : path.join(__dirname, 'presets', 'factory_presets.json');
@@ -546,6 +546,16 @@ describe('BRAUN RB-26 Verification Checklist & Automated Validation Suite', () =
       assert.strictEqual(knobParamMap['knob-pitch-delay'], 'pitch_delay_ms', 'knob-pitch-delay must map to pitch_delay_ms');
       assert.ok(appJsContent.includes("'knob-pitch-delay': 'pitch_delay_ms'"), 'knobParamMap must map knob-pitch-delay');
       assert.ok(appJsContent.includes("paramId: 'pitch_delay_ms'"), 'createKnob for pitch_delay must set paramId');
+    });
+
+    it('verifies app.js rotary knob min/max bounds align with APVTS Parameters.h physical ranges', () => {
+      const appJsContent = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      assert.ok(appJsContent.includes("label: 'PRE-DELAY', min: 0, max: 500"), 'PRE-DELAY max must be 500 ms');
+      assert.ok(appJsContent.includes("label: 'BASS MULT', min: 0.20, max: 4.00"), 'BASS MULT max must be 4.00x');
+      assert.ok(appJsContent.includes("label: 'SUB MONO', min: 20, max: 250"), 'SUB MONO min must be 20 Hz');
+      assert.ok(appJsContent.includes("label: 'DECAY (RT60)', min: 0.2, max: 30.0"), 'DECAY min must be 0.2 s');
+      assert.ok(appJsContent.includes("label: 'MOD RATE', min: 0.05, max: 5.00"), 'MOD RATE max must be 5.00 Hz');
+      assert.ok(appJsContent.includes("label: 'BLOOM ONSET', min: 20, max: 300"), 'BLOOM ONSET max must be 300 ms');
     });
   });
 

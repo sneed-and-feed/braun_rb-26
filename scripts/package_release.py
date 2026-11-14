@@ -15,7 +15,7 @@ if len(sys.argv) > 1 and sys.argv[1].strip():
 else:
     with open(os.path.join(root_dir, "package.json"), "r", encoding="utf-8") as f:
         pkg = json.load(f)
-    version = pkg.get("version", "1.4.14")
+    version = pkg.get("version", "1.5.0")
 
 # 1. Package Windows-x64 full zip
 zip_path = os.path.join(release_dir, f"BRAUN_RB26-v{version}-Windows-x64.zip")
@@ -69,11 +69,9 @@ def sha256_file(filepath):
 
 sums_file = os.path.join(release_dir, "SHA256SUMS.txt")
 packages = [zip_path, vst3_zip_path]
-extra_zips = [os.path.join(release_dir, f) for f in os.listdir(release_dir) if f.endswith(".zip") and os.path.join(release_dir, f) not in packages]
-all_zips = packages + extra_zips
 
 lines = []
-for p in sorted(all_zips, key=lambda x: os.path.basename(x)):
+for p in sorted(packages, key=lambda x: os.path.basename(x)):
     if os.path.exists(p):
         digest = sha256_file(p)
         filename = os.path.basename(p)

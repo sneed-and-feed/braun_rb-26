@@ -261,8 +261,9 @@ void FdnReverbTank::processSampleMultiChannel(const float* inChannels,
     const float diffR = processAllpass(3, processAllpass(2, inR));
 
     // Sum diffused input and pitch feedback with contractive loop gain headroom; isolate both on freeze
+    // Note: pitchFb is always a stereo [fbL, fbR] pair when non-null regardless of input channel count
     const float fbL = pitchFb ? pitchFb[0] : 0.0f;
-    const float fbR = (pitchFb && numInChannels > 1) ? pitchFb[1] : fbL;
+    const float fbR = pitchFb ? pitchFb[1] : 0.0f;
     const float dryL = (diffL + fbL) * freezeIn;
     const float dryR = (diffR + fbR) * freezeIn;
     const float mid = 0.70710678f * (dryL + dryR);
@@ -398,11 +399,12 @@ void FdnReverbTank::processBlockMultiChannel(const float* const* inChannels,
             pFb[0] = pitchFb[0] ? pitchFb[0][i] : 0.0f;
             pFb[1] = (pitchFb[1] ? pitchFb[1][i] : pFb[0]);
         }
-        float* sampleOutPtrs[12];
-        for (int ch = 0; ch < numOutChannels && ch < 12; ++ch) {
+        const int effectiveOutChannels = std::min(numOutChannels, 12);
+        float* sampleOutPtrs[12] = {nullptr};
+        for (int ch = 0; ch < effectiveOutChannels; ++ch) {
             sampleOutPtrs[ch] = outChannels[ch] ? (outChannels[ch] + i) : nullptr;
         }
-        processSampleMultiChannel(inSample, numInChannels, pitchFb ? pFb : nullptr, sampleOutPtrs, numOutChannels);
+        processSampleMultiChannel(inSample, numInChannels, pitchFb ? pFb : nullptr, sampleOutPtrs, effectiveOutChannels);
     }
 }
 

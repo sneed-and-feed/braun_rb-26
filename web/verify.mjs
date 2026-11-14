@@ -1329,4 +1329,83 @@ describe('BRAUN RB-26 Milestone M4 Verification Suite', () => {
         'Must guard against redundant canvas width/height mutations to preserve GPU textures');
     });
   });
+
+  //----------------------------------------------------------------------------
+  describe('15. v1.5.0 IPC Echo Guard, Scaling & Manifold WebEngine Regressions', () => {
+    it('verifies setPower(next, true) from host paramUpdate does not echo power back to JUCE backend', async () => {
+      const { BraunRb26App } = await import('./js/app.js');
+      const origWin = globalThis.window;
+      const origDoc = globalThis.document;
+      try {
+        const emitted = [];
+        globalThis.window = {
+          __JUCE__: {
+            backend: {
+              emitEvent: (evt, payload) => { emitted.push({ evt, payload }); },
+              addEventListener: () => {}
+            }
+          }
+        };
+        globalThis.document = {
+          getElementById: () => null,
+          querySelector: () => null,
+          querySelectorAll: () => []
+        };
+
+        const app = Object.create(BraunRb26App.prototype);
+        app.isJuce = true;
+        app.isPowered = false;
+        app.display = null;
+        app.engine = null;
+        app._pendingJuceParams = new Map();
+        app._juceRafId = null;
+
+        await app.setPower(true, true);
+        assert.strictEqual(app.isPowered, true);
+        assert.strictEqual(emitted.length, 0, 'Host-driven setPower(true, true) must not echo paramChange power back to C++');
+
+        await app.setPower(false, false);
+        assert.strictEqual(app.isPowered, false);
+        assert.strictEqual(emitted.length, 1, 'User-driven setPower(false) must emit power paramChange to C++');
+        assert.strictEqual(emitted[0].payload.id, 'power');
+        assert.strictEqual(emitted[0].payload.value, 0.0);
+      } finally {
+        globalThis.window = origWin;
+        globalThis.document = origDoc;
+      }
+    });
+
+    it('verifies tail_mod_depth_ms 5.0 ms scaling, manifold_type snapshot, and Rb26WebEngine 4-manifold primes', async () => {
+      const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
+      assert.ok(appJs.includes("tail_mod_depth_ms: { key: 'tail_mod_depth', scale: 100 / 5.0 }"),
+        'APVTS tail_mod_depth_ms [0, 5.0] ms must map 1:1 to [0, 100]% knob');
+      assert.ok(appJs.includes("this._emitJuceParam('tailModDepthMs', (v / 100) * 5.0)"),
+        'Mod Depth knob must emit [0, 5.0] ms to JUCE');
+
+      const { Rb26WebEngine } = await import('./js/audio/rb26_web_engine.js');
+      const engine = new Rb26WebEngine();
+      assert.strictEqual(engine.params.tailModDepthMs, 2.25, 'Default tailModDepthMs must match APVTS 2.25 ms (45%)');
+      assert.strictEqual(engine.params.manifoldType, 0, 'Default manifoldType must be 0 (Poincare)');
+
+      const seenSignatures = new Set();
+      for (let m = 0; m < 4; m++) {
+        engine.setParam('manifoldType', m);
+        const primes = engine._getManifoldPrimes();
+        assert.strictEqual(primes.length, 8, `Manifold ${m} must define 8 FDN delay primes`);
+        for (const d of primes) {
+          assert.ok(d > 0.01 && d * 4.0 < 1.0, `Manifold ${m} delay ${d}s must stay within 1.0s DelayNode max at 4x roomSize`);
+        }
+        seenSignatures.add(primes.join(','));
+      }
+      assert.strictEqual(seenSignatures.size, 4, 'All 4 geometric manifolds must have distinct FDN delay distributions');
+
+      const { BraunRb26App } = await import('./js/app.js');
+      const app = Object.create(BraunRb26App.prototype);
+      app.knobs = { rt60_decay: { getValue: () => 6.5 } };
+      app.engine = engine;
+      engine.setParam('manifoldType', 2);
+      const snap = app.getSnapshot();
+      assert.strictEqual(snap.manifold_type, 2, 'getSnapshot() must persist manifold_type');
+    });
+  });
 });

@@ -1506,6 +1506,295 @@ bool runMultiRateOperationsStressTests() {
 }
 
 // ============================================================================
+// TEST 10: v1.5.0 Deep Audit Regression Suite
+//   10.1 ShepardPitchSpiral BarberShimmer upward shift & linear spiralDepth
+//   10.2 192 kHz pre-delay / pitch-delay / ER non-truncation & idle gate guard
+//   10.3 EarlyReflections rapid roomSize automation continuity (zero step clicks)
+//   10.4 FdnReverbTank mono-in -> stereo-out stereo pitch feedback preservation
+// ============================================================================
+bool runV150RegressionTests() {
+    std::cout << "\n=======================================================\n";
+    std::cout << "TEST 10: v1.5.0 Deep Audit DSP Regression Suite\n";
+    std::cout << "=======================================================\n";
+
+    bool allPassed = true;
+
+    // --- Subtest 10.1: ShepardPitchSpiral BarberShimmer upward voice & linear spiralDepth ---
+    {
+        std::cout << "[10.1] ShepardPitchSpiral BarberShimmer Upward Voice & Linear Depth:\n";
+        const double fs = 48000.0;
+        const double f0 = 440.0;
+
+        rb26::ShepardPitchSpiral spiral;
+        spiral.prepare(fs);
+        spiral.setMode(rb26::ShepardPitchSpiral::SpiralMode::BarberShimmer);
+        spiral.setDepth(1.0f);
+        spiral.setRateHz(1.0f);
+
+        // Advance spiral phase to ~0.50 (6000 samples at 1.0 Hz -> deltaSigma = 4/48000 * 6000 = 0.50),
+        // where voice m=2 sits at sigma_2 = 2.5 -> r_2 = 2^(+0.5) = 1.4142 (622.25 Hz),
+        // then freeze rate to 0.01 Hz to measure spectral peak cleanly.
+        const size_t warmup = 6000;
+        const size_t fftLen = 8192;
+        std::vector<float> sigOut(fftLen, 0.0f);
+        float maxDeltaAcrossSweep = 0.0f;
+        float prevSample = 0.0f;
+
+        for (size_t n = 0; n < warmup + fftLen; ++n) {
+            if (n == warmup) {
+                spiral.setRateHz(0.01f);
+            }
+            const float x = static_cast<float>(0.5 * std::sin(2.0 * test_utils::kPi * f0 * static_cast<double>(n) / fs));
+            float yL = 0.0f, yR = 0.0f;
+            spiral.processSample(x, x, yL, yR);
+            if (n > 128) {
+                maxDeltaAcrossSweep = std::max(maxDeltaAcrossSweep, std::abs(yL - prevSample));
+            }
+            prevSample = yL;
+            if (n >= warmup) {
+                sigOut[n - warmup] = yL;
+            }
+        }
+
+        // Verify upward-shifted voice peak above 550 Hz (~622.25 Hz expected)
+        const double upwardPeakHz = test_utils::findPeakFrequency(sigOut, fs, 0, fftLen, 520.0, 1400.0);
+
+        // Also compute total FFT magnitude energy in [550, 1400] Hz vs [150, 400] Hz at sigma=0.5:
+        // Previously std::abs(1 - rm) inverted ALL voices downward so energy above 550 Hz was near zero!
+        std::vector<std::complex<double>> spec(fftLen);
+        for (size_t i = 0; i < fftLen; ++i) {
+            const double win = 0.5 * (1.0 - std::cos(2.0 * test_utils::kPi * static_cast<double>(i) / static_cast<double>(fftLen - 1)));
+            spec[i] = static_cast<double>(sigOut[i]) * win;
+        }
+        test_utils::fft(spec);
+        const double binHz = fs / static_cast<double>(fftLen);
+        double upwardEnergy = 0.0;
+        for (size_t k = static_cast<size_t>(550.0 / binHz); k <= static_cast<size_t>(1400.0 / binHz); ++k) {
+            upwardEnergy += std::norm(spec[k]);
+        }
+
+        // Check PitchShifter linear spiralDepth crossfade law (no depth^2 double attenuation)
+        auto runSpiralDepthProbe = [&](float depth) {
+            rb26::PitchShifter ps;
+            ps.prepare(fs, 256);
+            ps.setParameters(0.0f, 1.0f, 12, -12, -1.0f, 0.0f);
+            ps.setSpiralParameters(static_cast<int>(rb26::ShepardPitchSpiral::SpiralMode::PartchLattice), 0.1f, depth, 1);
+            // Settle parameter smoothers on silence before small-signal linearity probe
+            for (size_t w = 0; w < 2048; ++w) {
+                float wL = 0.0f, wR = 0.0f;
+                ps.processSample(0.0f, 0.0f, wL, wR);
+            }
+            std::vector<float> out(4096, 0.0f);
+            for (size_t n = 0; n < out.size(); ++n) {
+                const float x = static_cast<float>(0.05 * std::sin(2.0 * test_utils::kPi * 330.0 * static_cast<double>(n) / fs));
+                float oL = 0.0f, oR = 0.0f;
+                ps.processSample(x, x, oL, oR);
+                out[n] = oL;
+            }
+            return out;
+        };
+
+        const auto outD0 = runSpiralDepthProbe(0.0f);
+        const auto outD5 = runSpiralDepthProbe(0.5f);
+        const auto outD1 = runSpiralDepthProbe(1.0f);
+        float maxLinErr = 0.0f;
+        for (size_t n = 2400; n < 4096; ++n) {
+            const float expectedMid = 0.5f * (outD0[n] + outD1[n]);
+            maxLinErr = std::max(maxLinErr, std::abs(outD5[n] - expectedMid));
+        }
+
+        std::cout << "      Upward Peak @ sigma=0.5 : " << std::fixed << std::setprecision(2) << upwardPeakHz << " Hz (Expected ~622 Hz)\n";
+        std::cout << "      Upward Band Energy      : " << std::scientific << upwardEnergy << std::fixed << "\n";
+        std::cout << "      Max Step Delta          : " << std::setprecision(4) << maxDeltaAcrossSweep << "\n";
+        std::cout << "      Linear Depth Max Error  : " << std::scientific << maxLinErr << std::fixed << "\n";
+
+        if (upwardPeakHz > 580.0 && upwardPeakHz < 680.0 && upwardEnergy > 1.0e2 && maxDeltaAcrossSweep < 0.25f && maxLinErr < 1.0e-3f) {
+            std::cout << "      Verdict                 : PASS\n";
+        } else {
+            std::cout << "      Verdict                 : FAIL\n";
+            allPassed = false;
+        }
+    }
+
+    // --- Subtest 10.2: 192 kHz Non-Truncation & Idle Gate Preservation ---
+    {
+        std::cout << "[10.2] 192 kHz Pitch-Delay (723.75 ms = 138,960 smp) & Late ER Idle Gate:\n";
+        const double fs = 192000.0;
+
+        // Part A: Pure Early Reflections at roomSize = 4.0 -> Tap 11 at 43.1 * 4 = 172.4 ms (33,100 samples)
+        rb26::Rb26ReverbEngine erEngine;
+        erEngine.prepare(fs, 512);
+        rb26::Rb26Parameters erParams;
+        erParams.preDelayMs = 0.0f;
+        erParams.earlyLateMix = 0.0f; // 100% Early Reflections
+        erParams.dryWetMix = 1.0f;
+        erParams.roomSize = 4.0f;
+        erParams.shimmerSend = 0.0f;
+        erParams.dimmerSend = 0.0f;
+        erParams.limiterEnable = false;
+        erEngine.setParameters(erParams);
+
+        std::vector<float> blkInL(512, 0.0f), blkInR(512, 0.0f);
+        std::vector<float> blkOutL(512, 0.0f), blkOutR(512, 0.0f);
+        const float* erIn[2] = { blkInL.data(), blkInR.data() };
+        float* erOut[2] = { blkOutL.data(), blkOutR.data() };
+
+        // Settle smoothers with silent blocks first, then fire impulse
+        for (int b = 0; b < 20; ++b) erEngine.process(erIn, erOut, 2, 512);
+        blkInL[0] = 1.0f;
+        blkInR[0] = 1.0f;
+        erEngine.process(erIn, erOut, 2, 512);
+        blkInL[0] = 0.0f;
+        blkInR[0] = 0.0f;
+
+        float lateErPeak = 0.0f;
+        for (int b = 1; b < 75; ++b) { // up to ~200 ms (38,400 samples)
+            erEngine.process(erIn, erOut, 2, 512);
+            const int baseSample = b * 512;
+            if (baseSample >= 30000 && baseSample <= 36000) {
+                for (int i = 0; i < 512; ++i) {
+                    lateErPeak = std::max(lateErPeak, std::max(std::abs(blkOutL[i]), std::abs(blkOutR[i])));
+                }
+            }
+        }
+
+        // Part B: 192 kHz Pitch Delay R-channel echo at 723.75 ms (138,960 samples > 131,072!) with fast 0.2s RT60
+        rb26::Rb26ReverbEngine pdEngine;
+        pdEngine.prepare(fs, 512);
+        rb26::Rb26Parameters pdParams;
+        pdParams.preDelayMs = 0.0f;
+        pdParams.decayRt60Sec = 0.2f;
+        pdParams.earlyLateMix = 1.0f;
+        pdParams.dryWetMix = 1.0f;
+        pdParams.shimmerSend = 0.0f;
+        pdParams.dimmerSend = 1.0f;
+        pdParams.dimmerInterval = -12;
+        pdParams.pitchBlend = -1.0f;
+        pdParams.pitchFeedback = 0.90f;
+        pdParams.pitchDelayMs = 500.0f; // R channel = 500 * 1.05 * 1.375 + 1.25 = 723.125 ms = 138,840 samples!
+        pdParams.pitchBoostDb = 12.0f;
+        pdParams.limiterEnable = false;
+        pdEngine.setParameters(pdParams);
+
+        for (int b = 0; b < 20; ++b) pdEngine.process(erIn, erOut, 2, 512);
+
+        // Excite for 40 ms (7,680 samples = 15 blocks)
+        size_t sampleCounter = 0;
+        for (int b = 0; b < 15; ++b) {
+            for (int i = 0; i < 512; ++i, ++sampleCounter) {
+                const float s = static_cast<float>(0.5 * std::sin(2.0 * test_utils::kPi * 220.0 * static_cast<double>(sampleCounter) / fs));
+                blkInL[i] = s;
+                blkInR[i] = s;
+            }
+            pdEngine.process(erIn, erOut, 2, 512);
+        }
+        std::fill(blkInL.begin(), blkInL.end(), 0.0f);
+        std::fill(blkInR.begin(), blkInR.end(), 0.0f);
+
+        // Measure R-channel RMS in [730 ms, 830 ms] (140,160..159,360 samples after excitation onset)
+        double echoSumSqR = 0.0;
+        size_t echoCountR = 0;
+        for (int b = 15; b < 330; ++b) {
+            pdEngine.process(erIn, erOut, 2, 512);
+            const int s0 = b * 512;
+            if (s0 >= 140160 && s0 <= 160000) {
+                for (int i = 0; i < 512; ++i) {
+                    echoSumSqR += static_cast<double>(blkOutR[i]) * static_cast<double>(blkOutR[i]);
+                    ++echoCountR;
+                }
+            }
+        }
+        const double echoRmsR = (echoCountR > 0) ? std::sqrt(echoSumSqR / static_cast<double>(echoCountR)) : 0.0;
+
+        std::cout << "      192 kHz Late ER Peak (>156 ms) : " << std::setprecision(5) << lateErPeak << "\n";
+        std::cout << "      192 kHz 723 ms Pitch Echo RMS  : " << std::scientific << echoRmsR << std::fixed << "\n";
+
+        // Single-sample Dirac impulse dispersed through 4 Schroeder allpasses to Tap 11 (172.4 ms) yields ~0.0044 peak (was 0.0 pre-fix)
+        if (lateErPeak > 0.002f && echoRmsR > 1.0e-3) {
+            std::cout << "      Verdict                        : PASS\n";
+        } else {
+            std::cout << "      Verdict                        : FAIL\n";
+            allPassed = false;
+        }
+    }
+
+    // --- Subtest 10.3: EarlyReflections Rapid roomSize Automation Continuity ---
+    {
+        std::cout << "[10.3] EarlyReflections Rapid 32-Sample roomSize Automation Continuity:\n";
+        rb26::EarlyReflections er;
+        er.prepare(48000.0, 1.0f);
+
+        float maxStepDelta = 0.0f;
+        float prevL = 0.0f;
+        size_t nonFinite = 0;
+        const size_t totalSamples = 24000;
+
+        for (size_t n = 0; n < totalSamples; ++n) {
+            if (n % 32 == 0) {
+                const float t = static_cast<float>(n) / static_cast<float>(totalSamples);
+                const float room = 0.2f + 3.6f * (0.5f + 0.5f * std::sin(2.0f * 3.14159265f * 7.0f * t));
+                er.setParameters(room);
+            }
+            const float x = 0.4f * std::sin(2.0f * 3.14159265f * 330.0f * static_cast<float>(n) / 48000.0f);
+            float yL = 0.0f, yR = 0.0f;
+            er.processSample(x, x, yL, yR);
+            if (!std::isfinite(yL) || !std::isfinite(yR)) ++nonFinite;
+            if (n > 64) {
+                maxStepDelta = std::max(maxStepDelta, std::abs(yL - prevL));
+            }
+            prevL = yL;
+        }
+
+        std::cout << "      Max Sample-to-Sample Step : " << std::setprecision(5) << maxStepDelta << ", NonFinite: " << nonFinite << "\n";
+        if (nonFinite == 0 && maxStepDelta < 0.25f) {
+            std::cout << "      Verdict                   : PASS\n";
+        } else {
+            std::cout << "      Verdict                   : FAIL\n";
+            allPassed = false;
+        }
+    }
+
+    // --- Subtest 10.4: FdnReverbTank Mono-In -> Stereo-Out Asymmetric Pitch Feedback ---
+    {
+        std::cout << "[10.4] FdnReverbTank Mono-In -> Stereo-Out Stereo Pitch Feedback:\n";
+        rb26::FdnReverbTank tank;
+        tank.prepare(48000.0, 4.0f);
+        tank.setParameters(1.0f, 4.0f, 8000.0f, 0.75f, false, 0.0f, 0.0f, 50.0f);
+
+        // Compare pitchFb = {+0.5, -0.5} vs {+0.5, +0.5} under numInChannels = 1, numOutChannels = 2.
+        // Previously, fbR ignored pitchFb[1] when numInChannels == 1, making both runs identical!
+        rb26::FdnReverbTank tankSame;
+        tankSame.prepare(48000.0, 4.0f);
+        tankSame.setParameters(1.0f, 4.0f, 8000.0f, 0.75f, false, 0.0f, 0.0f, 50.0f);
+
+        float maxDiffBetweenStereoAndMonoFb = 0.0f;
+        for (int n = 0; n < 4096; ++n) {
+            const float monoIn = 0.0f;
+            const float fbAsym[2] = { (n < 256) ? 0.5f : 0.0f, (n < 256) ? -0.5f : 0.0f };
+            const float fbSym[2]  = { (n < 256) ? 0.5f : 0.0f, (n < 256) ? +0.5f : 0.0f };
+            float outAsym[2] = { 0.0f, 0.0f };
+            float outSym[2]  = { 0.0f, 0.0f };
+            float* ptrAsym[2] = { &outAsym[0], &outAsym[1] };
+            float* ptrSym[2]  = { &outSym[0],  &outSym[1] };
+            tank.processSampleMultiChannel(&monoIn, 1, fbAsym, ptrAsym, 2);
+            tankSame.processSampleMultiChannel(&monoIn, 1, fbSym, ptrSym, 2);
+            maxDiffBetweenStereoAndMonoFb = std::max(maxDiffBetweenStereoAndMonoFb,
+                std::max(std::abs(outAsym[0] - outSym[0]), std::abs(outAsym[1] - outSym[1])));
+        }
+
+        std::cout << "      Max Stereo vs Collapsed PitchFB Diff : " << std::setprecision(5) << maxDiffBetweenStereoAndMonoFb << "\n";
+        if (maxDiffBetweenStereoAndMonoFb > 1.0e-2f) {
+            std::cout << "      Verdict                              : PASS\n";
+        } else {
+            std::cout << "      Verdict                              : FAIL\n";
+            allPassed = false;
+        }
+    }
+
+    return allPassed;
+}
+
+// ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 int main() {
@@ -1523,6 +1812,7 @@ int main() {
     bool pass7 = runPrePrepareInvocationStressTests();
     bool pass8 = runDelayModulationStressTests();
     bool pass9 = runMultiRateOperationsStressTests();
+    bool pass10 = runV150RegressionTests();
 
     std::cout << "\n=======================================================\n";
     std::cout << "FINAL CHALLENGER 2 VERIFICATION SUMMARY:\n";
@@ -1535,9 +1825,10 @@ int main() {
     std::cout << "  [7] Pre-Prepare Invocation Safety   : " << (pass7 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [8] Rapid Delay Modulation Stress   : " << (pass8 ? "PASS" : "FAIL") << "\n";
     std::cout << "  [9] Multi-Rate & Buffer Boundary    : " << (pass9 ? "PASS" : "FAIL") << "\n";
+    std::cout << "  [10] v1.5.0 Deep Audit Regressions  : " << (pass10 ? "PASS" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 
-    const bool overallPass = pass1 && pass2 && pass3 && pass4 && pass5 && pass6 && pass7 && pass8 && pass9;
+    const bool overallPass = pass1 && pass2 && pass3 && pass4 && pass5 && pass6 && pass7 && pass8 && pass9 && pass10;
     std::cout << "OVERALL EMPIRICAL VERDICT: " << (overallPass ? "APPROVE" : "FAIL") << "\n";
     std::cout << "=======================================================\n";
 

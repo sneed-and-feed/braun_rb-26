@@ -478,25 +478,39 @@ void AcousticExciterEngine::prepare(double sampleRate) noexcept {
     mLevelSmoother.snapTo(dbToGain(mParams.levelDb));
 }
 
-void AcousticExciterEngine::reset() noexcept {
+void AcousticExciterEngine::resetVoicesAndGenerators(bool flushFifo) noexcept {
     for (auto& voice : mVoices) {
         voice.reset();
     }
 
     mLabGen.reset();
     mPoissonClock.reset();
-    mPoissonEnable.store(mParams.poissonEnable, std::memory_order_relaxed);
-    mPoissonEpm.store(mParams.poissonEpm, std::memory_order_relaxed);
-    mPoissonHumanize.store(mParams.poissonHumanize, std::memory_order_relaxed);
 
     for (auto& sn : mScheduledNotes) {
         sn.active = false;
         sn.delaySamples = 0;
     }
 
+    if (flushFifo) {
+        discardPendingTriggers();
+    }
+
+    mLevelSmoother.snapTo(dbToGain(mParams.levelDb));
+}
+
+void AcousticExciterEngine::discardPendingTriggers() noexcept {
+    const size_t writeIdx = mFifoWritePos.load(std::memory_order_acquire);
+    mFifoReadPos.store(writeIdx, std::memory_order_release);
+}
+
+void AcousticExciterEngine::reset() noexcept {
+    resetVoicesAndGenerators(false);
+    mPoissonEnable.store(mParams.poissonEnable, std::memory_order_relaxed);
+    mPoissonEpm.store(mParams.poissonEpm, std::memory_order_relaxed);
+    mPoissonHumanize.store(mParams.poissonHumanize, std::memory_order_relaxed);
+
     mFifoWritePos.store(0, std::memory_order_relaxed);
     mFifoReadPos.store(0, std::memory_order_relaxed);
-    mLevelSmoother.snapTo(dbToGain(mParams.levelDb));
 }
 
 void AcousticExciterEngine::setParameters(const AcousticExciterParameters& params) noexcept {
@@ -703,6 +717,32 @@ int AcousticExciterEngine::getActiveVoiceCount() const noexcept {
         if (voice.isActive()) count++;
     }
     return count;
+}
+
+bool AcousticExciterEngine::hasPendingActivity() const noexcept {
+    if (!mParams.enable) {
+        return false;
+    }
+    if (mFifoReadPos.load(std::memory_order_relaxed) != mFifoWritePos.load(std::memory_order_acquire)) {
+        return true;
+    }
+    if (mPoissonEnable.load(std::memory_order_relaxed)) {
+        return true;
+    }
+    if (mLabGen.isBusy()) {
+        return true;
+    }
+    for (const auto& voice : mVoices) {
+        if (voice.isActive()) {
+            return true;
+        }
+    }
+    for (const auto& sn : mScheduledNotes) {
+        if (sn.active) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void AcousticExciterEngine::process(float* outL, float* outR, int numSamples) noexcept {

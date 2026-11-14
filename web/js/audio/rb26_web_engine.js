@@ -258,6 +258,7 @@ export class Rb26WebEngine {
       decayRt60Sec: 6.5,
       roomSize: 1.0,
       highDampingHz: 1800.0,
+      manifoldType: 0,
       freezeHold: false,
       shimmerSend: 0.40,
       dimmerSend: 0.35,
@@ -269,7 +270,7 @@ export class Rb26WebEngine {
       pitchBoost: 0.0,
       pitchWarp: false,
       tailModRateHz: 0.65,
-      tailModDepthMs: 1.2,
+      tailModDepthMs: 2.25,
       tailBloomMs: 85.0,
       stereoWidth: 1.0,
       earlyLateMix: 0.50,
@@ -520,9 +521,8 @@ export class Rb26WebEngine {
     this.fdnLfos = [];
     this.fdnLfoGains = [];
 
-    // Hyperbolic incommensurate delay lengths in seconds (Poincare manifold distribution: L_k = L_0 * cosh(xi * k / 7))
-    // Completely eliminates harmonic mode clustering and flutter ringing
-    const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+    // Geometric manifold base delay lengths in seconds (0: Poincare, 1: Whispering Gallery, 2: Anharmonic Plate, 3: Klangdom)
+    const fdnPrimes = this._getManifoldPrimes();
     const goldenRatios = [1.0, 1.618, 0.618, 1.272, 0.786, 1.414, 0.866, 1.118];
     // Balanced sign pattern with sum == 0, strictly orthogonal to Householder eigenvector [1,1,1,1,1,1,1,1]
     const fdnSigns = [1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0];
@@ -932,6 +932,93 @@ export class Rb26WebEngine {
     }
   }
 
+  _getManifoldPrimes() {
+    switch (this.params?.manifoldType ?? 0) {
+      case 1: // Whispering Gallery (Airy caustic clustering)
+        return [0.0179, 0.0247, 0.0303, 0.0353, 0.0398, 0.0441, 0.0481, 0.0521];
+      case 2: // Anharmonic Plate (Helmholtz modal dispersion)
+        return [0.0149, 0.0193, 0.0211, 0.0269, 0.0317, 0.0367, 0.0431, 0.0487];
+      case 3: // Stockhausen Klangdom (antipodal dome perturbations)
+        return [0.0313, 0.0337, 0.0359, 0.0379, 0.0401, 0.0421, 0.0449, 0.0479];
+      case 0: // Poincare Hyperbolic
+      default:
+        return [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+    }
+  }
+
+  _crossfadeFdnDelays() {
+    if (!this.ctx || !this.fdnDelaysA || !this.fdnDelaysA.length) return;
+    const now = this.ctx.currentTime;
+    const fdnPrimes = this._getManifoldPrimes();
+
+    if (!this.isPowered) {
+      for (let i = 0; i < 8; i++) {
+        const targetDelayTime = fdnPrimes[i] * this.params.roomSize;
+        if (this.fdnDelaysA[i]) this.fdnDelaysA[i].delayTime.setValueAtTime(targetDelayTime, now);
+        if (this.fdnDelaysB[i]) this.fdnDelaysB[i].delayTime.setValueAtTime(targetDelayTime, now);
+      }
+      return;
+    }
+
+    const nextBank = this._activeFdnBank === 'A' ? 'B' : 'A';
+    const targetDelays = nextBank === 'A' ? this.fdnDelaysA : this.fdnDelaysB;
+    const targetXf = nextBank === 'A' ? this.fdnXfadeA : this.fdnXfadeB;
+    const currentXf = nextBank === 'A' ? this.fdnXfadeB : this.fdnXfadeA;
+    const elapsed = (this._lastRoomSizeTime !== undefined) ? (now - this._lastRoomSizeTime) : 1.0;
+    this._lastRoomSizeTime = now;
+    const xfadeSec = Math.max(0.012, Math.min(0.080, elapsed > 0.005 ? elapsed : 0.080));
+
+    // 1. Strictly cancel overlapping scheduled crossfades and ensure inactive bank is 100% muted
+    for (let i = 0; i < 8; i++) {
+      if (targetXf && targetXf[i]) {
+        try {
+          if (typeof targetXf[i].gain.cancelAndHoldAtTime === 'function') {
+            targetXf[i].gain.cancelAndHoldAtTime(now);
+          } else {
+            targetXf[i].gain.cancelScheduledValues(now);
+          }
+        } catch (_) {
+          try { targetXf[i].gain.cancelScheduledValues(now); } catch (_) {}
+        }
+        try { targetXf[i].gain.setValueAtTime(0.0, now); } catch (_) {}
+      }
+      if (currentXf && currentXf[i]) {
+        try {
+          if (typeof currentXf[i].gain.cancelAndHoldAtTime === 'function') {
+            currentXf[i].gain.cancelAndHoldAtTime(now);
+          } else {
+            currentXf[i].gain.cancelScheduledValues(now);
+          }
+        } catch (_) {
+          try { currentXf[i].gain.cancelScheduledValues(now); } catch (_) {}
+        }
+        try { currentXf[i].gain.setValueAtTime(1.0, now); } catch (_) {}
+      }
+    }
+
+    // 2. Set delayTime on the 100% muted target bank before crossfading (zero Doppler pitch shift or sample jumps)
+    for (let i = 0; i < 8; i++) {
+      const targetDelayTime = fdnPrimes[i] * this.params.roomSize;
+      if (targetDelays && targetDelays[i]) {
+        try { targetDelays[i].delayTime.setValueAtTime(targetDelayTime, now); } catch (_) {}
+        this.fdnDelays[i] = targetDelays[i];
+      }
+    }
+
+    // 3. Initiate smooth S-curve crossfade to target bank
+    for (let i = 0; i < 8; i++) {
+      if (targetXf && targetXf[i]) {
+        try { targetXf[i].gain.setValueCurveAtTime(this._xfadeInCurve, now, xfadeSec); } catch (_) {}
+      }
+      if (currentXf && currentXf[i]) {
+        try { currentXf[i].gain.setValueCurveAtTime(this._xfadeOutCurve, now, xfadeSec); } catch (_) {}
+      }
+    }
+
+    this._activeFdnBank = nextBank;
+    this._updateFdnDecayGains();
+  }
+
   _updateFdnDecayGains() {
     if (!this.ctx || !this.fdnFeedbackGains) return;
     if (!this.isPowered) {
@@ -950,7 +1037,7 @@ export class Rb26WebEngine {
       }
       return;
     }
-    const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+    const fdnPrimes = this._getManifoldPrimes();
     const now = this.ctx.currentTime;
     const maxFeedback = this.params.freezeHold ? 1.0 : 0.96;
 
@@ -967,7 +1054,7 @@ export class Rb26WebEngine {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
-    const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
+    const fdnPrimes = this._getManifoldPrimes();
     const modalTimes = [0.071, 0.089, 0.107, 0.126];
 
     // 1. Rebuild & clear FDN delay lines (Dual-Bank A & B)
@@ -1188,7 +1275,7 @@ export class Rb26WebEngine {
         try { this.outputTrimGain.gain.setValueAtTime(trimLinear, now); } catch (_) {}
       }
       if (this.inputGain) {
-        const inputLinear = Math.pow(10, this.params.inputTrimDb / 20) * 0.85;
+        const inputLinear = Math.pow(10, this.params.inputTrimDb / 20) * 1.0;
         this.inputGain.gain.value = inputLinear;
         try { this.inputGain.gain.setValueAtTime(inputLinear, now); } catch (_) {}
       }
@@ -1329,78 +1416,13 @@ export class Rb26WebEngine {
       case 'roomSize': {
         const val = Math.max(0.1, Math.min(4.0, Number(value) || 1.0));
         this.params.roomSize = val;
-
-        if (!this.ctx || !this.fdnDelaysA || !this.fdnDelaysA.length) return;
-        const now = this.ctx.currentTime;
-
-        if (!this.isPowered) {
-          const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
-          for (let i = 0; i < 8; i++) {
-            const targetDelayTime = fdnPrimes[i] * this.params.roomSize;
-            if (this.fdnDelaysA[i]) this.fdnDelaysA[i].delayTime.setValueAtTime(targetDelayTime, now);
-            if (this.fdnDelaysB[i]) this.fdnDelaysB[i].delayTime.setValueAtTime(targetDelayTime, now);
-          }
-          return;
-        }
-
-        const fdnPrimes = [0.0211, 0.0223, 0.0241, 0.0277, 0.0331, 0.0409, 0.0509, 0.0631];
-        const nextBank = this._activeFdnBank === 'A' ? 'B' : 'A';
-        const targetDelays = nextBank === 'A' ? this.fdnDelaysA : this.fdnDelaysB;
-        const targetXf = nextBank === 'A' ? this.fdnXfadeA : this.fdnXfadeB;
-        const currentXf = nextBank === 'A' ? this.fdnXfadeB : this.fdnXfadeA;
-        const elapsed = (this._lastRoomSizeTime !== undefined) ? (now - this._lastRoomSizeTime) : 1.0;
-        this._lastRoomSizeTime = now;
-        const xfadeSec = Math.max(0.012, Math.min(0.080, elapsed > 0.005 ? elapsed : 0.080));
-
-        // 1. Strictly cancel overlapping scheduled crossfades and ensure inactive bank is 100% muted
-        for (let i = 0; i < 8; i++) {
-          if (targetXf && targetXf[i]) {
-            try {
-              if (typeof targetXf[i].gain.cancelAndHoldAtTime === 'function') {
-                targetXf[i].gain.cancelAndHoldAtTime(now);
-              } else {
-                targetXf[i].gain.cancelScheduledValues(now);
-              }
-            } catch (_) {
-              try { targetXf[i].gain.cancelScheduledValues(now); } catch (_) {}
-            }
-            try { targetXf[i].gain.setValueAtTime(0.0, now); } catch (_) {}
-          }
-          if (currentXf && currentXf[i]) {
-            try {
-              if (typeof currentXf[i].gain.cancelAndHoldAtTime === 'function') {
-                currentXf[i].gain.cancelAndHoldAtTime(now);
-              } else {
-                currentXf[i].gain.cancelScheduledValues(now);
-              }
-            } catch (_) {
-              try { currentXf[i].gain.cancelScheduledValues(now); } catch (_) {}
-            }
-            try { currentXf[i].gain.setValueAtTime(1.0, now); } catch (_) {}
-          }
-        }
-
-        // 2. Set delayTime on the 100% muted target bank before crossfading (zero Doppler pitch shift or sample jumps)
-        for (let i = 0; i < 8; i++) {
-          const targetDelayTime = fdnPrimes[i] * this.params.roomSize;
-          if (targetDelays && targetDelays[i]) {
-            try { targetDelays[i].delayTime.setValueAtTime(targetDelayTime, now); } catch (_) {}
-            this.fdnDelays[i] = targetDelays[i];
-          }
-        }
-
-        // 3. Initiate smooth S-curve crossfade to target bank
-        for (let i = 0; i < 8; i++) {
-          if (targetXf && targetXf[i]) {
-            try { targetXf[i].gain.setValueCurveAtTime(this._xfadeInCurve, now, xfadeSec); } catch (_) {}
-          }
-          if (currentXf && currentXf[i]) {
-            try { currentXf[i].gain.setValueCurveAtTime(this._xfadeOutCurve, now, xfadeSec); } catch (_) {}
-          }
-        }
-
-        this._activeFdnBank = nextBank;
-        this._updateFdnDecayGains();
+        this._crossfadeFdnDelays();
+        break;
+      }
+      case 'manifoldType': {
+        const mIdx = Math.max(0, Math.min(3, Math.round(Number(value) || 0)));
+        this.params.manifoldType = mIdx;
+        this._crossfadeFdnDelays();
         break;
       }
       case 'freezeHold': {

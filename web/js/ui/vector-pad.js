@@ -410,8 +410,8 @@ export class BraunVectorPad {
     const rateHz = +(0.05 + Math.pow(this.x, 1.6) * 3.95).toFixed(2);
     // Y: Mod Depth 0% to 100%
     const depthPct = Math.round(this.y * 100);
-    // Y: Bloom Onset 20ms to 250ms
-    const bloomMs = Math.round(20 + this.y * 230);
+    // Y: Bloom Onset 20ms to 300ms
+    const bloomMs = Math.round(20 + this.y * 280);
 
     return { rateHz, depthPct, bloomMs };
   }

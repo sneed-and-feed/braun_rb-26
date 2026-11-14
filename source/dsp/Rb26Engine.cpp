@@ -888,9 +888,21 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
     }
     }
 
-    // Account for active pre-delay length so impulses traversing long pre-delays at 100% wet mix are never prematurely gated
-    const size_t activePreDelaySamples = static_cast<size_t>(std::max(0.0f, mPreDelaySmoother.getCurrent() * 0.001f * fs));
-    const size_t idleThresholdSamples = 2048 + activePreDelaySamples;
+    // Account for sample-rate-scaled guard window, active pre-delay, early-reflection cluster span,
+    // and decoupled pitch-delay holdover so echoes in flight at 44.1-192 kHz are never prematurely gated.
+    const size_t baseGuardSamples = std::max(size_t{2048}, static_cast<size_t>(std::ceil(0.050f * fs)));
+    const float maxPreMs = std::max(mPreDelaySmoother.getCurrent(), mPreDelaySmoother.getTarget());
+    const size_t activePreDelaySamples = static_cast<size_t>(std::max(0.0f, std::ceil(maxPreMs * 0.001f * fs)));
+    size_t activePitchDelaySamples = 0;
+    if (blockPitchActive) {
+        const float maxPitchMs = std::max(mPitchDelaySmoother.getCurrent(), mPitchDelaySmoother.getTarget());
+        // Worst-case R-channel pitch delay (1.35x dimmer mult * 1.07x R-spread + 1.5ms warp flutter) + 205ms max grain window
+        const float totalPitchHoldMs = maxPitchMs * 1.35f * 1.07f + 205.0f;
+        activePitchDelaySamples = static_cast<size_t>(std::max(0.0f, std::ceil(totalPitchHoldMs * 0.001f * fs)));
+    }
+    const float erScale = 0.20f + 0.80f * (std::tanh(mParams.roomSize) / std::tanh(1.0f));
+    const size_t activeErSamples = static_cast<size_t>(std::max(0.0f, std::ceil(0.140f * erScale * fs)));
+    const size_t idleThresholdSamples = baseGuardSamples + activePreDelaySamples + std::max(activePitchDelaySamples, activeErSamples);
     if (mSilentSamplesCount >= idleThresholdSamples && !mParams.freezeHold) {
         mIsIdle = true;
         // Flush all internal delay buffers, filters, and recursive states to clean zero

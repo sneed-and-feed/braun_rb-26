@@ -17,7 +17,7 @@ namespace rb26 {
 // ============================================================================
 class DualTapDelayPitchShifter {
 public:
-    static constexpr int kMaxCapacity = 65536;
+    static constexpr int kMaxCapacity = 131072; // 2^17 samples (~682.7 ms at 192 kHz, supporting 200 ms -24 st windows without clamping)
     static constexpr int kBufferMask = kMaxCapacity - 1;
 
     DualTapDelayPitchShifter() noexcept { prepare(48000.0); }
@@ -60,7 +60,7 @@ private:
     float mWarpAmount { 0.0f };
     float mWarpModulation { 0.0f };
 
-    std::vector<float> mDelayBuffer;   // Pre-allocated for 192 kHz (65536 samples)
+    std::vector<float> mDelayBuffer;   // Pre-allocated for 192 kHz (131072 samples)
     int mWriteIndex { 0 };
     int mBufferSize { kMaxCapacity };
 };
@@ -225,7 +225,8 @@ private:
     ShepardPitchSpiral mShepardSpiral;
 
     // Internal recirculation state for pitch feedback with decoupled circulation buffers
-    static constexpr size_t kCircCapacity = 32768;
+    // Sized for 192 kHz (211 ms Dimmer circulation = 40,512 samples -> 2^16 = 65,536)
+    static constexpr size_t kCircCapacity = 65536;
     static constexpr size_t kCircMask = kCircCapacity - 1;
     std::vector<float> mShimmerCircBufferL;
     std::vector<float> mShimmerCircBufferR;

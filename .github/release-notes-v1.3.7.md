@@ -1,7 +1,7 @@
 ## What's New in v1.3.7
 
 ### 🔊 Pitch Shifter & Grain Boundary Smoothing
-- **Hann Grain Crossfade Windows**: Replaced half-sine crossfade windows ($w = \sin(\pi \phi)$) in `DualTapDelayPitchShifter` and `ShepardPitchSpiral` with Hann windows ($w = \sin^2(\pi \phi)$). This provides exact constant-amplitude crossfading ($w_1 + w_2 \equiv 1.0$) with $C^1$ zero-derivative boundary suppression ($> 115\text{ dB}$ below peak), eliminating the ~40 Hz periodic grain-wrap step discontinuities and microphonic echoing crackle under sustained inputs (e.g. drone synthesizers).
+- **Hann Grain Crossfade Windows**: Replaced half-sine crossfade windows $(w = \sin(\pi \phi))$ in `DualTapDelayPitchShifter` and `ShepardPitchSpiral` with Hann windows $(w = \sin^2(\pi \phi))$. This provides exact constant-amplitude crossfading ($w_1 + w_2 \equiv 1.0$) with $C^1$ zero-derivative boundary suppression ($> 115\text{ dB}$ below peak), eliminating the ~40 Hz periodic grain-wrap step discontinuities and microphonic echoing crackle under sustained inputs (e.g. drone synthesizers).
 - **Hermite Interpolator Read Margin Invariant**: Enforced `kMinDelayMargin = 2.0f` on fractional delay lines so 4-point Hermite cubic interpolation never evaluates future unwritten circular buffer indices.
 - **Delay Excursion Rate Alignment**: Corrected delay excursion formulas to guarantee exact delay slopes matching $(1 - r)$, maintaining pitch ratio precision ($r = 2.000000$ Shimmer, $r = 0.500000$ Dimmer) without pitch drift.
 

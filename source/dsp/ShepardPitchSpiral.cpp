@@ -25,7 +25,7 @@ void ShepardPitchSpiral::prepare(double sampleRate) noexcept {
     mRateSmoother.setSampleRate(mSampleRate);
     mPartchRatioSmoother.setSampleRate(mSampleRate);
 
-    mDepthSmoother.reset(0.5f);
+    mDepthSmoother.reset(mDepth);
     mRateSmoother.reset(mRateHz);
     mPartchRatioSmoother.reset(kPartchRatios[static_cast<size_t>(mPartchIndex)]);
 
@@ -64,7 +64,8 @@ void ShepardPitchSpiral::setRateHz(float rateHz) noexcept {
 }
 
 void ShepardPitchSpiral::setDepth(float depth) noexcept {
-    mDepthSmoother.setTarget(std::clamp(depth, 0.0f, 1.0f));
+    mDepth = std::clamp(depth, 0.0f, 1.0f);
+    mDepthSmoother.setTarget(mDepth);
 }
 
 void ShepardPitchSpiral::setPartchInterval(int intervalIndex) noexcept {
@@ -79,7 +80,7 @@ void ShepardPitchSpiral::setPartchPolyphonic(bool polyphonic) noexcept {
 
 void ShepardPitchSpiral::setWindowSec(float sec) noexcept {
     mWindowSec = std::clamp(sec, 0.020f, 0.200f);
-    mWindowSamples = mWindowSec * mSampleRate;
+    mWindowSamples = std::clamp(mWindowSec * mSampleRate, 256.0f, static_cast<float>(kMaxCapacity / 2));
 }
 
 void ShepardPitchSpiral::setStereoSpread(float spread) noexcept {
@@ -211,15 +212,21 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             continue;
         }
 
-        // Phase increment for grain delay modulation:
-        // delay(t) = (1 - r_m) * t  ->  phaseInc = |1 - r_m| / windowSamples
-        const float grainPhaseInc = std::abs(1.0f - rm) / mWindowSamples;
+        // Signed phase increment for grain delay modulation:
+        // readPos(t) = writePos(t) - delay(t), so d(readPos)/dt = 1 - d(delay)/dt == r_m
+        // -> d(delay)/dt = 1 - r_m -> signedPhaseInc = (1 - r_m) / windowSamples.
+        // Preserves C^1 smooth delay slope across unison (r_m = 1.0) and wraps only at
+        // phi = 0 / 1 where Hann window sin^2(pi * phi) and its derivative are strictly zero.
+        const float grainPhaseInc = (1.0f - rm) / mWindowSamples;
 
         // --- Left Channel Voice Processing ---
         {
             auto& vL = mVoicesL[m];
             vL.grainPhase += grainPhaseInc;
             vL.grainPhase -= std::floor(vL.grainPhase);
+            if (vL.grainPhase >= 1.0f || vL.grainPhase < 0.0f) {
+                vL.grainPhase = 0.0f;
+            }
 
             const float phiA = vL.grainPhase;
             const float phiB = (phiA >= 0.5f) ? (phiA - 0.5f) : (phiA + 0.5f);
@@ -249,6 +256,9 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
             auto& vR = mVoicesR[m];
             vR.grainPhase += grainPhaseInc;
             vR.grainPhase -= std::floor(vR.grainPhase);
+            if (vR.grainPhase >= 1.0f || vR.grainPhase < 0.0f) {
+                vR.grainPhase = 0.0f;
+            }
 
             const float phiA = vR.grainPhase;
             const float phiB = (phiA >= 0.5f) ? (phiA - 0.5f) : (phiA + 0.5f);

@@ -66,8 +66,10 @@ private:
     std::array<float, kNumTaps> mTapGainsL {};
     std::array<float, kNumTaps> mTapGainsR {};
 
-    static constexpr int kCrossfadeSamples = 256;
+    static constexpr int kDefaultCrossfadeSamples = 288;
+    int mCrossfadeTotal { kDefaultCrossfadeSamples };
     int mCrossfadeRemaining { 0 };
+    bool mPendingTapUpdate { false };
     std::array<size_t, kNumTaps> mOldTapDelaysSamples {};
     std::array<float, kNumTaps> mOldTapGainsL {};
     std::array<float, kNumTaps> mOldTapGainsR {};
@@ -105,6 +107,10 @@ private:
 
     inline float processAllpass(size_t index, float input) noexcept;
     void updateTaps() noexcept;
+    void computeTapTargets(float roomSize,
+                           std::array<size_t, kNumTaps>& delays,
+                           std::array<float, kNumTaps>& gainsL,
+                           std::array<float, kNumTaps>& gainsR) const noexcept;
     void updateDiffusionGains() noexcept;
 };
 

@@ -220,6 +220,7 @@ void PitchShifter::prepare(double sampleRate, int /*maxBlockSize*/) noexcept {
     mDimmerFilterL.prepare(sampleRate);
     mDimmerFilterR.prepare(sampleRate);
 
+    mShepardSpiral.setDepth(1.0f);
     mShepardSpiral.prepare(sampleRate);
     setQualityMode(mQualityMode);
 
@@ -354,7 +355,8 @@ void PitchShifter::setSpiralParameters(int spiralMode,
     mSpiralDepthSmoother.setTarget(mSpiralDepth);
     mShepardSpiral.setMode(static_cast<ShepardPitchSpiral::SpiralMode>(mSpiralMode));
     mShepardSpiral.setRateHz(mSpiralRateHz);
-    mShepardSpiral.setDepth(mSpiralDepth);
+    // Keep internal spiral at 100% wet: PitchShifter::processSample performs the linear (1 - spiralDepth) / spiralDepth crossfade
+    mShepardSpiral.setDepth(1.0f);
     mShepardSpiral.setPartchInterval(mPartchInterval);
 }
 

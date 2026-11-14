@@ -110,6 +110,7 @@ void BRAUN_RB26AudioProcessor::setCurrentProgram(int index)
         return;
 
     setPresetParameters(presets[static_cast<size_t>(index)].params);
+    mStateSyncDirty.store(true, std::memory_order_release);
 }
 
 const juce::String BRAUN_RB26AudioProcessor::getProgramName(int index)
@@ -136,6 +137,7 @@ void BRAUN_RB26AudioProcessor::prepareToPlay(double sampleRate, int samplesPerBl
     reverbEngine.setParameters(snapshot.toDspParams());
     reverbEngine.reset();
     mPendingEngineReset.store(false, std::memory_order_release);
+    mPendingExciterFifoFlush.store(false, std::memory_order_release);
 
     scopeWritePos.store(0, std::memory_order_relaxed);
     for (int i = 0; i < kScopeBufferSize; ++i)
@@ -153,8 +155,8 @@ void BRAUN_RB26AudioProcessor::releaseResources()
 
 void BRAUN_RB26AudioProcessor::reset()
 {
+    mPendingExciterFifoFlush.store(true, std::memory_order_release);
     mPendingEngineReset.store(true, std::memory_order_release);
-    exciterEngine.reset();
 }
 
 bool BRAUN_RB26AudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -242,42 +244,42 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     if (numSamples <= 0 || numChannels <= 0)
         return;
 
-    // Process incoming MIDI Note-On and Note-Off events to control AcousticExciterEngine
-    for (const auto metadata : midiMessages)
-    {
-        if (metadata.numBytes >= 3)
-        {
-            const auto* rawData = metadata.data;
-            const uint8_t status = rawData[0] & 0xF0;
-            const uint8_t note = rawData[1] & 0x7F;
-            const uint8_t vel = rawData[2] & 0x7F;
-            if (status == 0x90 && vel > 0)
-            {
-                exciterEngine.triggerVoice(static_cast<float>(note), static_cast<float>(vel) / 127.0f);
-            }
-            else if (status == 0x80 || (status == 0x90 && vel == 0))
-            {
-                exciterEngine.releaseVoice(static_cast<float>(note));
-            }
-            else if (status == 0xB0 && note == 64)
-            {
-                // MIDI CC 64 Sustain Pedal -> toggle Freeze Hold
-                const float targetVal = (vel >= 64) ? 1.0f : 0.0f;
-                if (auto* freezeParam = apvts.getParameter(rb26::ParamIDs::freezeHold.getParamID()))
-                {
-                    if (std::abs(freezeParam->getValue() - targetVal) > 0.5f)
-                        freezeParam->setValueNotifyingHost(targetVal);
-                }
-            }
-        }
-    }
+    const bool powered = isPoweredOn.load(std::memory_order_acquire);
 
     // Standby Power: When powered off, start safe and ready to go with transparent unity-gain bypass.
-    if (!isPoweredOn.load(std::memory_order_relaxed))
+    if (!powered)
     {
         if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
         {
+            const bool flushFifo = mPendingExciterFifoFlush.exchange(false, std::memory_order_acq_rel);
             reverbEngine.reset();
+            exciterEngine.resetVoicesAndGenerators(flushFifo);
+        }
+        exciterEngine.discardPendingTriggers();
+
+        // In Standby, honor Note-Off and Sustain Pedal CC64 state updates without accumulating frozen Note-On voices
+        for (const auto metadata : midiMessages)
+        {
+            if (metadata.numBytes >= 3)
+            {
+                const auto* rawData = metadata.data;
+                const uint8_t status = rawData[0] & 0xF0;
+                const uint8_t note = rawData[1] & 0x7F;
+                const uint8_t vel = rawData[2] & 0x7F;
+                if (status == 0x80 || (status == 0x90 && vel == 0))
+                {
+                    exciterEngine.releaseVoice(static_cast<float>(note));
+                }
+                else if (status == 0xB0 && note == 64)
+                {
+                    const float targetVal = (vel >= 64) ? 1.0f : 0.0f;
+                    if (auto* freezeParam = apvts.getParameter(rb26::ParamIDs::freezeHold.getParamID()))
+                    {
+                        if (std::abs(freezeParam->getValue() - targetVal) > 0.5f)
+                            freezeParam->setValueNotifyingHost(targetVal);
+                    }
+                }
+            }
         }
 
         if (numInputChannels == 0)
@@ -314,9 +316,46 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const auto snapshot = atomicPointers.loadSnapshot();
     reverbEngine.setParameters(snapshot.toDspParams());
 
+    if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
+    {
+        const bool flushFifo = mPendingExciterFifoFlush.exchange(false, std::memory_order_acq_rel);
+        reverbEngine.reset();
+        exciterEngine.resetVoicesAndGenerators(flushFifo);
+    }
+
+    // Process incoming MIDI Note-On and Note-Off events to control AcousticExciterEngine
+    for (const auto metadata : midiMessages)
+    {
+        if (metadata.numBytes >= 3)
+        {
+            const auto* rawData = metadata.data;
+            const uint8_t status = rawData[0] & 0xF0;
+            const uint8_t note = rawData[1] & 0x7F;
+            const uint8_t vel = rawData[2] & 0x7F;
+            if (status == 0x90 && vel > 0)
+            {
+                exciterEngine.triggerVoice(static_cast<float>(note), static_cast<float>(vel) / 127.0f);
+            }
+            else if (status == 0x80 || (status == 0x90 && vel == 0))
+            {
+                exciterEngine.releaseVoice(static_cast<float>(note));
+            }
+            else if (status == 0xB0 && note == 64)
+            {
+                // MIDI CC 64 Sustain Pedal -> toggle Freeze Hold
+                const float targetVal = (vel >= 64) ? 1.0f : 0.0f;
+                if (auto* freezeParam = apvts.getParameter(rb26::ParamIDs::freezeHold.getParamID()))
+                {
+                    if (std::abs(freezeParam->getValue() - targetVal) > 0.5f)
+                        freezeParam->setValueNotifyingHost(targetVal);
+                }
+            }
+        }
+    }
+
     // Auto-wake / liveness check:
     // If DAW transport is playing, incoming audio arrives above threshold,
-    // or exciter has active voices / incoming MIDI, ensure the engine is fully active
+    // or exciter has active voices / queued triggers / incoming MIDI, ensure the engine is fully active
     bool isTransportPlaying = false;
     if (auto* ph = getPlayHead())
     {
@@ -338,17 +377,11 @@ void BRAUN_RB26AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     }
 
     const bool hasMidiOrExciter = !midiMessages.isEmpty()
-                               || exciterEngine.getActiveVoiceCount() > 0
-                               || exciterEngine.isPoissonActive();
+                               || exciterEngine.hasPendingActivity();
 
     if (isTransportPlaying || hasIncomingAudio || hasMidiOrExciter)
     {
         reverbEngine.wakeUp();
-    }
-
-    if (mPendingEngineReset.exchange(false, std::memory_order_acq_rel))
-    {
-        reverbEngine.reset();
     }
 
     // Zero heap allocations! Stack-allocated pointer arrays sized for max 16 channels
@@ -626,6 +659,7 @@ void BRAUN_RB26AudioProcessor::setStateInformation(const void* data, int sizeInB
         else
             setPower(true);
         apvts.replaceState(vt);
+        mStateSyncDirty.store(true, std::memory_order_release);
     }
 }
 
