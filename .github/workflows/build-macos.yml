@@ -15,7 +15,7 @@ permissions:
 jobs:
   build-macos:
     name: Build macOS Universal (ARM64 & x86_64)
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
