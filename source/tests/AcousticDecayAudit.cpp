@@ -30,6 +30,8 @@
 #include <limits>
 #include <cstdlib>
 #include <cstdint>
+#include <atomic>
+#include <new>
 
 // Core DSP Headers
 #include "DspMath.h"
@@ -37,46 +39,54 @@
 #include "FdnReverbTank.h"
 #include "ManifoldDelayNetwork.h"
 
+#if defined(__GNUC__) || defined(__clang__)
+#define RB26_AUDIT_NOINLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define RB26_AUDIT_NOINLINE __declspec(noinline)
+#else
+#define RB26_AUDIT_NOINLINE
+#endif
+
 // ============================================================================
 // Real-Time Heap Allocation Tracking
 // ============================================================================
-static bool gTrackAllocations = false;
-static size_t gAllocationCount = 0;
-static size_t gBytesAllocated = 0;
+static std::atomic<bool> gTrackAllocations { false };
+static std::atomic<size_t> gAllocationCount { 0 };
+static std::atomic<size_t> gBytesAllocated { 0 };
 
-void* operator new(size_t size) {
-    if (gTrackAllocations) {
-        ++gAllocationCount;
-        gBytesAllocated += size;
+RB26_AUDIT_NOINLINE void* operator new(size_t size) {
+    if (gTrackAllocations.load(std::memory_order_acquire)) {
+        gAllocationCount.fetch_add(1, std::memory_order_relaxed);
+        gBytesAllocated.fetch_add(size, std::memory_order_relaxed);
     }
     void* p = std::malloc(size);
     if (!p) throw std::bad_alloc();
     return p;
 }
 
-void operator delete(void* p) noexcept {
+RB26_AUDIT_NOINLINE void operator delete(void* p) noexcept {
     std::free(p);
 }
 
-void operator delete(void* p, size_t) noexcept {
+RB26_AUDIT_NOINLINE void operator delete(void* p, size_t) noexcept {
     std::free(p);
 }
 
-void* operator new[](size_t size) {
-    if (gTrackAllocations) {
-        ++gAllocationCount;
-        gBytesAllocated += size;
+RB26_AUDIT_NOINLINE void* operator new[](size_t size) {
+    if (gTrackAllocations.load(std::memory_order_acquire)) {
+        gAllocationCount.fetch_add(1, std::memory_order_relaxed);
+        gBytesAllocated.fetch_add(size, std::memory_order_relaxed);
     }
     void* p = std::malloc(size);
     if (!p) throw std::bad_alloc();
     return p;
 }
 
-void operator delete[](void* p) noexcept {
+RB26_AUDIT_NOINLINE void operator delete[](void* p) noexcept {
     std::free(p);
 }
 
-void operator delete[](void* p, size_t) noexcept {
+RB26_AUDIT_NOINLINE void operator delete[](void* p, size_t) noexcept {
     std::free(p);
 }
 

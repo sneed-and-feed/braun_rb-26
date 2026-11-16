@@ -15,6 +15,8 @@
 #include <cstring>
 #include <memory>
 #include <numeric>
+#include <atomic>
+#include <new>
 
 // Core DSP Headers
 #include "DspMath.h"
@@ -26,12 +28,20 @@
 #include "FdnReverbTank.h"
 #include "Rb26Engine.h"
 
+#if defined(__GNUC__) || defined(__clang__)
+#define RB26_TEST_NOINLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define RB26_TEST_NOINLINE __declspec(noinline)
+#else
+#define RB26_TEST_NOINLINE
+#endif
+
 // ============================================================================
 // Global Heap Allocation Tracker for Real-Time Safety Verification
 // ============================================================================
-extern bool gTrackAllocations;
-extern size_t gAllocationCount;
-extern size_t gBytesAllocated;
+extern std::atomic<bool> gTrackAllocations;
+extern std::atomic<size_t> gAllocationCount;
+extern std::atomic<size_t> gBytesAllocated;
 
 // ============================================================================
 // Test Framework Infrastructure
@@ -39,6 +49,17 @@ extern size_t gBytesAllocated;
 namespace test {
 
 inline int gCurrentTestAssertFailures = 0;
+
+// Escapes allocated pointers through volatile global state in a non-inlined
+// helper so C++14+ allocation elision (N3664) cannot omit tracked allocations
+// under aggressive optimization (e.g., GCC -O3).
+inline void* volatile gAllocationEscapeSink = nullptr;
+
+template <typename T>
+RB26_TEST_NOINLINE T* retainForAllocationTest(T* ptr) noexcept {
+    gAllocationEscapeSink = static_cast<void*>(ptr);
+    return ptr;
+}
 
 #if defined(_MSC_VER)
 #define TEST_ASSERT(cond, msg) do { \

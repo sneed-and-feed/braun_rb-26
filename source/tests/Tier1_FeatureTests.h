@@ -903,7 +903,7 @@ inline void registerTier1Tests() {
         p.punchDucking = 0.0f;
         modal.setParameters(p);
 
-        const size_t irLen = 24000;
+        const size_t irLen = 48000;
         std::vector<float> ir(irLen, 0.0f);
         float outL, outR;
         modal.processModalOnly(1.0f, 1.0f, outL, outR);
@@ -2260,10 +2260,12 @@ inline void registerTier1Tests() {
         gTrackAllocations = false;
         gAllocationCount = 0;
         gTrackAllocations = true;
-        int* p = new int(42);
+        int* p = test::retainForAllocationTest(new int(42));
         gTrackAllocations = false;
         TEST_ASSERT(gAllocationCount == 1, "Heap tracker must record exact allocation count");
+        TEST_ASSERT(*p == 42, "Heap-allocated object must preserve initialized value");
         delete p;
+        test::gAllocationEscapeSink = nullptr;
         return test::gCurrentTestAssertFailures == 0;
     });
 

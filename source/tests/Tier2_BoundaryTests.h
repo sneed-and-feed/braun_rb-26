@@ -1921,9 +1921,10 @@ inline void registerTier2Tests() {
         gTrackAllocations = false;
         gAllocationCount = 0;
         gTrackAllocations = true;
-        void* p = std::malloc(32);
+        void* p = test::retainForAllocationTest(std::malloc(32));
         gTrackAllocations = false;
         std::free(p);
+        test::gAllocationEscapeSink = nullptr;
         TEST_ASSERT(gAllocationCount == 0, "std::malloc directly does not trigger operator new override");
         return test::gCurrentTestAssertFailures == 0;
     });
@@ -1932,10 +1933,12 @@ inline void registerTier2Tests() {
         gTrackAllocations = false;
         gAllocationCount = 0;
         gTrackAllocations = true;
-        int* p = new int(10);
+        int* p = test::retainForAllocationTest(new int(10));
         gTrackAllocations = false;
         TEST_ASSERT(gAllocationCount == 1, "Heap tracker must record exact allocation");
+        TEST_ASSERT(*p == 10, "Heap-allocated object must preserve initialized value");
         delete p;
+        test::gAllocationEscapeSink = nullptr;
         return test::gCurrentTestAssertFailures == 0;
     });
 

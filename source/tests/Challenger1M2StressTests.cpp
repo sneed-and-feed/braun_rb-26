@@ -9,45 +9,56 @@
 #include <random>
 #include <cassert>
 #include <string>
+#include <atomic>
+#include <cstdlib>
+#include <new>
+
+#if defined(__GNUC__) || defined(__clang__)
+#define RB26_CH1_NOINLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define RB26_CH1_NOINLINE __declspec(noinline)
+#else
+#define RB26_CH1_NOINLINE
+#endif
 
 // Operator new overrides for real-time heap allocation tracking
-bool gTrackAllocations = false;
-size_t gAllocationCount = 0;
-size_t gBytesAllocated = 0;
+std::atomic<bool> gTrackAllocations { false };
+std::atomic<size_t> gAllocationCount { 0 };
+std::atomic<size_t> gBytesAllocated { 0 };
 
-void* operator new(size_t size) {
-    if (gTrackAllocations) {
-        ++gAllocationCount;
-        gBytesAllocated += size;
+RB26_CH1_NOINLINE void* operator new(size_t size) {
+    if (gTrackAllocations.load(std::memory_order_acquire)) {
+        gAllocationCount.fetch_add(1, std::memory_order_relaxed);
+        gBytesAllocated.fetch_add(size, std::memory_order_relaxed);
     }
     void* p = std::malloc(size);
     if (!p) throw std::bad_alloc();
     return p;
 }
 
-void operator delete(void* p) noexcept {
+RB26_CH1_NOINLINE void operator delete(void* p) noexcept {
     std::free(p);
 }
 
-void operator delete(void* p, size_t) noexcept {
+RB26_CH1_NOINLINE void operator delete(void* p, size_t) noexcept {
     std::free(p);
 }
 
-void* operator new[](size_t size) {
-    if (gTrackAllocations) {
-        ++gAllocationCount;
-        gBytesAllocated += size;
+RB26_CH1_NOINLINE void* operator new[](size_t size) {
+    if (gTrackAllocations.load(std::memory_order_acquire)) {
+        gAllocationCount.fetch_add(1, std::memory_order_relaxed);
+        gBytesAllocated.fetch_add(size, std::memory_order_relaxed);
     }
     void* p = std::malloc(size);
     if (!p) throw std::bad_alloc();
     return p;
 }
 
-void operator delete[](void* p) noexcept {
+RB26_CH1_NOINLINE void operator delete[](void* p) noexcept {
     std::free(p);
 }
 
-void operator delete[](void* p, size_t) noexcept {
+RB26_CH1_NOINLINE void operator delete[](void* p, size_t) noexcept {
     std::free(p);
 }
 
