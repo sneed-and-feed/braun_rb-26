@@ -30,7 +30,9 @@ struct SharedMockHardwareState {
     bool inputForceClosed { false };
     bool outputForceClosed { false };
     bool usbDacUnplugged { false };
+    bool rejectExclusiveCaptureOpen { false };
     double forcedInputNativeRate { 48000.0 };
+    double forcedOutputNativeRate { 48000.0 };
     bool lockInputToForcedRate { false };
     bool lockOutputTo48k { false };
     int openCallsOutput { 0 };
@@ -81,6 +83,10 @@ public:
             mOpen = false;
             return "Endpoint unplugged";
         }
+        if (mIsInput && mHw.rejectExclusiveCaptureOpen && getTypeName() == "Windows Audio (Exclusive Mode)") {
+            mOpen = false;
+            return "AUDCLNT_E_DEVICE_IN_USE (VB-Cable open in Shared Mode by other application)";
+        }
         if (mHw.failNextOpenCount > 0) {
             --mHw.failNextOpenCount;
             mOpen = false;
@@ -100,7 +106,7 @@ public:
             ++mHw.openCallsOutput;
             mHw.outputForceClosed = false;
             mActiveOut = outChans;
-            mSampleRate = (sr > 0.0) ? sr : mNativeRate;
+            mSampleRate = (sr > 0.0) ? sr : mHw.forcedOutputNativeRate;
         }
 
         mBufferSize = (bufSize > 0) ? bufSize : 480;
@@ -166,10 +172,25 @@ public:
         }
     }
 
+    // Simulates JUCE WASAPIAudioIODevice::handleAsyncUpdate() reopening & restarting an inner
+    // endpoint at a new sample rate / channel count / buffer size while isOpen() & isPlaying() remain true!
+    void simulateSpontaneousFormatRestart(double newSr, int newBuf, const juce::BigInteger& newChans) {
+        RB26_GUARD_ASSERT(mOpen && mPlaying && mCallback != nullptr);
+        mCallback->audioDeviceStopped();
+        mSampleRate = newSr;
+        mBufferSize = newBuf;
+        if (mIsInput) {
+            mActiveIn = newChans;
+        } else {
+            mActiveOut = newChans;
+        }
+        mCallback->audioDeviceAboutToStart(this);
+    }
+
 private:
     bool mIsInput { false };
     SharedMockHardwareState& mHw;
-    double mNativeRate { 48000.0 };
+    [[maybe_unused]] double mNativeRate { 48000.0 };
     double mSampleRate { 48000.0 };
     int mBufferSize { 480 };
     bool mOpen { false };
@@ -181,8 +202,9 @@ private:
 
 class MockWindowsAudioDeviceType final : public juce::AudioIODeviceType {
 public:
-    explicit MockWindowsAudioDeviceType(SharedMockHardwareState& hw)
-        : juce::AudioIODeviceType("Windows Audio"),
+    explicit MockWindowsAudioDeviceType(SharedMockHardwareState& hw,
+                                        const juce::String& customTypeName = "Windows Audio")
+        : juce::AudioIODeviceType(customTypeName),
           mHw(hw) {}
 
     void scanForDevices() override {}
@@ -735,6 +757,11 @@ void runLiveWindowsWasapiVbCableIntegrationTest() {
     RB26_GUARD_ASSERT(duplex != nullptr);
 
     rb26::standalone::StandaloneAudioRecoveryController recovery(dm, {}, 0);
+    // Regression (Bug 1): Verify Modern Standby (S0 Low Power Idle) power notification registration
+    // succeeded on live Windows (powrprof!PowerRegisterSuspendResumeNotification previously failed with 87)!
+    RB26_GUARD_ASSERT(recovery.isModernStandbyRegistered());
+    const HWND powerHwnd = recovery.getPowerNotifyWindowHandle();
+    RB26_GUARD_ASSERT(powerHwnd != nullptr && ::IsWindow(powerHwnd) != FALSE);
 
     // Stream real WASAPI capture (VB-Cable) -> ElasticDriftRingBuffer -> real WASAPI render for 900 ms
     // Note: Windows WASAPI sets AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY on the initial packet after
@@ -753,21 +780,31 @@ void runLiveWindowsWasapiVbCableIntegrationTest() {
     RB26_GUARD_ASSERT(postStreamXRuns == initialStartupXRuns);
     RB26_GUARD_ASSERT(!duplex->hasFatalStreamFault());
 
-    // Exercise real WASAPI + VB-Cable suspend -> resume teardown & reopen cycle!
-    recovery.handleSystemSuspend();
+    // Exercise real Win32 WM_POWERBROADCAST dispatch through powerHwnd wndProc:
+    //   1) PBT_APMSUSPEND -> closes WASAPI + VB-Cable handles cleanly
+    //   2) PBT_APMRESUMEAUTOMATIC -> schedules recovery & reopens VB-Cable + Speakers
+    //   3) Delayed PBT_APMRESUMESUSPEND (user mouse/keyboard input after wake) -> NO redundant reopen!
+    RB26_GUARD_ASSERT(::SendMessageW(powerHwnd, WM_POWERBROADCAST, PBT_APMSUSPEND, 0) == TRUE);
+    RB26_GUARD_ASSERT(recovery.isSuspended());
     RB26_GUARD_ASSERT(dm.getCurrentAudioDevice() == nullptr);
 
     const double t0 = juce::Time::getMillisecondCounterHiRes();
     const int64_t w0 = rb26::standalone::StandaloneAudioRecoveryController::currentWallClockMs();
-    recovery.handleSystemResume(50.0);
-    juce::Thread::sleep(80);
-    recovery.tickWatchdog(t0 + 100.0, w0 + 100);
+    RB26_GUARD_ASSERT(::SendMessageW(powerHwnd, WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC, 0) == TRUE);
+    RB26_GUARD_ASSERT(!recovery.isSuspended());
+    RB26_GUARD_ASSERT(recovery.isRecoveryPending());
+    recovery.tickWatchdog(t0 + 700.0, w0 + 700);
 
     RB26_GUARD_ASSERT(!recovery.isRecoveryPending());
     RB26_GUARD_ASSERT(recovery.getFullRecoveryCount() == 1);
     RB26_GUARD_ASSERT(dm.getCurrentAudioDevice() != nullptr && dm.getCurrentAudioDevice()->isOpen());
     RB26_GUARD_ASSERT(dm.getAudioDeviceSetup().inputDeviceName == chosenIn);
     RB26_GUARD_ASSERT(dm.getAudioDeviceSetup().outputDeviceName == chosenOut);
+
+    // Delayed PBT_APMRESUMESUSPEND when stream is already recovered & healthy must NOT reopen!
+    RB26_GUARD_ASSERT(::SendMessageW(powerHwnd, WM_POWERBROADCAST, PBT_APMRESUMESUSPEND, 0) == TRUE);
+    RB26_GUARD_ASSERT(!recovery.isRecoveryPending());
+    RB26_GUARD_ASSERT(recovery.getFullRecoveryCount() == 1);
 
     const uint64_t postResumeStart = silentCb.callbacks.load(std::memory_order_relaxed);
     juce::Thread::sleep(400);
@@ -822,6 +859,39 @@ void runLiveWindowsWasapiVbCableIntegrationTest() {
                         RB26_GUARD_ASSERT(llDuplex->getRingBuffer().getRecenterCount() == 0);
                         RB26_GUARD_ASSERT(llInitXRuns <= 2);
                         RB26_GUARD_ASSERT(llEndXRuns == llInitXRuns);
+                    }
+                }
+            }
+            break;
+        }
+    }
+
+    // Regression: Live Windows Audio (Exclusive Mode) with VB-Cable + physical output
+    // (If output endpoint is currently available for Exclusive Mode, verify VB-Cable capture opens
+    // either in Exclusive Mode or via automatic Shared-Mode capture fallback with 0 steady-state xruns!)
+    for (auto* t : dm.getAvailableDeviceTypes()) {
+        if (t->getTypeName() == "Windows Audio (Exclusive Mode)") {
+            t->scanForDevices();
+            const auto exIns = t->getDeviceNames(true);
+            const auto exOuts = t->getDeviceNames(false);
+            if (exIns.contains(chosenIn) && exOuts.contains(chosenOut)) {
+                dm.closeAudioDevice();
+                dm.setCurrentAudioDeviceType("Windows Audio (Exclusive Mode)", true);
+                auto exSetup = dm.getAudioDeviceSetup();
+                exSetup.inputDeviceName = chosenIn;
+                exSetup.outputDeviceName = chosenOut;
+                if (dm.setAudioDeviceSetup(exSetup, true).isEmpty()) {
+                    if (auto* exDuplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice())) {
+                        juce::Thread::sleep(150);
+                        const int exInitXRuns = exDuplex->getXRunCount();
+                        juce::Thread::sleep(500);
+                        const int exEndXRuns = exDuplex->getXRunCount();
+                        RB26_GUARD_ASSERT(exDuplex->getRingBuffer().getPushBlockCount() >= 10);
+                        RB26_GUARD_ASSERT(exDuplex->getRingBuffer().getPullBlockCount() >= 10);
+                        RB26_GUARD_ASSERT(exDuplex->getRingBuffer().getUnderrunCount() == 0);
+                        RB26_GUARD_ASSERT(exDuplex->getRingBuffer().getRecenterCount() == 0);
+                        RB26_GUARD_ASSERT(exInitXRuns <= 2);
+                        RB26_GUARD_ASSERT(exEndXRuns == exInitXRuns);
                     }
                 }
             }
@@ -1025,41 +1095,199 @@ void runRoutingSafetyAndCaptureEscalationTests() {
     dm.closeAudioDevice();
 }
 
+// ============================================================================
+// Test 9: PBT_APMRESUMESUSPEND Idempotency, Spontaneous Format-Change Resync & Exclusive Fallback
+// ============================================================================
+void runResumeCoalesceFormatDisconnectAndExclusiveTests() {
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // 9A & 9B: Delayed PBT_APMRESUMESUSPEND idempotency + mid-retry coalescing + spontaneous WASAPI format change
+    {
+        SharedMockHardwareState hwState;
+        juce::AudioDeviceManager dm;
+        dm.addAudioDeviceType(std::make_unique<rb26::standalone::DriftCompensatedAudioIODeviceType>(
+            std::make_unique<MockWindowsAudioDeviceType>(hwState)));
+
+        RB26_GUARD_ASSERT(dm.initialise(2, 2, nullptr, true).isEmpty());
+
+        auto setup = dm.getAudioDeviceSetup();
+        setup.inputDeviceName = "CABLE Output (VB-Audio Virtual Cable)";
+        setup.outputDeviceName = "Speakers (Realtek High Definition Audio)";
+        setup.sampleRate = 48000.0;
+        setup.bufferSize = 480;
+        RB26_GUARD_ASSERT(dm.setAudioDeviceSetup(setup, true).isEmpty());
+
+        int resetCount = 0;
+        rb26::standalone::StandaloneAudioRecoveryController recovery(
+            dm, [&]() { ++resetCount; }, 0);
+
+        // 9A-1: Unattended PBT_APMRESUMEAUTOMATIC followed by PBT_APMRESUMESUSPEND mid-backoff:
+        //       verify PBT_APMRESUMESUSPEND does NOT delay mNextRecoveryTimeMs or reset mRetryIndex!
+        recovery.handleSystemSuspend();
+        hwState.failNextOpenCount = 1;
+        double nowMs = juce::Time::getMillisecondCounterHiRes();
+        int64_t wallMs = rb26::standalone::StandaloneAudioRecoveryController::currentWallClockMs();
+        recovery.handleSystemResume(200.0, nowMs, false /* PBT_APMRESUMEAUTOMATIC */);
+
+        // Attempt #1 at t=+250ms fails (advances mRetryIndex to 1, schedules retry at +600ms => t=+850ms)
+        recovery.tickWatchdog(nowMs + 250.0, wallMs + 250);
+        RB26_GUARD_ASSERT(recovery.isRecoveryPending());
+        RB26_GUARD_ASSERT(dm.getCurrentAudioDevice() == nullptr);
+
+        // User moves mouse at t=+750ms -> PBT_APMRESUMESUSPEND arrives!
+        // Must NOT push mNextRecoveryTimeMs out to 750+650=1400ms; retry at t=+900ms must succeed immediately!
+        recovery.handleSystemResume(650.0, nowMs + 750.0, true /* PBT_APMRESUMESUSPEND */);
+        recovery.tickWatchdog(nowMs + 900.0, wallMs + 900);
+        RB26_GUARD_ASSERT(!recovery.isRecoveryPending());
+        RB26_GUARD_ASSERT(recovery.getFullRecoveryCount() == 1);
+        RB26_GUARD_ASSERT(resetCount == 1);
+        const int openOutAfterWake = hwState.openCallsOutput;
+
+        // 9A-2: Minutes later (t=+180,000ms), delayed PBT_APMRESUMESUSPEND arrives while stream is healthy:
+        //       must be a strict no-op (zero redundant stream teardown or processor->reset())!
+        recovery.handleSystemResume(650.0, nowMs + 180000.0, true /* PBT_APMRESUMESUSPEND */, wallMs + 180000);
+        RB26_GUARD_ASSERT(!recovery.isRecoveryPending());
+        recovery.tickWatchdog(nowMs + 181000.0, wallMs + 181000);
+        RB26_GUARD_ASSERT(recovery.getFullRecoveryCount() == 1);
+        RB26_GUARD_ASSERT(resetCount == 1);
+        RB26_GUARD_ASSERT(hwState.openCallsOutput == openOutAfterWake);
+
+        // 9B-1: Simulate JUCE WASAPIAudioIODevice::handleAsyncUpdate() spontaneous capture format change
+        //       (VB-Cable switched 48 kHz -> 44.1 kHz in Windows Control Panel while isOpen() & isPlaying() stay true!)
+        auto* duplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice());
+        RB26_GUARD_ASSERT(duplex != nullptr);
+        auto* mockIn = dynamic_cast<MockEndpointAudioIODevice*>(duplex->getInnerInputDevice());
+        RB26_GUARD_ASSERT(mockIn != nullptr);
+
+        hwState.forcedInputNativeRate = 44100.0;
+        hwState.lockInputToForcedRate = true;
+        hwState.lockOutputTo48k = true;
+        juce::BigInteger stereoMask;
+        stereoMask.setRange(0, 2, true);
+        mockIn->simulateSpontaneousFormatRestart(44100.0, 441, stereoMask);
+        RB26_GUARD_ASSERT(mockIn->isOpen() && mockIn->isPlaying());
+        RB26_GUARD_ASSERT(duplex->hasFatalStreamFault());
+
+        const double tFmt1 = nowMs + 181250.0;
+        const int64_t wFmt1 = wallMs + 181250;
+        recovery.tickWatchdog(tFmt1, wFmt1);
+        RB26_GUARD_ASSERT(recovery.isRecoveryPending());
+        recovery.tickWatchdog(tFmt1 + 350.0, wFmt1 + 350);
+        RB26_GUARD_ASSERT(!recovery.isRecoveryPending());
+        RB26_GUARD_ASSERT(recovery.getFullRecoveryCount() == 2);
+
+        duplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice());
+        RB26_GUARD_ASSERT(duplex != nullptr);
+        RB26_GUARD_ASSERT(std::abs(duplex->getRingBuffer().getCurrentRatio() - (44100.0 / 48000.0)) < 0.005);
+
+        // 9B-2: Simulate spontaneous output channel-count shrink (2ch -> 1ch) & rate jump (48k -> 96k):
+        //       verify output callback safely zeroes 1-ch buffer without calling user callback with mismatched
+        //       channel count (preventing CallbackMaxSizeEnforcer OOB read), and escalates to full reopen!
+        int userCbCallsWithWrongChans = 0;
+        struct StrictTwoChanCallback final : public juce::AudioIODeviceCallback {
+            int* badCalls { nullptr };
+            void audioDeviceIOCallbackWithContext(const float* const*, int,
+                                                  float* const*, int numOut,
+                                                  int, const juce::AudioIODeviceCallbackContext&) override {
+                if (numOut != 2 && badCalls != nullptr) {
+                    ++(*badCalls);
+                }
+            }
+            void audioDeviceAboutToStart(juce::AudioIODevice*) override {}
+            void audioDeviceStopped() override {}
+        } strictCb;
+        strictCb.badCalls = &userCbCallsWithWrongChans;
+        dm.addAudioCallback(&strictCb);
+
+        auto* mockOut = dynamic_cast<MockEndpointAudioIODevice*>(duplex->getInnerOutputDevice());
+        RB26_GUARD_ASSERT(mockOut != nullptr);
+        juce::BigInteger monoMask;
+        monoMask.setBit(0, true);
+        mockOut->simulateSpontaneousFormatRestart(96000.0, 960, monoMask);
+        RB26_GUARD_ASSERT(duplex->hasFatalStreamFault());
+
+        std::vector<float> outMono(960, 0.75f);
+        float* outMonoPtrs[1] = { outMono.data() };
+        mockOut->pumpOutputBlock(outMonoPtrs, 1, 960);
+        RB26_GUARD_ASSERT(userCbCallsWithWrongChans == 0);
+        RB26_GUARD_ASSERT(outMono[0] == 0.0f && outMono[959] == 0.0f);
+
+        dm.removeAudioCallback(&strictCb);
+        dm.closeAudioDevice();
+    }
+
+    // 9C: WASAPI Exclusive Mode output + VB-Cable Shared-Mode capture fallback when VB-Cable rejects Exclusive open!
+    {
+        SharedMockHardwareState hwState;
+        hwState.rejectExclusiveCaptureOpen = true; // VB-Cable held in Shared Mode by Discord/Chrome!
+
+        juce::AudioDeviceManager dm;
+        dm.addAudioDeviceType(std::make_unique<rb26::standalone::DriftCompensatedAudioIODeviceType>(
+            std::make_unique<MockWindowsAudioDeviceType>(hwState, "Windows Audio (Exclusive Mode)"),
+            std::make_unique<MockWindowsAudioDeviceType>(hwState, "Windows Audio"),
+            false /* try Exclusive capture first, fall back to Shared capture on AUDCLNT_E_DEVICE_IN_USE */));
+
+        RB26_GUARD_ASSERT(dm.initialise(2, 2, nullptr, true).isEmpty());
+
+        auto setup = dm.getAudioDeviceSetup();
+        setup.inputDeviceName = "CABLE Output (VB-Audio Virtual Cable)";
+        setup.outputDeviceName = "Headphones (USB DAC)";
+        setup.sampleRate = 48000.0;
+        setup.bufferSize = 256;
+        const juce::String openErr = dm.setAudioDeviceSetup(setup, true);
+        RB26_GUARD_ASSERT(openErr.isEmpty());
+
+        auto* duplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice());
+        RB26_GUARD_ASSERT(duplex != nullptr && duplex->isOpen() && duplex->isPlaying());
+        RB26_GUARD_ASSERT(duplex->getInnerOutputDevice() != nullptr);
+        RB26_GUARD_ASSERT(duplex->getInnerInputDevice() != nullptr);
+        // Output runs in Exclusive Mode while VB-Cable capture fell back seamlessly to Shared Mode!
+        RB26_GUARD_ASSERT(duplex->getInnerOutputDevice()->getTypeName() == "Windows Audio (Exclusive Mode)");
+        RB26_GUARD_ASSERT(duplex->getInnerInputDevice()->getTypeName() == "Windows Audio");
+
+        dm.closeAudioDevice();
+    }
+}
+
 } // namespace
 
 int main() {
     std::cout << "=== BRAUN RB-26 Standalone Audio Guard & VB-Cable Drift/Sleep Verification ===\n";
 
-    std::cout << "[1/8] Sustained +85 ppm Clock Drift (VB-Cable > Hardware, 6M frames)... ";
+    std::cout << "[1/9] Sustained +85 ppm Clock Drift (VB-Cable > Hardware, 6M frames)... ";
     runSustainedClockDriftTest(+85.0, 480, 480);
     std::cout << "PASS\n";
 
-    std::cout << "[2/8] Sustained -85 ppm Clock Drift & Block Mismatch (480 vs 512, 6M frames)... ";
+    std::cout << "[2/9] Sustained -85 ppm Clock Drift & Block Mismatch (480 vs 512, 6M frames)... ";
     runSustainedClockDriftTest(-85.0, 480, 512);
     std::cout << "PASS\n";
 
-    std::cout << "[3/8] Async Sample Rate Mismatch (44.1 kHz VB-Cable -> 48.0 kHz Output)... ";
+    std::cout << "[3/9] Async Sample Rate Mismatch (44.1 kHz VB-Cable -> 48.0 kHz Output)... ";
     runAsyncSampleRateConversionTest();
     std::cout << "PASS\n";
 
-    std::cout << "[4/8] Severe OS Stall Recenter, Underrun Decay & Toxic NaN/Inf Immunity... ";
+    std::cout << "[4/9] Severe OS Stall Recenter, Underrun Decay & Toxic NaN/Inf Immunity... ";
     runStallAndToxicSelfHealingTest();
     std::cout << "PASS\n";
 
-    std::cout << "[5/8] Duplex Passthrough, S3/S0 Sleep D3->D0 Retry & Invalidated Storm Recovery... ";
+    std::cout << "[5/9] Duplex Passthrough, S3/S0 Sleep D3->D0 Retry & Invalidated Storm Recovery... ";
     runDuplexLifecycleSleepAndStormTests();
     std::cout << "PASS\n";
 
-    std::cout << "[6/8] Live Win32 EcoQoS Guard, Sub-10ms (256) & Low-Latency WASAPI + VB-Cable... ";
+    std::cout << "[6/9] Live Win32 S0 Standby Reg, Sub-10ms/LowLat/Excl WASAPI + VB-Cable... ";
     runLiveWindowsWasapiVbCableIntegrationTest();
     std::cout << "PASS\n";
 
-    std::cout << "[7/8] Large-Buffer DirectSound (4096) Cushion & Race-Free Overflow Crossfade... ";
+    std::cout << "[7/9] Large-Buffer DirectSound (4096) Cushion & Race-Free Overflow Crossfade... ";
     runLargeBufferAndMultiBlockOverflowCrossfadeTest();
     std::cout << "PASS\n";
 
-    std::cout << "[8/8] Pre-Suspend Disconnect, Unplugged USB DAC Safe Fallback & Rate Escalation... ";
+    std::cout << "[8/9] Pre-Suspend Disconnect, Unplugged USB DAC Safe Fallback & Rate Escalation... ";
     runRoutingSafetyAndCaptureEscalationTests();
+    std::cout << "PASS\n";
+
+    std::cout << "[9/9] Delayed Resume Idempotency, Spontaneous Format Resync & Exclusive Fallback... ";
+    runResumeCoalesceFormatDisconnectAndExclusiveTests();
     std::cout << "PASS\n";
 
     std::cout << "ALL STANDALONE AUDIO GUARD TESTS PASSED UNANIMOUSLY.\n";

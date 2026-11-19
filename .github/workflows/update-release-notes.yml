@@ -2,16 +2,25 @@ name: Update Release Notes
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to update (e.g. v1.5.1)'
+        required: false
+        type: string
   push:
+    branches:
+      - main
     paths:
-      - '.github/release-notes-v1.3.9.md'
+      - '.github/release-notes-v*.md'
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
   update-notes:
-    name: Update v1.3.9 Release Notes
+    name: Update Release Notes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -20,5 +29,24 @@ jobs:
       - name: Update Release Notes
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          gh release edit v1.3.9 --notes-file .github/release-notes-v1.3.9.md
+          if [ -n "${INPUT_TAG}" ]; then
+            TAG_NAME="${INPUT_TAG}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+          else
+            VERSION=$(grep '"version":' package.json | head -n 1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
+            TAG_NAME="v${VERSION}"
+          fi
+          NOTES_FILE=".github/release-notes-${TAG_NAME}.md"
+          if [ ! -f "${NOTES_FILE}" ]; then
+            echo "No release notes file ${NOTES_FILE} found for ${TAG_NAME}; skipping."
+            exit 0
+          fi
+          if gh release view "${TAG_NAME}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Updating release notes for ${TAG_NAME} from ${NOTES_FILE}..."
+            gh release edit "${TAG_NAME}" --repo "${{ github.repository }}" --notes-file "${NOTES_FILE}"
+          else
+            echo "Release ${TAG_NAME} does not exist yet on GitHub; skipping."
+          fi

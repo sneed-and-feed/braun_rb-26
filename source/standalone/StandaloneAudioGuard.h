@@ -134,14 +134,15 @@ private:
 // 2. Windows S3 Sleep & S0 Modern Standby Suspend/Resume Listener
 // ============================================================================
 // Listens to both broadcast WM_POWERBROADCAST messages on a hidden top-level
-// WS_POPUP HWND and explicit PowerRegisterSuspendResumeNotification callbacks
+// WS_POPUP HWND and explicit user32!RegisterSuspendResumeNotification callbacks
 // so Modern Standby (S0 Low Power Idle) laptop lid close/reopen cycles reliably
-// notify the Standalone audio device recovery state machine.
+// notify the Standalone audio device recovery state machine on the message thread.
 class WindowsPowerSuspendNotifier {
 public:
-    using Callback = std::function<void()>;
+    using SuspendCallback = std::function<void()>;
+    using ResumeCallback = std::function<void(bool isUserActivityResume)>;
 
-    WindowsPowerSuspendNotifier(Callback onSuspend, Callback onResume)
+    WindowsPowerSuspendNotifier(SuspendCallback onSuspend, ResumeCallback onResume)
         : mOnSuspend(std::move(onSuspend)),
           mOnResume(std::move(onResume)) {
 #if JUCE_WINDOWS
@@ -161,13 +162,24 @@ public:
     WindowsPowerSuspendNotifier(const WindowsPowerSuspendNotifier&) = delete;
     WindowsPowerSuspendNotifier& operator=(const WindowsPowerSuspendNotifier&) = delete;
 
+    [[nodiscard]] bool isModernStandbyRegistered() const noexcept {
+#if JUCE_WINDOWS
+        return mSuspendResumeRegHandle != nullptr;
+#else
+        return false;
+#endif
+    }
+
+#if JUCE_WINDOWS
+    [[nodiscard]] HWND getNativeWindowHandle() const noexcept { return mHwnd; }
+#endif
+
 private:
-    Callback mOnSuspend;
-    Callback mOnResume;
+    SuspendCallback mOnSuspend;
+    ResumeCallback mOnResume;
 
 #if JUCE_WINDOWS
     HWND mHwnd { nullptr };
-    HMODULE mPowrProfLib { nullptr };
     PVOID mSuspendResumeRegHandle { nullptr };
     ATOM mWindowClassAtom { 0 };
 
@@ -188,7 +200,7 @@ private:
             }
             if (wParam == PBT_APMRESUMEAUTOMATIC || wParam == PBT_APMRESUMESUSPEND) {
                 if (self->mOnResume) {
-                    self->mOnResume();
+                    self->mOnResume(wParam == PBT_APMRESUMESUSPEND);
                 }
                 return TRUE;
             }
@@ -225,28 +237,32 @@ private:
             return;
         }
 
-        // Also register for Windows 8/10/11 S0 Modern Standby suspend/resume notifications
-        mPowrProfLib = ::LoadLibraryW(L"powrprof.dll");
-        if (mPowrProfLib != nullptr) {
-            using PowerRegFn = DWORD(WINAPI*)(ULONG, HANDLE, PVOID*);
-            const auto rawReg = reinterpret_cast<void*>(::GetProcAddress(mPowrProfLib, "PowerRegisterSuspendResumeNotification"));
+        // Register mHwnd for Windows 8/10/11 S0 Modern Standby (Low Power Idle) suspend/resume
+        // WM_POWERBROADCAST delivery via user32!RegisterSuspendResumeNotification.
+        HMODULE user32 = ::GetModuleHandleW(L"user32.dll");
+        if (user32 != nullptr) {
+            using RegSuspendResumeFn = PVOID(WINAPI*)(HANDLE, DWORD);
+            const auto rawReg = reinterpret_cast<void*>(::GetProcAddress(user32, "RegisterSuspendResumeNotification"));
             if (rawReg != nullptr) {
-                PowerRegFn regFn = nullptr;
+                RegSuspendResumeFn regFn = nullptr;
                 std::memcpy(&regFn, &rawReg, sizeof(regFn));
-                constexpr ULONG kDeviceNotifyWindowHandle = 0; // DEVICE_NOTIFY_WINDOW_HANDLE
-                (void)regFn(kDeviceNotifyWindowHandle, mHwnd, &mSuspendResumeRegHandle);
+                constexpr DWORD kDeviceNotifyWindowHandle = 0; // DEVICE_NOTIFY_WINDOW_HANDLE
+                mSuspendResumeRegHandle = regFn(mHwnd, kDeviceNotifyWindowHandle);
             }
         }
     }
 
     void destroyHiddenPowerWindow() noexcept {
-        if (mSuspendResumeRegHandle != nullptr && mPowrProfLib != nullptr) {
-            using PowerUnregFn = DWORD(WINAPI*)(PVOID);
-            const auto rawUnreg = reinterpret_cast<void*>(::GetProcAddress(mPowrProfLib, "PowerUnregisterSuspendResumeNotification"));
-            if (rawUnreg != nullptr) {
-                PowerUnregFn unregFn = nullptr;
-                std::memcpy(&unregFn, &rawUnreg, sizeof(unregFn));
-                (void)unregFn(mSuspendResumeRegHandle);
+        if (mSuspendResumeRegHandle != nullptr) {
+            HMODULE user32 = ::GetModuleHandleW(L"user32.dll");
+            if (user32 != nullptr) {
+                using UnregSuspendResumeFn = BOOL(WINAPI*)(PVOID);
+                const auto rawUnreg = reinterpret_cast<void*>(::GetProcAddress(user32, "UnregisterSuspendResumeNotification"));
+                if (rawUnreg != nullptr) {
+                    UnregSuspendResumeFn unregFn = nullptr;
+                    std::memcpy(&unregFn, &rawUnreg, sizeof(unregFn));
+                    (void)unregFn(mSuspendResumeRegHandle);
+                }
             }
             mSuspendResumeRegHandle = nullptr;
         }
@@ -260,11 +276,6 @@ private:
         if (mWindowClassAtom != 0) {
             ::UnregisterClassW(reinterpret_cast<LPCWSTR>(static_cast<uintptr_t>(mWindowClassAtom)), ::GetModuleHandleW(nullptr));
             mWindowClassAtom = 0;
-        }
-
-        if (mPowrProfLib != nullptr) {
-            ::FreeLibrary(mPowrProfLib);
-            mPowrProfLib = nullptr;
         }
     }
 #endif
@@ -699,9 +710,11 @@ public:
                                         std::unique_ptr<juce::AudioIODevice> outputDeviceIn,
                                         std::unique_ptr<juce::AudioIODevice> inputDeviceIn,
                                         const juce::String& outputDeviceNameIn,
-                                        const juce::String& inputDeviceNameIn)
+                                        const juce::String& inputDeviceNameIn,
+                                        juce::AudioIODeviceType* sharedCaptureFallbackTypeIn = nullptr)
         : juce::AudioIODevice(deviceName, typeName),
-          mInputParentType(inputParentTypeIn),
+          mInputParentType(&inputParentTypeIn),
+          mSharedCaptureFallbackType(sharedCaptureFallbackTypeIn),
           mOutputDev(std::move(outputDeviceIn)),
           mInputDev(std::move(inputDeviceIn)),
           mOutputDeviceName(outputDeviceNameIn),
@@ -861,6 +874,7 @@ public:
         mLastError.clear();
         mStreamFaulted.store(false, std::memory_order_relaxed);
         mInputStreamFaulted.store(false, std::memory_order_relaxed);
+        mControlledSubdeviceStart.store(false, std::memory_order_relaxed);
         mRateWindowFrames = 0;
         mRateWindowBlocks = 0;
         mRateWindowStartTick = 0;
@@ -877,9 +891,9 @@ public:
         // If a prior failed hot-recovery left mInputDev null while mInputDeviceName is configured, recreate it
         {
             const juce::ScopedLock sl(mDeviceSwapLock);
-            if (mInputDev == nullptr && mInputDeviceName.isNotEmpty() && !inputChannels.isZero()) {
-                mInputParentType.scanForDevices();
-                mInputDev.reset(mInputParentType.createDevice({}, mInputDeviceName));
+            if (mInputDev == nullptr && mInputDeviceName.isNotEmpty() && !inputChannels.isZero() && mInputParentType != nullptr) {
+                mInputParentType->scanForDevices();
+                mInputDev.reset(mInputParentType->createDevice({}, mInputDeviceName));
             }
         }
 
@@ -898,9 +912,11 @@ public:
             }
             mCurrentSampleRate = mOutputDev->getCurrentSampleRate();
             mCurrentBufferSize = mOutputDev->getCurrentBufferSizeSamples();
+            mNumActiveOutputs = mOutputDev->getActiveOutputChannels().countNumberOfSetBits();
         } else {
             mCurrentSampleRate = sampleRate > 0.0 ? sampleRate : 48000.0;
             mCurrentBufferSize = bufferSizeSamples > 0 ? bufferSizeSamples : getDefaultBufferSize();
+            mNumActiveOutputs = 0;
         }
 
         double actualInputRate = mCurrentSampleRate;
@@ -914,6 +930,27 @@ public:
                 // for input-only mode, preserve the exact requested bufferSizeSamples!
                 if (wantOutput) {
                     inErr = openInputEndpointWithFallbacks(*mInputDev, inputChannels, mCurrentSampleRate, bufferSizeSamples, true);
+                    // If Exclusive Mode capture failed (e.g. VB-Cable is open in Shared Mode by Chrome/Discord/OS mixer),
+                    // fall back seamlessly to WASAPI Shared capture bridged into Exclusive output via ElasticDriftRingBuffer!
+                    if (inErr.isNotEmpty()
+                        && mSharedCaptureFallbackType != nullptr
+                        && mInputParentType != mSharedCaptureFallbackType) {
+                        mInputDev->close();
+                        mSharedCaptureFallbackType->scanForDevices();
+                        std::unique_ptr<juce::AudioIODevice> sharedIn(
+                            mSharedCaptureFallbackType->createDevice({}, mInputDeviceName));
+                        if (sharedIn != nullptr) {
+                            const juce::String sharedErr = openInputEndpointWithFallbacks(
+                                *sharedIn, inputChannels, mCurrentSampleRate, bufferSizeSamples, true);
+                            if (sharedErr.isEmpty()) {
+                                mInputDev = std::move(sharedIn);
+                                mInputParentType = mSharedCaptureFallbackType;
+                                inErr.clear();
+                            } else {
+                                sharedIn->close();
+                            }
+                        }
+                    }
                 } else {
                     inErr = mInputDev->open(inputChannels, {}, mCurrentSampleRate, bufferSizeSamples);
                 }
@@ -1025,6 +1062,7 @@ public:
         }
 
         // Start capture BEFORE render so the elastic ring buffer begins filling immediately.
+        mControlledSubdeviceStart.store(true, std::memory_order_release);
         if (mInputOpened && mOutputOpened) {
             {
                 const juce::ScopedLock sl(mDeviceSwapLock);
@@ -1041,6 +1079,7 @@ public:
                 mInputDev->start(&mInputCallback);
             }
         }
+        mControlledSubdeviceStart.store(false, std::memory_order_release);
     }
 
     void stop() override {
@@ -1212,17 +1251,42 @@ public:
             oldIn.reset();
         }
 
-        mInputParentType.scanForDevices();
-        std::unique_ptr<juce::AudioIODevice> newIn(mInputParentType.createDevice({}, mInputDeviceName));
-        if (newIn == nullptr) {
+        if (mInputParentType == nullptr) {
             scheduleInputHotRetryBackoff(nowMs);
             return false;
         }
 
-        const juce::String err = openInputEndpointWithFallbacks(
-            *newIn, mRequestedInputChannels, mCurrentSampleRate, mRequestedBufferSize, true);
-        if (err.isNotEmpty()) {
-            newIn->close();
+        mInputParentType->scanForDevices();
+        std::unique_ptr<juce::AudioIODevice> newIn(mInputParentType->createDevice({}, mInputDeviceName));
+        juce::String err;
+        if (newIn != nullptr) {
+            err = openInputEndpointWithFallbacks(
+                *newIn, mRequestedInputChannels, mCurrentSampleRate, mRequestedBufferSize, true);
+            if (err.isNotEmpty()) {
+                newIn->close();
+                newIn.reset();
+            }
+        }
+
+        if (newIn == nullptr
+            && mSharedCaptureFallbackType != nullptr
+            && mInputParentType != mSharedCaptureFallbackType) {
+            mSharedCaptureFallbackType->scanForDevices();
+            std::unique_ptr<juce::AudioIODevice> sharedIn(
+                mSharedCaptureFallbackType->createDevice({}, mInputDeviceName));
+            if (sharedIn != nullptr) {
+                err = openInputEndpointWithFallbacks(
+                    *sharedIn, mRequestedInputChannels, mCurrentSampleRate, mRequestedBufferSize, true);
+                if (err.isEmpty()) {
+                    newIn = std::move(sharedIn);
+                    mInputParentType = mSharedCaptureFallbackType;
+                } else {
+                    sharedIn->close();
+                }
+            }
+        }
+
+        if (newIn == nullptr) {
             scheduleInputHotRetryBackoff(nowMs);
             return false;
         }
@@ -1248,7 +1312,9 @@ public:
         {
             const juce::ScopedLock sl(mDeviceSwapLock);
             mInputDev = std::move(newIn);
+            mControlledSubdeviceStart.store(true, std::memory_order_release);
             mInputDev->start(&mInputCallback);
+            mControlledSubdeviceStart.store(false, std::memory_order_release);
         }
         mInputHotRecoveries.fetch_add(1, std::memory_order_relaxed);
         return true;
@@ -1265,6 +1331,38 @@ private:
         mNextInputHotRetryMs = nowMs + (1000.0 * static_cast<double>(1 << shift));
     }
 
+    // Detects spontaneous inner JUCE WASAPIAudioIODevice::handleAsyncUpdate() format/rate/channel restarts
+    // (triggered by IAudioSessionEvents::OnSessionDisconnected(DisconnectReasonFormatChanged)) so we
+    // escalate cleanly to a full duplex reopen that re-prepares ElasticDriftRingBuffer & AudioProcessorPlayer!
+    void handleSubdeviceAboutToStart(juce::AudioIODevice* dev, bool isInput) noexcept {
+        if (dev == nullptr
+            || mControlledSubdeviceStart.load(std::memory_order_acquire)
+            || !mIsOpen
+            || !mIsPlaying.load(std::memory_order_acquire)) {
+            return;
+        }
+
+        if (isInput) {
+            const double newRate = dev->getCurrentSampleRate();
+            const int newChans = dev->getActiveInputChannels().countNumberOfSetBits();
+            const int newBuf = dev->getCurrentBufferSizeSamples();
+            if (std::abs(newRate - mActualInputSampleRate) > 0.5
+                || newChans != mNumActiveInputs
+                || (!mOutputOpened && newBuf != mCurrentBufferSize)) {
+                mStreamFaulted.store(true, std::memory_order_release);
+            }
+        } else {
+            const double newRate = dev->getCurrentSampleRate();
+            const int newChans = dev->getActiveOutputChannels().countNumberOfSetBits();
+            const int newBuf = dev->getCurrentBufferSizeSamples();
+            if (std::abs(newRate - mCurrentSampleRate) > 0.5
+                || newChans != mNumActiveOutputs
+                || newBuf != mCurrentBufferSize) {
+                mStreamFaulted.store(true, std::memory_order_release);
+            }
+        }
+    }
+
     struct InputPumpCallback final : public juce::AudioIODeviceCallback {
         explicit InputPumpCallback(DuplexDriftCompensatedAudioIODevice& o) noexcept : owner(o) {}
 
@@ -1277,7 +1375,9 @@ private:
             owner.handleInputCallback(inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples, context);
         }
 
-        void audioDeviceAboutToStart(juce::AudioIODevice*) override {}
+        void audioDeviceAboutToStart(juce::AudioIODevice* dev) override {
+            owner.handleSubdeviceAboutToStart(dev, true);
+        }
         void audioDeviceStopped() override {}
 
         DuplexDriftCompensatedAudioIODevice& owner;
@@ -1295,7 +1395,9 @@ private:
             owner.handleOutputCallback(inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples, context);
         }
 
-        void audioDeviceAboutToStart(juce::AudioIODevice*) override {}
+        void audioDeviceAboutToStart(juce::AudioIODevice* dev) override {
+            owner.handleSubdeviceAboutToStart(dev, false);
+        }
         void audioDeviceStopped() override {}
 
         DuplexDriftCompensatedAudioIODevice& owner;
@@ -1354,7 +1456,14 @@ private:
             return;
         }
 
-        // Input-only configuration: forward directly to user callback
+        // Input-only configuration: guard channel count before forwarding to CallbackMaxSizeEnforcer / user callback
+        if (mNumActiveInputs > 0 && numInputChannels != mNumActiveInputs) {
+            mStreamFaulted.store(true, std::memory_order_release);
+            clearOutputChannels(outputChannelData, numOutputChannels, numSamples);
+            juce::Thread::sleep(2);
+            return;
+        }
+
         const juce::ScopedTryLock sl(mCallbackLock);
         if (sl.isLocked() && mIsPlaying.load(std::memory_order_acquire) && mUserCallback != nullptr) {
             mUserCallback->audioDeviceIOCallbackWithContext(inputChannelData,
@@ -1377,6 +1486,14 @@ private:
         // real-time wall-clock duration (> 4x faster than the speed of time!). Works identically whether
         // processBlock takes 1 us (Standby passthrough) or 1500 us (full 192 kHz 7.1.4 reverb).
         if (mStreamFaulted.load(std::memory_order_relaxed)) {
+            clearOutputChannels(outputChannelData, numOutputChannels, numSamples);
+            juce::Thread::sleep(2);
+            return;
+        }
+
+        // Protect JUCE StandalonePluginHolder::CallbackMaxSizeEnforcer against spontaneous output channel-count changes
+        if (mNumActiveOutputs > 0 && numOutputChannels != mNumActiveOutputs) {
+            mStreamFaulted.store(true, std::memory_order_release);
             clearOutputChannels(outputChannelData, numOutputChannels, numSamples);
             juce::Thread::sleep(2);
             return;
@@ -1443,7 +1560,8 @@ private:
         }
     }
 
-    juce::AudioIODeviceType& mInputParentType;
+    juce::AudioIODeviceType* mInputParentType { nullptr };
+    juce::AudioIODeviceType* mSharedCaptureFallbackType { nullptr };
     mutable juce::CriticalSection mDeviceSwapLock;
     std::unique_ptr<juce::AudioIODevice> mOutputDev;
     std::unique_ptr<juce::AudioIODevice> mInputDev;
@@ -1468,10 +1586,12 @@ private:
     double mActualInputSampleRate { 48000.0 };
     int mCurrentBufferSize { 512 };
     int mNumActiveInputs { 0 };
+    int mNumActiveOutputs { 0 };
     bool mInputOpened { false };
     bool mOutputOpened { false };
     bool mIsOpen { false };
     std::atomic<bool> mIsPlaying { false };
+    std::atomic<bool> mControlledSubdeviceStart { false };
     juce::String mLastError;
 
     // Stream health & storm detection
@@ -1493,16 +1613,27 @@ private:
 class DriftCompensatedAudioIODeviceType final : public juce::AudioIODeviceType,
                                                 private juce::AudioIODeviceType::Listener {
 public:
-    explicit DriftCompensatedAudioIODeviceType(std::unique_ptr<juce::AudioIODeviceType> innerType)
+    explicit DriftCompensatedAudioIODeviceType(std::unique_ptr<juce::AudioIODeviceType> innerType,
+                                               std::unique_ptr<juce::AudioIODeviceType> customSharedCaptureHelper = nullptr,
+                                               bool preferSharedCapturePrimary = false)
         : juce::AudioIODeviceType(innerType->getTypeName()),
-          mInner(std::move(innerType)) {
+          mInner(std::move(innerType)),
+          mSharedCaptureHelper(std::move(customSharedCaptureHelper)),
+          mPreferSharedCapturePrimary(preferSharedCapturePrimary) {
         mInner->addListener(this);
 #if JUCE_WINDOWS
-        // For Low Latency Mode, pair IAudioClient3 low-latency render with WASAPI Shared capture
-        // so capture supports AUTOCONVERTPCM cross-rate operation and oversized self-draining
-        // reservoir chunks (immune to IAudioClient3 input-only queue ratcheting).
-        if (getTypeName() == "Windows Audio (Low Latency Mode)") {
-            mSharedCaptureHelper.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(juce::WASAPIDeviceMode::shared));
+        if (mSharedCaptureHelper == nullptr) {
+            // For Low Latency Mode, pair IAudioClient3 low-latency render with WASAPI Shared capture
+            // as primary so capture supports AUTOCONVERTPCM cross-rate operation and oversized self-draining
+            // reservoir chunks. For Exclusive Mode, keep Exclusive capture primary when available, but retain
+            // WASAPI Shared capture as an automatic fallback when VB-Cable is held in Shared Mode by other apps!
+            if (getTypeName() == "Windows Audio (Low Latency Mode)") {
+                mSharedCaptureHelper.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(juce::WASAPIDeviceMode::shared));
+                mPreferSharedCapturePrimary = true;
+            } else if (getTypeName() == "Windows Audio (Exclusive Mode)") {
+                mSharedCaptureHelper.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(juce::WASAPIDeviceMode::shared));
+                mPreferSharedCapturePrimary = false;
+            }
         }
 #endif
     }
@@ -1555,6 +1686,7 @@ public:
         std::unique_ptr<juce::AudioIODevice> outDev;
         std::unique_ptr<juce::AudioIODevice> inDev;
         juce::AudioIODeviceType* inputCreatorType = mInner.get();
+        juce::AudioIODeviceType* sharedFallbackType = nullptr;
 
         if (outputDeviceName.isNotEmpty()) {
             outDev.reset(mInner->createDevice(outputDeviceName, {}));
@@ -1564,7 +1696,7 @@ public:
         }
 
         if (inputDeviceName.isNotEmpty()) {
-            if (outputDeviceName.isNotEmpty() && mSharedCaptureHelper != nullptr) {
+            if (outputDeviceName.isNotEmpty() && mSharedCaptureHelper != nullptr && mPreferSharedCapturePrimary) {
                 mSharedCaptureHelper->scanForDevices();
                 inDev.reset(mSharedCaptureHelper->createDevice({}, inputDeviceName));
                 if (inDev != nullptr) {
@@ -1574,6 +1706,17 @@ public:
             if (inDev == nullptr) {
                 inDev.reset(mInner->createDevice({}, inputDeviceName));
                 inputCreatorType = mInner.get();
+                if (outputDeviceName.isNotEmpty() && mSharedCaptureHelper != nullptr && !mPreferSharedCapturePrimary) {
+                    sharedFallbackType = mSharedCaptureHelper.get();
+                }
+            }
+            if (inDev == nullptr && outputDeviceName.isNotEmpty() && mSharedCaptureHelper != nullptr) {
+                mSharedCaptureHelper->scanForDevices();
+                inDev.reset(mSharedCaptureHelper->createDevice({}, inputDeviceName));
+                if (inDev != nullptr) {
+                    inputCreatorType = mSharedCaptureHelper.get();
+                    sharedFallbackType = nullptr;
+                }
             }
             if (inDev == nullptr) {
                 return nullptr;
@@ -1591,7 +1734,8 @@ public:
                                                        std::move(outDev),
                                                        std::move(inDev),
                                                        outputDeviceName,
-                                                       inputDeviceName);
+                                                       inputDeviceName,
+                                                       sharedFallbackType);
     }
 
     void setPreDeviceListChangeCallback(std::function<void(DriftCompensatedAudioIODeviceType&)> cb) {
@@ -1611,6 +1755,7 @@ private:
 
     std::unique_ptr<juce::AudioIODeviceType> mInner;
     std::unique_ptr<juce::AudioIODeviceType> mSharedCaptureHelper;
+    bool mPreferSharedCapturePrimary { false };
     std::function<void(DriftCompensatedAudioIODeviceType&)> mPreDeviceListChange;
 };
 
@@ -1671,7 +1816,9 @@ public:
           mOnStreamRecovered(std::move(onStreamRecovered)),
           mLastWallClockMs(currentWallClockMs()),
           mPowerNotifier([this] { handleSystemSuspend(); },
-                         [this] { handleSystemResume(); }) {
+                         [this](bool isUserActivity) {
+                             handleSystemResume(650.0, juce::Time::getMillisecondCounterHiRes(), isUserActivity);
+                         }) {
         captureCurrentSetupIfActive();
         installPreDeviceListChangeHooks();
         mDeviceManager.addChangeListener(this);
@@ -1705,12 +1852,32 @@ public:
     }
 
     void handleSystemResume(double initialSettleDelayMs = 650.0,
-                            double nowHiResMs = juce::Time::getMillisecondCounterHiRes()) {
+                            double nowHiResMs = juce::Time::getMillisecondCounterHiRes(),
+                            bool isUserActivityResume = false,
+                            int64_t nowWallMs = currentWallClockMs()) {
+        const bool wasSuspended = mIsSuspended;
         mIsSuspended = false;
-        mLastWallClockMs = currentWallClockMs();
+        mLastWallClockMs = nowWallMs;
         if (!mHasSavedSetup) {
             return;
         }
+
+        // Coalesce secondary resume notifications (e.g. PBT_APMRESUMESUSPEND arriving while
+        // PBT_APMRESUMEAUTOMATIC is already settling or stepping through D3->D0 backoff retries)
+        // without resetting mRetryIndex or delaying mNextRecoveryTimeMs!
+        if (!wasSuspended && mPendingRecovery) {
+            if (!isUserActivityResume) {
+                mNextRecoveryTimeMs = std::min(mNextRecoveryTimeMs, nowHiResMs + std::max(0.0, initialSettleDelayMs));
+            }
+            return;
+        }
+
+        // Secondary PBT_APMRESUMESUSPEND (user mouse/keyboard presence after an unattended
+        // PBT_APMRESUMEAUTOMATIC wake already recovered the stream) must not tear down healthy audio.
+        if (!wasSuspended && isUserActivityResume && isCurrentDeviceHealthyAndMatchingSaved()) {
+            return;
+        }
+
         mPendingRecovery = true;
         mRetryIndex = 0;
         mNextRecoveryTimeMs = nowHiResMs + std::max(0.0, initialSettleDelayMs);
@@ -1727,7 +1894,7 @@ public:
             const auto* duplex = dynamic_cast<const DuplexDriftCompensatedAudioIODevice*>(curDev);
             if (curDev == nullptr || !curDev->isOpen() || !curDev->isPlaying()
                 || (duplex != nullptr && duplex->hasFatalStreamFault())) {
-                handleSystemResume(500.0, nowHiResMs);
+                handleSystemResume(500.0, nowHiResMs, false, nowWallMs);
             }
         }
 
@@ -1772,6 +1939,10 @@ public:
 
     [[nodiscard]] bool isSuspended() const noexcept { return mIsSuspended; }
     [[nodiscard]] bool isRecoveryPending() const noexcept { return mPendingRecovery; }
+    [[nodiscard]] bool isModernStandbyRegistered() const noexcept { return mPowerNotifier.isModernStandbyRegistered(); }
+#if JUCE_WINDOWS
+    [[nodiscard]] HWND getPowerNotifyWindowHandle() const noexcept { return mPowerNotifier.getNativeWindowHandle(); }
+#endif
     [[nodiscard]] uint64_t getFullRecoveryCount() const noexcept { return mFullRecoveryCount; }
     [[nodiscard]] const juce::AudioDeviceManager::AudioDeviceSetup& getSavedSetup() const noexcept { return mSavedSetup; }
 
@@ -1781,6 +1952,33 @@ public:
     }
 
 private:
+    [[nodiscard]] bool isCurrentDeviceHealthyAndMatchingSaved() const {
+        if (!mHasSavedSetup) {
+            return false;
+        }
+        auto* curDev = mDeviceManager.getCurrentAudioDevice();
+        if (curDev == nullptr || !curDev->isOpen() || !curDev->isPlaying()) {
+            return false;
+        }
+        const auto curSetup = mDeviceManager.getAudioDeviceSetup();
+        if (!curSetup.inputDeviceName.trim().equalsIgnoreCase(mSavedSetup.inputDeviceName.trim())
+            || !curSetup.outputDeviceName.trim().equalsIgnoreCase(mSavedSetup.outputDeviceName.trim())) {
+            return false;
+        }
+        if (const auto* duplex = dynamic_cast<const DuplexDriftCompensatedAudioIODevice*>(curDev)) {
+            if (duplex->hasFatalStreamFault()) {
+                return false;
+            }
+            if (!duplex->getActiveInputChannels().isZero()) {
+                auto* innerIn = duplex->getInnerInputDevice();
+                if (innerIn == nullptr || !innerIn->isOpen() || !innerIn->isPlaying()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     static bool containsDeviceIgnoreCase(const juce::StringArray& names, const juce::String& target) {
         for (const auto& n : names) {
             if (n.trim().equalsIgnoreCase(target.trim())) {
