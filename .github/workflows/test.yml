@@ -11,7 +11,7 @@ on:
 jobs:
   test:
     name: Run Unit & DSP Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -26,8 +26,13 @@ jobs:
 
       - name: Install Linux Build Dependencies
         run: |
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=15 update
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=15 install -y \
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf 'https://ubuntu.osuosl.org/ubuntu/\tpriority:1\nhttps://mirrors.mit.edu/ubuntu/\tpriority:2\nhttp://azure.archive.ubuntu.com/ubuntu/\tpriority:3\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          sudo sed -i -E 's|https?://(azure\.archive|archive|security)\.ubuntu\.com/ubuntu|https://ubuntu.osuosl.org/ubuntu|g' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 install -y --no-install-recommends \
             ninja-build libasound2-dev libfreetype-dev libfontconfig1-dev libgl-dev \
             libcurl4-openssl-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxinerama-dev
 

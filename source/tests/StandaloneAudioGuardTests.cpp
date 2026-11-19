@@ -604,6 +604,7 @@ void runDuplexLifecycleSleepAndStormTests() {
 // ============================================================================
 // Test 6: Live Windows OS Power-Throttling API & Real WASAPI + VB-Cable Probe
 // ============================================================================
+#if JUCE_WINDOWS
 struct SilentMonitorCallback final : public juce::AudioIODeviceCallback {
     std::atomic<uint64_t> callbacks { 0 };
     std::atomic<bool> sawFiniteInput { true };
@@ -639,6 +640,7 @@ struct SilentMonitorCallback final : public juce::AudioIODeviceCallback {
     void audioDeviceAboutToStart(juce::AudioIODevice*) override {}
     void audioDeviceStopped() override {}
 };
+#endif
 
 void runLiveWindowsWasapiVbCableIntegrationTest() {
 #if JUCE_WINDOWS

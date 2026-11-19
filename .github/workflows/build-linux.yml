@@ -24,8 +24,13 @@ jobs:
 
       - name: Install Linux Build Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf 'https://ubuntu.osuosl.org/ubuntu/\tpriority:1\nhttps://mirrors.mit.edu/ubuntu/\tpriority:2\nhttp://azure.archive.ubuntu.com/ubuntu/\tpriority:3\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          sudo sed -i -E 's|https?://(azure\.archive|archive|security)\.ubuntu\.com/ubuntu|https://ubuntu.osuosl.org/ubuntu|g' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10 install -y \
             build-essential \
             cmake \
             ninja-build \
