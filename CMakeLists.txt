@@ -12,7 +12,7 @@ if(APPLE)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 endif()
 
-project(BRAUN_RB26_PROJECT VERSION 1.5.0 LANGUAGES C CXX)
+project(BRAUN_RB26_PROJECT VERSION 1.5.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -250,7 +250,7 @@ juce_add_plugin(BRAUN_RB26
     PLUGIN_CODE Rb26
     FORMATS ${RB26_FORMATS}
     PRODUCT_NAME "BRAUN_RB26"
-    VERSION "1.5.0"
+    VERSION "1.5.1"
     ${RB26_EXTRA_PLUGIN_ARGS}
 )
 
@@ -344,6 +344,35 @@ if(UNIX AND NOT APPLE)
     if(_sub_target)
         target_link_libraries(BRAUN_RB26 PUBLIC ${_sub_target})
     endif()
+endif()
+
+# Custom Standalone application wrapper: drift-compensated dual-endpoint WASAPI/DirectSound
+# bridge (VB-Cable + hardware clock domains), S3/S0 Modern Standby sleep/wake recovery,
+# and Windows EcoQoS / timer-coalescing anti-throttling guard.
+if(TARGET BRAUN_RB26_Standalone)
+    target_compile_definitions(BRAUN_RB26_Standalone PRIVATE
+        JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1
+    )
+    target_sources(BRAUN_RB26_Standalone PRIVATE
+        source/standalone/Rb26StandaloneApp.cpp
+        source/standalone/StandaloneAudioGuard.h
+    )
+    target_include_directories(BRAUN_RB26_Standalone PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/source
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/standalone
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/plugin
+        ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp
+    )
+    target_link_libraries(BRAUN_RB26_Standalone PRIVATE
+        juce::juce_audio_basics
+        juce::juce_audio_devices
+        juce::juce_audio_processors
+        juce::juce_audio_utils
+        juce::juce_gui_basics
+        juce::juce_gui_extra
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
+    )
 endif()
 
 # Attach CLAP format target via clap-juce-extensions

@@ -7,9 +7,9 @@
 [![C++20 & Web Audio](https://img.shields.io/badge/DSP%20Parity-Verified-EE592B?style=for-the-badge)](VERIFICATION_CHECKLIST.md)
 
 **Document ID**: `RB26-VERIFY-CHECKLIST-001`  
-**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.5.0)  
+**Product**: BRAUN RB-26 Master Studio Reverberator & Space Synthesizer (v1.5.1)  
 **Targets**: C++20 VST3 / CLAP / AU / Standalone Core & Zero-Install Web Audio Showcase (`web/`)  
-**Status**: **100% PASS (10/10 CTest C++ Suites, 26/26 Checklist Tests, 39/39 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
+**Status**: **100% PASS (11/11 CTest C++ Suites, 26/26 Checklist Tests, 39/39 Web Unit Tests, 0 Leaks, 0 Denormals, 0 NaNs)**  
 **Verification Engineer**: RB-26 Lead Verification Specialist  
 
 ---
@@ -257,9 +257,9 @@ S(t) + (1 - S(t)) \equiv 1.00000
 ================================================================================
   Verification Status           : 100% UNANIMOUS PASS
   Acoustic Decay Audit Suites   : 8 / 8 (Suites A-H, 100%)
-  CTest C++ Verification Suites : 10 / 10 (100%)
+  CTest C++ Verification Suites : 11 / 11 (100%)
   Web Unit Tests                : 39 / 39 (100%)
-  Checklist Automated Tests     : 25 / 25 (100%)
+  Checklist Automated Tests     : 26 / 26 (100%)
   Total Assertions Evaluated    : > 1,180,000
   Memory Leaks                  : 0
   Denormal Stalls               : 0
@@ -267,5 +267,5 @@ S(t) + (1 - S(t)) \equiv 1.00000
   Algorithmic Through-Latency   : 0 samples
   Multi-Rate Support            : 44.1k, 48k, 88.2k, 96k, 176.4k, 192k (Verified)
 ================================================================================
-VERDICT: CERTIFIED PRODUCTION READY (v1.5.0)
+VERDICT: CERTIFIED PRODUCTION READY (v1.5.1)
 ```

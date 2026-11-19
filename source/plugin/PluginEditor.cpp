@@ -518,13 +518,22 @@ juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOpti
     // Configure WebView2 arguments for low latency, no audio contention, and host DAW stability.
     // Background throttling and occlusion backgrounding are allowed to function naturally so
     // Chromium can idle, trigger V8 garbage collection sweeps, and trim working set memory.
-    _wputenv_s(
-        L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+    const wchar_t* const kBrowserArgs =
         L"--mute-audio "
         L"--disable-audio-output "
         L"--disable-web-midi "
-        L"--disable-features=Translate,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,CalculateNativeWinOcclusion"
-    );
+        L"--disable-http-cache "
+        L"--disable-features=Translate,OptimizationHints,MediaRouter,InterestFeedContentSuggestions,CalculateNativeWinOcclusion";
+    _wputenv_s(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", kBrowserArgs);
+
+    // Scope UserDataFolder per host executable + browser-flag signature so BRAUN_RB26.exe Standalone
+    // running alongside a DAW hosting BRAUN_RB26.vst3 never collides on EBWebView profile locks.
+    const auto exeFile = juce::File::getSpecialLocation(juce::File::SpecialLocationType::currentExecutableFile);
+    const juce::String scopeSeed = exeFile.getFullPathName().toLowerCase() + "|" + juce::String(kBrowserArgs);
+    const juce::String hostFolderName = "host_" + juce::String::toHexString(scopeSeed.hashCode64());
+    const auto webViewDataDir = juce::File::getSpecialLocation(juce::File::SpecialLocationType::tempDirectory)
+        .getChildFile("BraunRB26_WebView2")
+        .getChildFile(hostFolderName);
 #endif
 
     auto options = juce::WebBrowserComponent::Options{}
@@ -532,7 +541,7 @@ juce::WebBrowserComponent::Options BRAUN_RB26AudioProcessorEditor::createWebOpti
         .withBackend(juce::WebBrowserComponent::Options::Backend::webview2)
         .withWinWebView2Options(
             juce::WebBrowserComponent::Options::WinWebView2{}
-                .withUserDataFolder(juce::File::getSpecialLocation(juce::File::SpecialLocationType::tempDirectory).getChildFile("BraunRB26_WebView2"))
+                .withUserDataFolder(webViewDataDir)
                 .withBackgroundColour(juce::Colour(0xff141517)))
 #endif
         .withUserScript("window.__IS_JUCE__ = true; window.addEventListener('contextmenu', function(e) { if (!e.defaultPrevented) e.preventDefault(); }, false);")
@@ -722,6 +731,34 @@ void BRAUN_RB26AudioProcessorEditor::syncAllParametersToWeb()
 }
 #endif
 
+#if JUCE_WEB_BROWSER
+bool BRAUN_RB26AudioProcessorEditor::isWebViewActuallyShowing() const noexcept
+{
+    if (useNativeUI || webComponent == nullptr || !webComponent->isVisible() || !webComponent->isShowing())
+        return false;
+
+    const auto* peer = webComponent->getPeer();
+    if (peer == nullptr || !peer->isShowing())
+        return false;
+
+#if JUCE_WINDOWS
+    const HWND hwnd = static_cast<HWND>(peer->getNativeHandle());
+    if (hwnd == nullptr || !::IsWindow(hwnd) || !::IsWindowVisible(hwnd) || ::IsIconic(hwnd))
+        return false;
+
+    // JUCE Component::isShowing() only inspects child HWND placement, which remains SW_SHOWNORMAL
+    // even when the top-level Standalone or DAW frame (GA_ROOT) is minimized (IsIconic) or hidden.
+    if (const HWND root = ::GetAncestor(hwnd, GA_ROOT))
+    {
+        if (!::IsWindowVisible(root) || ::IsIconic(root))
+            return false;
+    }
+#endif
+
+    return true;
+}
+#endif
+
 void BRAUN_RB26AudioProcessorEditor::timerCallback()
 {
     // Always drain visualizer telemetry from audio thread
@@ -736,6 +773,21 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
 #if JUCE_WEB_BROWSER
     if (!useNativeUI && webComponent != nullptr)
     {
+        if (stateSyncDirty)
+            pendingStateSyncDirty = true;
+
+        // Suspend 120 Hz JSON IPC streaming while minimized or hidden so WebView2's backgrounded
+        // renderer never accumulates unbounded IPC/V8 heap queues during multi-hour passthrough runs.
+        const bool currentlyShowing = isWebViewActuallyShowing();
+        if (!currentlyShowing)
+        {
+            wasWebShowing = false;
+            return;
+        }
+
+        const bool justRestored = !wasWebShowing;
+        wasWebShowing = true;
+
         if (processorRef.consumeRecordingSavedDirty())
         {
             auto* obj = new juce::DynamicObject();
@@ -743,21 +795,26 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
             webComponent->emitEventIfBrowserIsVisible("recordingSaved", juce::var(obj));
         }
 
-        // Initial state synchronization on webview ready or after host state/program/power recall
-        if ((!initialSyncDone || stateSyncDirty) && webComponent->isVisible())
+        // Initial state synchronization on webview ready, window restore, or host state/program/power recall
+        if (!initialSyncDone || justRestored || pendingStateSyncDirty)
         {
             syncAllParametersToWeb();
             initialSyncDone = true;
+            pendingStateSyncDirty = false;
+            for (size_t i = 0; i < kNumParams; ++i)
+                paramDirty[i].store(false, std::memory_order_relaxed);
         }
-
-        // Coalesced dirty parameter dispatch at 60 Hz
-        const auto& meta = rb26::getParameterMetadataTable();
-        for (size_t i = 0; i < meta.size(); ++i)
+        else
         {
-            if (paramDirty[i].exchange(false, std::memory_order_relaxed))
+            // Coalesced dirty parameter dispatch at 60 Hz
+            const auto& meta = rb26::getParameterMetadataTable();
+            for (size_t i = 0; i < meta.size(); ++i)
             {
-                const float val = pendingParamValues[i].load(std::memory_order_relaxed);
-                sendParameterUpdateToWeb(meta[i].apvtsId, meta[i].webId, val);
+                if (paramDirty[i].exchange(false, std::memory_order_relaxed))
+                {
+                    const float val = pendingParamValues[i].load(std::memory_order_relaxed);
+                    sendParameterUpdateToWeb(meta[i].apvtsId, meta[i].webId, val);
+                }
             }
         }
 
@@ -766,6 +823,8 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
         sendScopeDataToWeb();
     }
     else
+#else
+    juce::ignoreUnused(stateSyncDirty);
 #endif
     {
         // Native UI: update header button states
@@ -792,7 +851,7 @@ void BRAUN_RB26AudioProcessorEditor::timerCallback()
 #if JUCE_WEB_BROWSER
 void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
 {
-    if (!processorRef.isPower() || webComponent == nullptr || !webComponent->isVisible())
+    if (!processorRef.isPower() || !isWebViewActuallyShowing())
         return;
 
     const bool isSilent = (latestTelemetryFrame.inputRmsL < 1.0e-5f &&
@@ -831,7 +890,7 @@ void BRAUN_RB26AudioProcessorEditor::sendTelemetryToWeb()
 
 void BRAUN_RB26AudioProcessorEditor::sendScopeDataToWeb()
 {
-    if (!processorRef.isPower() || webComponent == nullptr || !webComponent->isVisible())
+    if (!processorRef.isPower() || !isWebViewActuallyShowing())
         return;
 
     constexpr int kSamples = 512;
@@ -892,6 +951,9 @@ void BRAUN_RB26AudioProcessorEditor::handleParamChangeFromWeb(const juce::var& d
 
     if (incomingId.equalsIgnoreCase("requestSync") || incomingId.equalsIgnoreCase("requestState"))
     {
+        initialSyncDone = true;
+        pendingStateSyncDirty = false;
+        wasWebShowing = isWebViewActuallyShowing();
         syncAllParametersToWeb();
         return;
     }
@@ -1612,6 +1674,7 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
     {
         if (useNativeUI)
         {
+            wasWebShowing = false;
             webComponent->setVisible(false);
             webComponent->setBounds(0, 0, 0, 0);
             webComponent->toBack();
@@ -1621,7 +1684,16 @@ void BRAUN_RB26AudioProcessorEditor::setNativeMode(bool native)
             webComponent->setVisible(true);
             webComponent->setBounds(getLocalBounds());
             webComponent->toFront(false);
-            syncAllParametersToWeb();
+            wasWebShowing = isWebViewActuallyShowing();
+            if (wasWebShowing)
+            {
+                pendingStateSyncDirty = false;
+                syncAllParametersToWeb();
+            }
+            else
+            {
+                pendingStateSyncDirty = true;
+            }
         }
     }
     viewModeButton.setVisible(useNativeUI);

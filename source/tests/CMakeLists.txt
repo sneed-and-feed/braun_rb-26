@@ -112,10 +112,63 @@ add_executable(rb26_multichannel_tests MultiChannelSurroundTests.cpp)
 target_include_directories(rb26_multichannel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../dsp)
 target_link_libraries(rb26_multichannel_tests PRIVATE rb26_dsp_core)
 set_target_properties(rb26_multichannel_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+
+add_executable(rb26_standalone_audio_guard_tests
+    StandaloneAudioGuardTests.cpp
+)
+target_include_directories(rb26_standalone_audio_guard_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../standalone
+    ${CMAKE_CURRENT_SOURCE_DIR}/../plugin
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dsp
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(rb26_standalone_audio_guard_tests PRIVATE
+    BRAUN_RB26
+    juce::juce_audio_basics
+    juce::juce_audio_devices
+    juce::juce_audio_processors
+    juce::juce_audio_utils
+    juce::juce_gui_basics
+    juce::juce_gui_extra
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
+)
+if(WIN32 AND RB26_USE_WEBVIEW AND EXISTS "${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.1.0.2849.39/build/native/include")
+    target_include_directories(rb26_standalone_audio_guard_tests PRIVATE
+        ${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2.1.0.2849.39/build/native/include
+    )
+endif()
+if(UNIX AND NOT APPLE AND RB26_USE_WEBVIEW)
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(WEBKIT_GTK QUIET gtk+-3.0 webkit2gtk-4.0)
+        if(WEBKIT_GTK_FOUND)
+            target_include_directories(rb26_standalone_audio_guard_tests PRIVATE ${WEBKIT_GTK_INCLUDE_DIRS})
+            target_link_libraries(rb26_standalone_audio_guard_tests PRIVATE ${WEBKIT_GTK_LIBRARIES})
+        endif()
+    endif()
+endif()
+if(UNIX AND NOT APPLE)
+    get_directory_property(_sub_target DIRECTORY ${CMAKE_SOURCE_DIR} JUCE_EMBEDDED_LINUX_SUBPROCESS_TARGET)
+    if(_sub_target)
+        target_link_libraries(rb26_standalone_audio_guard_tests PRIVATE ${_sub_target})
+    endif()
+    target_include_directories(rb26_standalone_audio_guard_tests PRIVATE
+        ${CMAKE_BINARY_DIR}/juce_LinuxSubprocessHelper
+        ${CMAKE_BINARY_DIR}/juce_LinuxSubprocessHelper/$<CONFIG>
+    )
+    if(TARGET juce_linux_subprocess_helper)
+        add_dependencies(rb26_standalone_audio_guard_tests juce_linux_subprocess_helper)
+    endif()
+endif()
+set_target_properties(rb26_standalone_audio_guard_tests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+
 add_test(NAME Rb26MultiChannelTests COMMAND rb26_multichannel_tests)
 add_test(NAME Rb26Challenger1M2Tests COMMAND rb26_challenger1_m2_tests)
 add_test(NAME Rb26M3StressAudit COMMAND rb26_m3_stress_audit)
 add_test(NAME Rb26M4JuceTests COMMAND rb26_m4_tests)
 add_test(NAME Rb26HammerTransientTests COMMAND rb26_hammer_transient_tests)
+add_test(NAME Rb26StandaloneAudioGuardTests COMMAND rb26_standalone_audio_guard_tests)
 
 

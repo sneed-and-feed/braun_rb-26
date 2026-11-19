@@ -153,6 +153,7 @@ void Rb26ReverbEngine::reset() noexcept {
     mTelemetryWriteIndex.store(0, std::memory_order_relaxed);
     mTelemetryReadIndex.store(0, std::memory_order_relaxed);
     mWasFrozen = mParams.freezeHold;
+    mPitchBuffersDirty = false;
     mLastBoostDb = mPitchBoostSmoother.getCurrent();
     mLastBoostGain = (mLastBoostDb <= 1.0e-5f) ? 1.0f : dbToGain(mLastBoostDb);
 }
@@ -162,8 +163,10 @@ void Rb26ReverbEngine::setParameters(const Rb26Parameters& params) noexcept {
     mWasFrozen = params.freezeHold;
 
     if (unfreezeEdge) {
-        std::fill(mPitchDelayBufferL.begin(), mPitchDelayBufferL.end(), 0.0f);
-        std::fill(mPitchDelayBufferR.begin(), mPitchDelayBufferR.end(), 0.0f);
+        if (mPitchBuffersDirty) {
+            std::fill(mPitchDelayBufferL.begin(), mPitchDelayBufferL.end(), 0.0f);
+            std::fill(mPitchDelayBufferR.begin(), mPitchDelayBufferR.end(), 0.0f);
+        }
         mLastPitchFbL = 0.0f;
         mLastPitchFbR = 0.0f;
     }
@@ -319,7 +322,9 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
     const float fs = static_cast<float>(mSampleRate);
     const bool blockPitchActive = mPitchShifter.isActive();
 
-    if (!blockPitchActive) {
+    if (blockPitchActive) {
+        mPitchBuffersDirty = true;
+    } else {
         mPitchDelaySmoother.snapTo(mPitchDelaySmoother.getTarget());
         mPitchBlendSmoother.snapTo(mPitchBlendSmoother.getTarget());
         mPitchFeedbackSmoother.snapTo(mPitchFeedbackSmoother.getTarget());
@@ -909,16 +914,19 @@ void Rb26ReverbEngine::process(const float* const* inputChannels,
         mLowBandMatrix.reset();
         mEarlyReflections.reset();
         mFdnTank.reset();
-        mPitchShifter.reset();
         mMasterSubMono.reset();
-        mPitchFeedbackHpL.reset();
-        mPitchFeedbackHpR.reset();
-        mPitchFeedbackLpL.reset();
-        mPitchFeedbackLpR.reset();
         std::fill(mPreDelayBufferL.begin(), mPreDelayBufferL.end(), 0.0f);
         std::fill(mPreDelayBufferR.begin(), mPreDelayBufferR.end(), 0.0f);
-        std::fill(mPitchDelayBufferL.begin(), mPitchDelayBufferL.end(), 0.0f);
-        std::fill(mPitchDelayBufferR.begin(), mPitchDelayBufferR.end(), 0.0f);
+        if (mPitchBuffersDirty) {
+            mPitchShifter.reset();
+            mPitchFeedbackHpL.reset();
+            mPitchFeedbackHpR.reset();
+            mPitchFeedbackLpL.reset();
+            mPitchFeedbackLpR.reset();
+            std::fill(mPitchDelayBufferL.begin(), mPitchDelayBufferL.end(), 0.0f);
+            std::fill(mPitchDelayBufferR.begin(), mPitchDelayBufferR.end(), 0.0f);
+            mPitchBuffersDirty = false;
+        }
         mLastPitchFbL = 0.0f;
         mLastPitchFbR = 0.0f;
         mDecayPeakFollower = 0.0f;

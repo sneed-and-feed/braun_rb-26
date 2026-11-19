@@ -27,16 +27,16 @@ jobs:
       - name: Install Linux Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libfreetype-dev libfontconfig1-dev libgl-dev libcurl4-openssl-dev libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev
+          sudo apt-get install -y libasound2-dev libfreetype-dev libfontconfig1-dev libgl-dev libcurl4-openssl-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxinerama-dev
 
       - name: Configure CMake (Native Linux Headless C++ Tests)
         run: |
           cmake -B build-ci -DCMAKE_BUILD_TYPE=Release -DRB26_USE_WEBVIEW=OFF -DRB26_BUILD_TESTS=ON
 
-      - name: Build Headless C++ DSP Test Runner
+      - name: Build Headless C++ DSP & Standalone Guard Test Runners
         run: |
-          cmake --build build-ci --target rb26_headless_dsp_tests --config Release -j$(nproc)
+          cmake --build build-ci --target rb26_headless_dsp_tests rb26_standalone_audio_guard_tests --config Release -j$(nproc)
 
-      - name: Run Headless C++ DSP Verification Suite
+      - name: Run Headless C++ DSP & Standalone Guard Verification Suites
         run: |
-          ctest --test-dir build-ci --output-on-failure -R Rb26HeadlessDspTests
+          ctest --test-dir build-ci --output-on-failure -R "Rb26HeadlessDspTests|Rb26StandaloneAudioGuardTests"

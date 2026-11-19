@@ -356,4 +356,5 @@ Because $\frac{dS}{dt}\Big|_{t=0} = \frac{dS}{dt}\Big|_{t=1} = 0$, the derivativ
 | **Limiter Ceiling** | Output strictly $\le 1.000000$ | $C^1$ cubic Hermite limiter with $M = 1.00$ |
 | **Overload Headroom** | Finite bounded output under $+40\text{ dBFS}$ | Bounded saturator clamping with NaN neutralization |
 | **Sample Rate Range** | Bit-exact operation across all rates | Normalized coefficients for 44.1k, 48k, 88.2k, 96k, 176.4k, 192k |
-| **Verification Suite** | 100% test pass rate | 10 CTest C++ binaries + 64 Node tests (v1.5.0) |
+| **Standalone Duplex Sync** | Drift-free multi-clock audio I/O | Lock-free SPSC 4-point Hermite ASRC + S3/S0 sleep/wake endpoint recovery |
+| **Verification Suite** | 100% test pass rate | 11 CTest C++ binaries + 64 Node tests (v1.5.1) |

@@ -84,6 +84,9 @@ private:
     static juce::WebBrowserComponent::Options createWebOptions(BRAUN_RB26AudioProcessorEditor& editor);
     std::unique_ptr<juce::WebBrowserComponent> webComponent;
     bool initialSyncDone { false };
+    bool wasWebShowing { false };
+    bool pendingStateSyncDirty { false };
+    bool isWebViewActuallyShowing() const noexcept;
 
     // Coalescing array for all 29 APVTS parameters (prevents Win32 message loop stalls)
     static constexpr size_t kNumParams = 29;

@@ -4,6 +4,22 @@ All notable changes to the **BRAUN RB-26** Master Studio Reverberator & Space Sy
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-11-19
+
+### Fixed
+- **Windows Standalone Dual-Clock Drift Popping with VB-Cable & Virtual/Hardware Endpoint Pairs (`StandaloneAudioGuard.h`, `Rb26StandaloneApp.cpp`)**:
+  - Replaced stock JUCE single-thread full-duplex WASAPI/DirectSound coupling in `BRAUN_RB26_Standalone` (`JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1`) with `DriftCompensatedAudioIODeviceType` and `DuplexDriftCompensatedAudioIODevice`, isolating capture (e.g. `CABLE Output (VB-Audio Virtual Cable)` QPC clock) and render (hardware crystal oscillator) onto independent single-direction OS audio threads bridged by `ElasticDriftRingBuffer`.
+  - Eliminated both permanent capture-endpoint overflow packet drops (`IAudioCaptureClient::ReleaseBuffer(0)`) under positive clock drift (`f_in > f_out`) and repeated `zeromem` zero-splice clicks under negative clock drift (`f_in < f_out`) — including in Standby passthrough (`!isPoweredOn`) and 0% wet mix — via a pre-primed 64-bit lock-free SPSC circular buffer, 4-point 3rd-order Hermite fractional interpolation, and an overdamped gain-scheduled 2nd-order PI drift controller ($\zeta = 1.15, \omega_n = 0.025\text{ rad/s}$).
+  - Added click-free 128-sample raised-cosine dual-head recentering on severe output stalls and smooth exponential decay/fade-in recovery on capture underruns, plus automatic asynchronous sample-rate conversion when Exclusive/Low-Latency endpoints are locked to distinct native rates (e.g. $44.1\text{ kHz}$ vs $48.0\text{ kHz}$).
+- **Laptop Sleep / S0 Modern Standby Wake Recovery & Invalidated WASAPI Storm Guard (`StandaloneAudioGuard.h`)**:
+  - Added `WindowsPowerSuspendNotifier` (hidden top-level `WS_POPUP` `WM_POWERBROADCAST` listener + `PowerRegisterSuspendResumeNotification` for Windows 10/11 S0 Low Power Idle / Modern Standby lid close/reopen) and `StandaloneAudioRecoveryController`.
+  - Cleanly releases audio endpoints on `PBT_APMSUSPEND` and restores the preserved `AudioDeviceSetup` across progressive backoff retries on `PBT_APMRESUMEAUTOMATIC` / `PBT_APMRESUMESUSPEND` even when `AudioDeviceManager::setAudioDeviceSetup` transiently fails and clears its internal `currentSetup` while Realtek/USB/HDMI codecs transition from `D3` to `D0`.
+  - Added a physically invariant callback-rate storm guard (`>= 24` blocks and `>= 200 ms` of audio frames elapsing in `< 25%` of real-time wall-clock duration) to detect and heal post-sleep `AUDCLNT_E_DEVICE_INVALIDATED` unthrottled spin loops, plus non-disruptive hot capture reopen when input-only WASAPI `WaitForSingleObject(1000 ms)` times out.
+- **Windows Background EcoQoS / Timer Power-Throttling Opt-Out, Occluded WebView2 IPC Suspension & Idle Reset Optimization (`StandaloneAudioGuard.h`, `PluginEditor.cpp`, `Rb26Engine.cpp`)**:
+  - Added `WindowsAudioProcessGuard` in `BRAUN_RB26.exe` to opt out of `ProcessPowerThrottling` (`PROCESS_POWER_THROTTLING_EXECUTION_SPEED` and `PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION`, with automatic fallback for Windows 10 1709–1909 builds) and activate `1 ms` multimedia timer resolution (`timeBeginPeriod(1)`), preventing CPU parking and `15.625 ms` timer coalescing when RB-26 runs unattended in the background.
+  - Added Win32 child + `GA_ROOT` ancestor visibility/iconic checks (`isWebViewActuallyShowing()`) and per-host `UserDataFolder` scoping in `BRAUN_RB26AudioProcessorEditor`, halting 120 Hz JSON telemetry/scope IPC while minimized or hidden and re-synchronizing parameters cleanly on restore.
+  - Added `mPitchBuffersDirty` tracking in `Rb26ReverbEngine` to skip redundant `5.5 MiB` pitch-shifter and pitch-delay `std::fill` wipes on real-time idle silence transitions when shimmer/dimmer sends are inactive.
+
 ## [1.5.0] - 2026-11-14
 
 ### Fixed

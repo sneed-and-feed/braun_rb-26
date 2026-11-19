@@ -212,6 +212,7 @@ private:
     int mTelemetryDecimator { 0 };
 
     bool mWasFrozen { false };
+    bool mPitchBuffersDirty { true };
     float mLastBoostDb { 0.0f };
     float mLastBoostGain { 1.0f };
 
