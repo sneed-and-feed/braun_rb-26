@@ -63,6 +63,7 @@ private:
     std::vector<float> mDelayBuffer;   // Pre-allocated for 192 kHz (131072 samples)
     int mWriteIndex { 0 };
     int mBufferSize { kMaxCapacity };
+    bool mBufferDirty { false };
 };
 
 // ============================================================================

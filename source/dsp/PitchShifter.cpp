@@ -13,6 +13,7 @@ void DualTapDelayPitchShifter::prepare(double sampleRate) noexcept {
     mBufferSize = kMaxCapacity;
 
     mDelayBuffer.assign(static_cast<size_t>(kMaxCapacity), 0.0f);
+    mBufferDirty = false;
     mWriteIndex = 0;
     mPhase = 0.0f;
 
@@ -20,7 +21,10 @@ void DualTapDelayPitchShifter::prepare(double sampleRate) noexcept {
 }
 
 void DualTapDelayPitchShifter::reset() noexcept {
-    std::fill(mDelayBuffer.begin(), mDelayBuffer.end(), 0.0f);
+    if (mBufferDirty) {
+        std::fill(mDelayBuffer.begin(), mDelayBuffer.end(), 0.0f);
+        mBufferDirty = false;
+    }
     mWriteIndex = 0;
     mPhase = 0.0f;
     updateWindowTarget();
@@ -98,6 +102,7 @@ float DualTapDelayPitchShifter::processSample(float input) noexcept {
         mPhaseInc = (absSlope > 1.0e-5f && mWindowSamples > 0.0f) ? (absSlope / mWindowSamples) : 0.0f;
     }
     // Write sample to delay buffer
+    mBufferDirty = true;
     mDelayBuffer[static_cast<size_t>(mWriteIndex)] = flushDenormal(input);
 
     // If pitch shift is 0 (mSemitones == 0 or mRatio == 1.0), bypass pitch-shifting processing block completely and pass dry audio straight through

@@ -18,6 +18,7 @@ void ShepardPitchSpiral::prepare(double sampleRate) noexcept {
 
     mDelayBufferL.assign(static_cast<size_t>(kMaxCapacity), 0.0f);
     mDelayBufferR.assign(static_cast<size_t>(kMaxCapacity), 0.0f);
+    mBufferDirty = false;
     mWriteIndex = 0;
     mSpiralPhase = 0.0f;
 
@@ -33,8 +34,11 @@ void ShepardPitchSpiral::prepare(double sampleRate) noexcept {
 }
 
 void ShepardPitchSpiral::reset() noexcept {
-    std::fill(mDelayBufferL.begin(), mDelayBufferL.end(), 0.0f);
-    std::fill(mDelayBufferR.begin(), mDelayBufferR.end(), 0.0f);
+    if (mBufferDirty) {
+        std::fill(mDelayBufferL.begin(), mDelayBufferL.end(), 0.0f);
+        std::fill(mDelayBufferR.begin(), mDelayBufferR.end(), 0.0f);
+        mBufferDirty = false;
+    }
     mWriteIndex = 0;
     mSpiralPhase = 0.0f;
 
@@ -154,6 +158,7 @@ void ShepardPitchSpiral::processSample(float inL, float inR, float& outL, float&
     const float partchTargetRatio = mPartchRatioSmoother.next();
 
     // 1. Write incoming samples to circular delay buffers
+    mBufferDirty = true;
     mDelayBufferL[static_cast<size_t>(mWriteIndex)] = flushDenormal(inL);
     mDelayBufferR[static_cast<size_t>(mWriteIndex)] = flushDenormal(inR);
 

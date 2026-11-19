@@ -29,6 +29,10 @@ struct SharedMockHardwareState {
     int failNextOpenCount { 0 };
     bool inputForceClosed { false };
     bool outputForceClosed { false };
+    bool usbDacUnplugged { false };
+    double forcedInputNativeRate { 48000.0 };
+    bool lockInputToForcedRate { false };
+    bool lockOutputTo48k { false };
     int openCallsOutput { 0 };
     int openCallsInput { 0 };
 };
@@ -54,11 +58,17 @@ public:
     }
 
     juce::Array<double> getAvailableSampleRates() override {
+        if (mIsInput && mHw.lockInputToForcedRate) {
+            return { mHw.forcedInputNativeRate };
+        }
+        if (!mIsInput && mHw.lockOutputTo48k) {
+            return { 48000.0 };
+        }
         return { mNativeRate, 44100.0, 48000.0, 96000.0 };
     }
 
     juce::Array<int> getAvailableBufferSizes() override {
-        return { 128, 256, 480, 512, 1024 };
+        return { 128, 256, 480, 512, 1024, 2560, 4096 };
     }
 
     int getDefaultBufferSize() override { return 480; }
@@ -67,23 +77,32 @@ public:
                       const juce::BigInteger& outChans,
                       double sr,
                       int bufSize) override {
+        if (!mIsInput && mHw.usbDacUnplugged && getName() == "Headphones (USB DAC)") {
+            mOpen = false;
+            return "Endpoint unplugged";
+        }
         if (mHw.failNextOpenCount > 0) {
             --mHw.failNextOpenCount;
             mOpen = false;
             return "AUDCLNT_E_DEVICE_INVALIDATED (simulated D3->D0 wake transition)";
+        }
+        if (mIsInput && mHw.lockInputToForcedRate && sr > 0.0 && std::abs(sr - mHw.forcedInputNativeRate) > 0.5) {
+            mOpen = false;
+            return "AUDCLNT_E_UNSUPPORTED_FORMAT (locked to native rate)";
         }
 
         if (mIsInput) {
             ++mHw.openCallsInput;
             mHw.inputForceClosed = false;
             mActiveIn = inChans;
+            mSampleRate = (sr > 0.0) ? sr : mHw.forcedInputNativeRate;
         } else {
             ++mHw.openCallsOutput;
             mHw.outputForceClosed = false;
             mActiveOut = outChans;
+            mSampleRate = (sr > 0.0) ? sr : mNativeRate;
         }
 
-        mSampleRate = (sr > 0.0) ? sr : mNativeRate;
         mBufferSize = (bufSize > 0) ? bufSize : 480;
         mOpen = true;
         return {};
@@ -168,9 +187,18 @@ public:
 
     void scanForDevices() override {}
 
+    void notifyDeviceListChanged() {
+        callDeviceChangeListeners();
+    }
+
     juce::StringArray getDeviceNames(bool wantInputNames) const override {
         if (wantInputNames) {
-            return { "CABLE Output (VB-Audio Virtual Cable)", "Microphone (Realtek Audio)" };
+            // Put hardware Microphone at index 0 (system default) so any unsolicited default-device
+            // fallback would replace VB-Cable with Microphone unless explicitly guarded!
+            return { "Microphone (Realtek Audio)", "CABLE Output (VB-Audio Virtual Cable)" };
+        }
+        if (mHw.usbDacUnplugged) {
+            return { "Speakers (Realtek High Definition Audio)" };
         }
         return { "Speakers (Realtek High Definition Audio)", "Headphones (USB DAC)" };
     }
@@ -191,10 +219,13 @@ public:
         // Note: DriftCompensatedAudioIODeviceType always requests single-direction endpoints!
         RB26_GUARD_ASSERT(!(outName.isNotEmpty() && inName.isNotEmpty()));
         if (outName.isNotEmpty()) {
+            if (mHw.usbDacUnplugged && outName == "Headphones (USB DAC)") {
+                return nullptr;
+            }
             return new MockEndpointAudioIODevice(outName, getTypeName(), false, mHw);
         }
         if (inName.isNotEmpty()) {
-            return new MockEndpointAudioIODevice(inName, getTypeName(), true, mHw);
+            return new MockEndpointAudioIODevice(inName, getTypeName(), true, mHw, mHw.forcedInputNativeRate);
         }
         return nullptr;
     }
@@ -706,11 +737,20 @@ void runLiveWindowsWasapiVbCableIntegrationTest() {
     rb26::standalone::StandaloneAudioRecoveryController recovery(dm, {}, 0);
 
     // Stream real WASAPI capture (VB-Cable) -> ElasticDriftRingBuffer -> real WASAPI render for 900 ms
-    juce::Thread::sleep(900);
+    // Note: Windows WASAPI sets AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY on the initial packet after
+    // IAudioClient::Start(); verify zero NEW xruns accrue across steady-state streaming!
+    juce::Thread::sleep(150);
+    const int initialStartupXRuns = duplex->getXRunCount();
+    juce::Thread::sleep(800);
+    const int postStreamXRuns = duplex->getXRunCount();
     RB26_GUARD_ASSERT(silentCb.callbacks.load(std::memory_order_relaxed) >= 20);
     RB26_GUARD_ASSERT(silentCb.sawFiniteInput.load(std::memory_order_relaxed));
     RB26_GUARD_ASSERT(duplex->getRingBuffer().getPushBlockCount() >= 20);
     RB26_GUARD_ASSERT(duplex->getRingBuffer().getPullBlockCount() >= 20);
+    RB26_GUARD_ASSERT(duplex->getRingBuffer().getUnderrunCount() == 0);
+    RB26_GUARD_ASSERT(duplex->getRingBuffer().getRecenterCount() == 0);
+    RB26_GUARD_ASSERT(initialStartupXRuns <= 2);
+    RB26_GUARD_ASSERT(postStreamXRuns == initialStartupXRuns);
     RB26_GUARD_ASSERT(!duplex->hasFatalStreamFault());
 
     // Exercise real WASAPI + VB-Cable suspend -> resume teardown & reopen cycle!
@@ -733,9 +773,256 @@ void runLiveWindowsWasapiVbCableIntegrationTest() {
     juce::Thread::sleep(400);
     RB26_GUARD_ASSERT(silentCb.callbacks.load(std::memory_order_relaxed) > postResumeStart + 10);
 
+    // Regression: Sub-10ms buffer size (256 frames @ 48 kHz) on live WASAPI Shared + VB-Cable!
+    // Prior attempt starved WASAPIInputDevice::queue in <90 ms (13 underruns & 133 xruns in 1.2 s).
+    {
+        auto subSetup = dm.getAudioDeviceSetup();
+        subSetup.inputDeviceName = chosenIn;
+        subSetup.outputDeviceName = chosenOut;
+        subSetup.sampleRate = 48000.0;
+        subSetup.bufferSize = 256;
+        const juce::String subErr = dm.setAudioDeviceSetup(subSetup, true);
+        if (subErr.isEmpty()) {
+            auto* subDuplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice());
+            RB26_GUARD_ASSERT(subDuplex != nullptr);
+            RB26_GUARD_ASSERT(subDuplex->getCurrentBufferSizeSamples() == 256);
+            juce::Thread::sleep(150);
+            const int subInitXRuns = subDuplex->getXRunCount();
+            juce::Thread::sleep(1100);
+            const int subEndXRuns = subDuplex->getXRunCount();
+            RB26_GUARD_ASSERT(subDuplex->getRingBuffer().getPushBlockCount() >= 40);
+            RB26_GUARD_ASSERT(subDuplex->getRingBuffer().getPullBlockCount() >= 120);
+            RB26_GUARD_ASSERT(subDuplex->getRingBuffer().getUnderrunCount() == 0);
+            RB26_GUARD_ASSERT(subDuplex->getRingBuffer().getRecenterCount() == 0);
+            RB26_GUARD_ASSERT(subInitXRuns <= 2);
+            RB26_GUARD_ASSERT(subEndXRuns == subInitXRuns);
+        }
+    }
+
+    // Regression: Live Windows Audio (Low Latency Mode) with VB-Cable + physical output
+    for (auto* t : dm.getAvailableDeviceTypes()) {
+        if (t->getTypeName() == "Windows Audio (Low Latency Mode)") {
+            t->scanForDevices();
+            const auto llIns = t->getDeviceNames(true);
+            const auto llOuts = t->getDeviceNames(false);
+            if (llIns.contains(chosenIn) && llOuts.contains(chosenOut)) {
+                dm.setCurrentAudioDeviceType("Windows Audio (Low Latency Mode)", true);
+                auto llSetup = dm.getAudioDeviceSetup();
+                llSetup.inputDeviceName = chosenIn;
+                llSetup.outputDeviceName = chosenOut;
+                if (dm.setAudioDeviceSetup(llSetup, true).isEmpty()) {
+                    if (auto* llDuplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice())) {
+                        juce::Thread::sleep(150);
+                        const int llInitXRuns = llDuplex->getXRunCount();
+                        juce::Thread::sleep(600);
+                        const int llEndXRuns = llDuplex->getXRunCount();
+                        RB26_GUARD_ASSERT(llDuplex->getRingBuffer().getPushBlockCount() >= 15);
+                        RB26_GUARD_ASSERT(llDuplex->getRingBuffer().getPullBlockCount() >= 15);
+                        RB26_GUARD_ASSERT(llDuplex->getRingBuffer().getUnderrunCount() == 0);
+                        RB26_GUARD_ASSERT(llDuplex->getRingBuffer().getRecenterCount() == 0);
+                        RB26_GUARD_ASSERT(llInitXRuns <= 2);
+                        RB26_GUARD_ASSERT(llEndXRuns == llInitXRuns);
+                    }
+                }
+            }
+            break;
+        }
+    }
+
     dm.removeAudioCallback(&silentCb);
     dm.closeAudioDevice();
 #endif
+}
+
+// ============================================================================
+// Test 7: Large-Buffer DirectSound (4096) Cushion & Multi-Block Overflow Crossfade
+// ============================================================================
+void runLargeBufferAndMultiBlockOverflowCrossfadeTest() {
+    // 7A. 4096-sample DirectSound-class buffer with consumer pulling BEFORE first producer push
+    {
+        rb26::standalone::ElasticDriftRingBuffer ring;
+        ring.prepare(2, 4096, 4096, 48000.0, 48000.0);
+
+        std::vector<float> inL(4096, 0.0f), inR(4096, 0.0f);
+        std::vector<float> outL(4096, 0.0f), outR(4096, 0.0f);
+        const float* inPtrs[2] = { inL.data(), inR.data() };
+        float* outPtrs[2] = { outL.data(), outR.data() };
+
+        // Consumer fires first before producer has pushed a single block!
+        ring.pull(outPtrs, 2, 4096);
+        RB26_GUARD_ASSERT(ring.getUnderrunCount() == 0);
+
+        uint64_t ph = 0;
+        for (int b = 0; b < 120; ++b) {
+            for (int i = 0; i < 4096; ++i) {
+                const float v = static_cast<float>(0.7 * std::sin(kTwoPi * 440.0 * static_cast<double>(ph++) / 48000.0));
+                inL[static_cast<size_t>(i)] = v;
+                inR[static_cast<size_t>(i)] = v;
+            }
+            ring.push(inPtrs, 2, 4096);
+            ring.pull(outPtrs, 2, 4096);
+        }
+        RB26_GUARD_ASSERT(ring.getUnderrunCount() == 0);
+        RB26_GUARD_ASSERT(ring.getOverflowCount() == 0);
+    }
+
+    // 7B. Full-capacity producer overflow followed by small 64-sample pulls (< 128-frame crossfade)
+    //     interleaved with big producer pushes (verifying consumer-private mCrossfadeTail immunity)
+    {
+        rb26::standalone::ElasticDriftRingBuffer ring;
+        ring.prepare(2, 256, 64, 48000.0, 48000.0);
+
+        std::vector<float> inL(256, 0.0f), inR(256, 0.0f);
+        std::vector<float> outL(64, 0.0f), outR(64, 0.0f);
+        const float* inPtrs[2] = { inL.data(), inR.data() };
+        float* outPtrs[2] = { outL.data(), outR.data() };
+
+        uint64_t ph = 0;
+        auto pushContinuousTone = [&]() {
+            for (int i = 0; i < 256; ++i) {
+                const float v = static_cast<float>(0.85 * std::sin(kTwoPi * 310.0 * static_cast<double>(ph++) / 48000.0));
+                inL[static_cast<size_t>(i)] = v;
+                inR[static_cast<size_t>(i)] = v;
+            }
+            ring.push(inPtrs, 2, 256);
+        };
+
+        for (int b = 0; b < 20; ++b) {
+            pushContinuousTone();
+            for (int sub = 0; sub < 4; ++sub) {
+                ring.pull(outPtrs, 2, 64);
+            }
+        }
+        float prev = outL.back();
+
+        // Force full kCapacity wrap overflow!
+        while (ring.getOverflowCount() == 0) {
+            pushContinuousTone();
+        }
+
+        // Now pull 64-sample blocks (< kCrossfadeFrames = 128) while producer immediately overwrites freed slots
+        // with adversarial -1.0/+1.0 square-wave values if old ring slots were still being read!
+        float maxStep = 0.0f;
+        for (int step = 0; step < 8; ++step) {
+            ring.pull(outPtrs, 2, 64);
+            for (int i = 0; i < 64; ++i) {
+                maxStep = std::max(maxStep, std::abs(outL[static_cast<size_t>(i)] - prev));
+                prev = outL[static_cast<size_t>(i)];
+            }
+            pushContinuousTone();
+        }
+        RB26_GUARD_ASSERT(ring.getRecenterCount() >= 1);
+        RB26_GUARD_ASSERT(maxStep < 0.12f);
+    }
+}
+
+// ============================================================================
+// Test 8: Pre-Suspend Disconnect, Unplugged USB DAC Safe Fallback & Capture Storm/Rate Escalation
+// ============================================================================
+void runRoutingSafetyAndCaptureEscalationTests() {
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    SharedMockHardwareState hwState;
+    juce::AudioDeviceManager dm;
+    auto* rawMockType = new MockWindowsAudioDeviceType(hwState);
+    dm.addAudioDeviceType(std::make_unique<rb26::standalone::DriftCompensatedAudioIODeviceType>(
+        std::unique_ptr<juce::AudioIODeviceType>(rawMockType)));
+
+    RB26_GUARD_ASSERT(dm.initialise(2, 2, nullptr, true).isEmpty());
+
+    // User explicitly chooses VB-Cable (index 1, NOT default Mic index 0!) -> USB DAC (index 1)
+    auto setup = dm.getAudioDeviceSetup();
+    setup.inputDeviceName = "CABLE Output (VB-Audio Virtual Cable)";
+    setup.outputDeviceName = "Headphones (USB DAC)";
+    setup.sampleRate = 48000.0;
+    setup.bufferSize = 480;
+    RB26_GUARD_ASSERT(dm.setAudioDeviceSetup(setup, true /* treatAsChosenDevice */).isEmpty());
+    RB26_GUARD_ASSERT(dm.createStateXml() != nullptr);
+
+    rb26::standalone::StandaloneAudioRecoveryController recovery(dm, {}, 0);
+    RB26_GUARD_ASSERT(recovery.getSavedSetup().inputDeviceName == "CABLE Output (VB-Audio Virtual Cable)");
+    RB26_GUARD_ASSERT(recovery.getSavedSetup().outputDeviceName == "Headphones (USB DAC)");
+
+    // 8A. Simulate USB DAC disappearing 200ms BEFORE PBT_APMSUSPEND!
+    //     Stock AudioDeviceManager::audioDeviceListChanged() immediately opens default Mic + default Speakers.
+    //     Verify StandaloneAudioRecoveryController immediately shuts down the unsolicited Mic, preserves mSavedSetup,
+    //     and schedules recovery!
+    hwState.usbDacUnplugged = true;
+    rawMockType->notifyDeviceListChanged();
+
+    RB26_GUARD_ASSERT(recovery.getSavedSetup().inputDeviceName == "CABLE Output (VB-Audio Virtual Cable)");
+    RB26_GUARD_ASSERT(recovery.getSavedSetup().outputDeviceName == "Headphones (USB DAC)");
+    // Unsolicited Microphone MUST NOT remain open!
+    if (dm.getCurrentAudioDevice() != nullptr) {
+        RB26_GUARD_ASSERT(dm.getAudioDeviceSetup().inputDeviceName != "Microphone (Realtek Audio)");
+    }
+
+    // 8B. Laptop sleeps and wakes with USB DAC STILL permanently unplugged across all 8 backoff retries (~32s).
+    //     Post-retry fallback MUST switch output to Speakers while KEEPING VB-Cable (NEVER opening Microphone!)
+    //     and MUST NOT wipe AudioDeviceManager::createStateXml()!
+    recovery.handleSystemSuspend();
+    double simNow = juce::Time::getMillisecondCounterHiRes();
+    int64_t simWall = rb26::standalone::StandaloneAudioRecoveryController::currentWallClockMs();
+    recovery.handleSystemResume(100.0);
+
+    for (int attempt = 0; attempt < 10; ++attempt) {
+        simNow += 12000.0;
+        simWall += 12000;
+        recovery.tickWatchdog(simNow, simWall);
+        if (!recovery.isRecoveryPending()) {
+            break;
+        }
+    }
+    RB26_GUARD_ASSERT(!recovery.isRecoveryPending());
+    RB26_GUARD_ASSERT(dm.getCurrentAudioDevice() != nullptr && dm.getCurrentAudioDevice()->isOpen());
+    RB26_GUARD_ASSERT(dm.getAudioDeviceSetup().inputDeviceName == "CABLE Output (VB-Audio Virtual Cable)");
+    RB26_GUARD_ASSERT(dm.getAudioDeviceSetup().outputDeviceName == "Speakers (Realtek High Definition Audio)");
+    RB26_GUARD_ASSERT(dm.createStateXml() != nullptr); // Saved XML preserved!
+
+    // 8C. Simulate DirectSound/capture spin-storm -> throttled & hot-recovered without dropping output!
+    auto* duplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice());
+    RB26_GUARD_ASSERT(duplex != nullptr);
+    {
+        auto* mockIn = dynamic_cast<MockEndpointAudioIODevice*>(duplex->getInnerInputDevice());
+        RB26_GUARD_ASSERT(mockIn != nullptr);
+        std::vector<float> inL(480, 0.25f), inR(480, 0.25f);
+        const float* inPtrs[2] = { inL.data(), inR.data() };
+        for (int i = 0; i < 32; ++i) {
+            mockIn->pumpInputBlock(inPtrs, 2, 480);
+        }
+        const uint64_t prevFullRecoveries = recovery.getFullRecoveryCount();
+        simNow += 500.0;
+        simWall += 500;
+        recovery.tickWatchdog(simNow, simWall);
+        RB26_GUARD_ASSERT(duplex->getInputHotRecoveryCount() >= 1);
+        RB26_GUARD_ASSERT(recovery.getFullRecoveryCount() == prevFullRecoveries);
+    }
+
+    // 8D. Simulate mid-session capture sample-rate change (48 kHz -> 44.1 kHz while output is locked to 48 kHz)
+    //     -> escalates to full reopen so ElasticDriftRingBuffer::prepare() reconfigures mNominalRatio (44.1k / 48k)!
+    {
+        const uint64_t prevFullRecoveries = recovery.getFullRecoveryCount();
+        hwState.forcedInputNativeRate = 44100.0;
+        hwState.lockInputToForcedRate = true;
+        hwState.lockOutputTo48k = true;
+        hwState.inputForceClosed = true;
+
+        const double realNow = juce::Time::getMillisecondCounterHiRes() + 20000.0;
+        const int64_t realWall = rb26::standalone::StandaloneAudioRecoveryController::currentWallClockMs() + 20000;
+        recovery.tickWatchdog(realNow, realWall);
+        RB26_GUARD_ASSERT(recovery.isRecoveryPending());
+
+        recovery.tickWatchdog(realNow + 500.0, realWall + 500);
+        RB26_GUARD_ASSERT(!recovery.isRecoveryPending());
+        RB26_GUARD_ASSERT(recovery.getFullRecoveryCount() == prevFullRecoveries + 1);
+
+        auto* reopenedDuplex = dynamic_cast<rb26::standalone::DuplexDriftCompensatedAudioIODevice*>(dm.getCurrentAudioDevice());
+        RB26_GUARD_ASSERT(reopenedDuplex != nullptr);
+        RB26_GUARD_ASSERT(std::abs(reopenedDuplex->getCurrentSampleRate() - 48000.0) < 0.5);
+        RB26_GUARD_ASSERT(std::abs(reopenedDuplex->getRingBuffer().getCurrentRatio() - (44100.0 / 48000.0)) < 0.005);
+    }
+
+    dm.closeAudioDevice();
 }
 
 } // namespace
@@ -743,28 +1030,36 @@ void runLiveWindowsWasapiVbCableIntegrationTest() {
 int main() {
     std::cout << "=== BRAUN RB-26 Standalone Audio Guard & VB-Cable Drift/Sleep Verification ===\n";
 
-    std::cout << "[1/6] Sustained +85 ppm Clock Drift (VB-Cable > Hardware, 6M frames)... ";
+    std::cout << "[1/8] Sustained +85 ppm Clock Drift (VB-Cable > Hardware, 6M frames)... ";
     runSustainedClockDriftTest(+85.0, 480, 480);
     std::cout << "PASS\n";
 
-    std::cout << "[2/6] Sustained -85 ppm Clock Drift & Block Mismatch (480 vs 512, 6M frames)... ";
+    std::cout << "[2/8] Sustained -85 ppm Clock Drift & Block Mismatch (480 vs 512, 6M frames)... ";
     runSustainedClockDriftTest(-85.0, 480, 512);
     std::cout << "PASS\n";
 
-    std::cout << "[3/6] Async Sample Rate Mismatch (44.1 kHz VB-Cable -> 48.0 kHz Output)... ";
+    std::cout << "[3/8] Async Sample Rate Mismatch (44.1 kHz VB-Cable -> 48.0 kHz Output)... ";
     runAsyncSampleRateConversionTest();
     std::cout << "PASS\n";
 
-    std::cout << "[4/6] Severe OS Stall Recenter, Underrun Decay & Toxic NaN/Inf Immunity... ";
+    std::cout << "[4/8] Severe OS Stall Recenter, Underrun Decay & Toxic NaN/Inf Immunity... ";
     runStallAndToxicSelfHealingTest();
     std::cout << "PASS\n";
 
-    std::cout << "[5/6] Duplex Passthrough, S3/S0 Sleep D3->D0 Retry & Invalidated Storm Recovery... ";
+    std::cout << "[5/8] Duplex Passthrough, S3/S0 Sleep D3->D0 Retry & Invalidated Storm Recovery... ";
     runDuplexLifecycleSleepAndStormTests();
     std::cout << "PASS\n";
 
-    std::cout << "[6/6] Live Win32 EcoQoS Guard & Real WASAPI + VB-Cable Duplex Sleep/Wake... ";
+    std::cout << "[6/8] Live Win32 EcoQoS Guard, Sub-10ms (256) & Low-Latency WASAPI + VB-Cable... ";
     runLiveWindowsWasapiVbCableIntegrationTest();
+    std::cout << "PASS\n";
+
+    std::cout << "[7/8] Large-Buffer DirectSound (4096) Cushion & Race-Free Overflow Crossfade... ";
+    runLargeBufferAndMultiBlockOverflowCrossfadeTest();
+    std::cout << "PASS\n";
+
+    std::cout << "[8/8] Pre-Suspend Disconnect, Unplugged USB DAC Safe Fallback & Rate Escalation... ";
+    runRoutingSafetyAndCaptureEscalationTests();
     std::cout << "PASS\n";
 
     std::cout << "ALL STANDALONE AUDIO GUARD TESTS PASSED UNANIMOUSLY.\n";

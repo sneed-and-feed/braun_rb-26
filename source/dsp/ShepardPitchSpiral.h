@@ -144,6 +144,7 @@ private:
     std::vector<float> mDelayBufferL;
     std::vector<float> mDelayBufferR;
     int mWriteIndex { 0 };
+    bool mBufferDirty { false };
 
     // Parameter smoothers
     OnePoleSmoother mDepthSmoother;
